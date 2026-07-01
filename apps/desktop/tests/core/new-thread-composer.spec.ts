@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { join } from "node:path";
 import {
+  createNamedThread,
   desktopShortcut,
   getDesktopState,
   getSelectedTranscript,
@@ -11,6 +12,7 @@ import {
   openNewThread,
   pasteTinyPng,
   seedAgentDir,
+  seedTranscriptMessages,
 } from "../helpers/electron-app";
 
 test("new thread reuses composer behaviors for slash commands, image previews, and branding", async () => {
@@ -75,6 +77,102 @@ test("new thread reuses composer behaviors for slash commands, image previews, a
       .toBe("image");
     await expect(window.locator(".timeline-item__attachment")).toBeVisible({ timeout: 15_000 });
     await expect(window.locator(".composer-attachment")).toHaveCount(0);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("new thread composer uses the lower canvas while keeping a small bottom gap", async () => {
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("new-thread-spacing-workspace");
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+    },
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await openNewThread(window);
+
+    const metrics = await window.evaluate(() => {
+      const canvas = document.querySelector<HTMLElement>(".canvas--new-thread");
+      const hero = document.querySelector<HTMLElement>(".new-thread__hero");
+      const composer = document.querySelector<HTMLElement>(".new-thread__composer");
+      if (!canvas || !hero || !composer) {
+        throw new Error("New-thread layout elements were unavailable");
+      }
+
+      const canvasBox = canvas.getBoundingClientRect();
+      const heroBox = hero.getBoundingClientRect();
+      const composerBox = composer.getBoundingClientRect();
+      return {
+        bottomGap: Math.round(canvasBox.bottom - composerBox.bottom),
+        heroGap: Math.round(composerBox.top - heroBox.bottom),
+        composerCenterY: Math.round(composerBox.top + composerBox.height / 2),
+        canvasCenterY: Math.round(canvasBox.top + canvasBox.height / 2),
+      };
+    });
+
+    expect(metrics.composerCenterY).toBeGreaterThan(metrics.canvasCenterY);
+    expect(metrics.bottomGap).toBeGreaterThanOrEqual(28);
+    expect(metrics.bottomGap).toBeLessThanOrEqual(96);
+    expect(metrics.heroGap).toBeGreaterThanOrEqual(18);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("thread content reserves room above horizontal scrollbars", async () => {
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("thread-scrollbar-clearance-workspace");
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+    },
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await createNamedThread(window, "Scrollbar clearance");
+    await seedTranscriptMessages(harness, window, {
+      count: 1,
+      textFactory: () => [
+        "```text",
+        `last visible line ${"0123456789".repeat(90)}`,
+        "```",
+      ].join("\n"),
+    });
+
+    await expect(window.locator(".message__content pre[data-language='text']").last()).toBeVisible();
+
+    const metrics = await window.evaluate(() => {
+      const pane = document.querySelector<HTMLElement>("[data-testid='timeline-pane']");
+      const codeBlocks = Array.from(document.querySelectorAll<HTMLElement>(".message__content pre[data-language='text']"));
+      const codeBlock = codeBlocks.at(-1);
+      if (!pane || !codeBlock) {
+        throw new Error("Thread scrollbar clearance elements were unavailable");
+      }
+
+      const paneStyle = window.getComputedStyle(pane);
+      const codeBlockStyle = window.getComputedStyle(codeBlock);
+      return {
+        panePaddingBottom: Number.parseFloat(paneStyle.paddingBottom),
+        codeBlockPaddingBottom: Number.parseFloat(codeBlockStyle.paddingBottom),
+        codeBlockScrollWidth: codeBlock.scrollWidth,
+        codeBlockClientWidth: codeBlock.clientWidth,
+      };
+    });
+
+    expect(metrics.panePaddingBottom).toBeGreaterThanOrEqual(16);
+    expect(metrics.codeBlockPaddingBottom).toBeGreaterThanOrEqual(18);
+    expect(metrics.codeBlockScrollWidth).toBeGreaterThan(metrics.codeBlockClientWidth);
   } finally {
     await harness.close();
   }

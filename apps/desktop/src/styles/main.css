@@ -313,10 +313,12 @@
 .timeline-pane {
   width: 100%;
   min-height: 420px;
+  padding-bottom: 18px;
   background: transparent;
   position: relative;
   max-height: calc(100vh - 320px);
   overflow: auto;
+  scrollbar-gutter: stable;
   scroll-behavior: smooth;
 }
 
@@ -1073,9 +1075,10 @@
 }
 
 .message__content pre {
-  padding: 12px 14px;
+  padding: 12px 14px 20px;
   border-radius: 10px;
   overflow: auto;
+  scrollbar-gutter: stable;
   background: #f2f4f8;
   color: #25304a;
   border: 1px solid #dfe3eb;
@@ -1997,16 +2000,26 @@
 
 .canvas--new-thread {
   align-content: stretch;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .new-thread {
-  min-height: calc(100vh - 164px);
+  --new-thread-bottom-gap: clamp(36px, 4.5vh, 60px);
+  --new-thread-hero-gap: clamp(22px, 3vh, 34px);
+
+  flex: 1 0 auto;
+  min-height: 520px;
   display: grid;
-  align-content: center;
-  gap: 28px;
+  grid-template-rows: minmax(max-content, 1fr) auto;
+  align-content: stretch;
+  gap: var(--new-thread-hero-gap);
+  padding-bottom: var(--new-thread-bottom-gap);
 }
 
 .new-thread__hero {
+  align-self: end;
   display: grid;
   justify-items: center;
   gap: 10px;
