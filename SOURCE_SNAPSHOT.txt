@@ -1,0 +1,4 @@
+source_repo=/Users/sudhirjha/playground/pi-gui-rpc-lab
+source_branch=rpc-driver-prototype
+source_head=161611b3939847da2ae4feac7503cebb5d89cfe2
+source_copied_at=2026-07-01T03:48:49Z

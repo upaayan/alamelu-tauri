@@ -1,0 +1,46 @@
+appId: com.alamelu.pi
+productName: Alamelu Pi
+copyright: Copyright 2026 Sudhir Jha
+electronVersion: 39.8.10
+
+executableName: alpi
+
+directories:
+  output: release-alpi
+  buildResources: resources
+
+files:
+  - out/**/*
+  - package.json
+
+extraResources:
+  - from: resources/alpi-icon.png
+    to: icon.png
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "**/*.wasm"
+  - "**/node_modules/node-pty/**/*"
+  - "**/node_modules/.pnpm/node-pty*/node_modules/node-pty/**/*"
+
+artifactName: alpi-${version}-${arch}.${ext}
+
+mac:
+  icon: resources/alpi-icon.icns
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  notarize: false
+  executableName: alpi
+  target:
+    - target: dir
+      arch: arm64
+  darkModeSupport: true
+  extraFiles:
+    - from: build/native/pi-gui-notification-status-helper
+      to: MacOS/pi-gui-notification-status-helper
+
+publish: null
