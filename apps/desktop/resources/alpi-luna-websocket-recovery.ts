@@ -6,9 +6,31 @@ const LUNA_PROVIDER = "openai-codex";
 const LUNA_MODEL = "gpt-5.6-luna";
 
 export function registerLunaWebSocketRecovery(pi, resetWebSocketState) {
+  // Pi evaluates this immediately before its Codex provider chooses WebSocket
+  // versus SSE. Clearing a stale fallback here means a later Luna request gets
+  // another WebSocket attempt instead of inheriting an invisible SSE-only
+  // state from an earlier transport failure.
+  pi.on("before_provider_request", (_event, context) => {
+    if (!isLunaModel(context.model)) return;
+    resetWebSocketState(context.sessionManager.getSessionId());
+  });
+
   pi.on("message_end", (event, context) => {
     if (!isLunaWebSocketFailure(event)) return;
     resetWebSocketState(context.sessionManager.getSessionId());
+
+    // When a WebSocket connection fails before it streams, Pi falls back to
+    // SSE in the same provider call. Luna's SSE endpoint rejects that route
+    // with a non-retryable 404. Replacing only this diagnosed fallback error
+    // lets Pi use its existing auto-retry/continue path on the original turn.
+    if (isLunaSseFallbackError(event)) {
+      return {
+        message: {
+          ...event.message,
+          errorMessage: "WebSocket error: Luna SSE fallback was rejected",
+        },
+      };
+    }
   });
 }
 
@@ -20,11 +42,30 @@ export default async function installLunaWebSocketRecovery(pi) {
 function isLunaWebSocketFailure(event) {
   const message = event?.message;
   if (!message || typeof message !== "object") return false;
-  if (message.role !== "assistant" || message.provider !== LUNA_PROVIDER || message.model !== LUNA_MODEL) return false;
+  if (!isLunaMessage(message)) return false;
   if (hasSseFallbackDiagnostic(message.diagnostics)) return true;
   if (message.stopReason !== "error") return false;
   const errorText = [message.errorMessage, message.error].filter((value) => typeof value === "string").join(" ");
   return /websocket/i.test(errorText);
+}
+
+function isLunaSseFallbackError(event) {
+  const message = event?.message;
+  return Boolean(
+    message &&
+    typeof message === "object" &&
+    isLunaMessage(message) &&
+    message.stopReason === "error" &&
+    hasSseFallbackDiagnostic(message.diagnostics),
+  );
+}
+
+function isLunaModel(model) {
+  return model?.provider === LUNA_PROVIDER && model?.id === LUNA_MODEL;
+}
+
+function isLunaMessage(message) {
+  return message.role === "assistant" && message.provider === LUNA_PROVIDER && message.model === LUNA_MODEL;
 }
 
 function hasSseFallbackDiagnostic(diagnostics) {

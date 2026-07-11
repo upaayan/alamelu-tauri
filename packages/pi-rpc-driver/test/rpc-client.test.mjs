@@ -894,6 +894,463 @@ test('PiRpcDriver reports a finalized assistant error only after Pi declines to 
   assert.equal(events.filter((event) => event.type === 'sessionUpdated').at(-1).snapshot.status, 'idle');
 });
 
+test('PiRpcDriver internally reopens a successful Luna thread before its next prompt', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    closed = false;
+    constructor(name) { this.name = name; }
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() { this.closed = true; }
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') return {
+        type: 'response', id, command: 'get_state', success: true,
+        data: { sessionId: 'successful-luna-session', sessionName: 'Successful Luna', model: { provider: 'openai-codex', id: 'gpt-5.6-luna' }, thinkingLevel: 'xhigh' },
+      };
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: `${this.name}_OK` } });
+        this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const first = new FakeClient('FIRST');
+  const second = new FakeClient('SECOND');
+  const contexts = [];
+  const clients = [first, second];
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    rpcClientFactory: (context) => { contexts.push(context); return clients.shift(); },
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
+  );
+
+  await driver.sendUserMessage(snapshot.ref, { text: 'first successful turn' });
+  await driver.sendUserMessage(snapshot.ref, { text: 'second successful turn' });
+
+  assert.equal(contexts.length, 2);
+  assert.equal(contexts[1].sessionId, 'successful-luna-session');
+  assert.equal(first.closed, true);
+  assert.deepEqual(first.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['first successful turn']);
+  assert.deepEqual(second.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['second successful turn']);
+});
+
+test('PiRpcDriver lets Pi finish a Luna retry, then rotates the recovered child before the following prompt', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    closed = false;
+    constructor(name) { this.name = name; }
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() { this.closed = true; }
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') return {
+        type: 'response', id, command: 'get_state', success: true,
+        data: { sessionId: 'retried-luna-session', sessionName: 'Retried Luna', model: { provider: 'openai-codex', id: 'gpt-5.6-luna' }, thinkingLevel: 'xhigh' },
+      };
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        if (this.name === 'RETRY') {
+          this.emit({ type: 'message_end', message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-5.6-luna', stopReason: 'error', errorMessage: 'WebSocket error' } });
+          this.emit({ type: 'agent_end', willRetry: true });
+          this.emit({ type: 'agent_start' });
+        }
+        this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: `${this.name}_OK` } });
+        this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const retrying = new FakeClient('RETRY');
+  const replacement = new FakeClient('FRESH');
+  const clients = [retrying, replacement];
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    rpcClientFactory: () => clients.shift(),
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
+  );
+  const events = [];
+  driver.subscribe(snapshot.ref, (event) => events.push(event));
+
+  await driver.sendUserMessage(snapshot.ref, { text: 'recover this exact turn' });
+  await driver.sendUserMessage(snapshot.ref, { text: 'next turn uses fresh child' });
+
+  assert.equal(events.some((event) => event.type === 'runFailed'), false);
+  assert.equal(events.some((event) => event.type === 'assistantDelta' && event.text === 'RETRY_OK'), true);
+  assert.equal(retrying.closed, true);
+  assert.deepEqual(retrying.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['recover this exact turn']);
+  assert.deepEqual(replacement.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['next turn uses fresh child']);
+});
+
+test('PiRpcDriver leaves Sol and Terra children running across successful idle prompts', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    closed = false;
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() { this.closed = true; }
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') return {
+        type: 'response', id, command: 'get_state', success: true,
+        data: { sessionId: 'terra-session', sessionName: 'Terra', model: { provider: 'openai-codex', id: 'gpt-5.6-terra' }, thinkingLevel: 'xhigh' },
+      };
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const client = new FakeClient();
+  let factoryCalls = 0;
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    rpcClientFactory: () => { factoryCalls += 1; return client; },
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-terra' }, initialThinkingLevel: 'xhigh' },
+  );
+  await driver.sendUserMessage(snapshot.ref, { text: 'Terra first' });
+  await driver.sendUserMessage(snapshot.ref, { text: 'Terra second' });
+
+  assert.equal(factoryCalls, 1);
+  assert.equal(client.closed, false);
+  assert.deepEqual(client.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['Terra first', 'Terra second']);
+});
+
+test('PiRpcDriver keeps the previous Luna child intact if its internal reopen fails', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    closed = false;
+    constructor(name, openSucceeds = true) { this.name = name; this.openSucceeds = openSucceeds; }
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() { this.closed = true; }
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') {
+        if (!this.openSucceeds) return { type: 'response', id, command: 'get_state', success: false, error: 'replacement unavailable' };
+        return {
+          type: 'response', id, command: 'get_state', success: true,
+          data: { sessionId: 'replace-failure-luna', sessionName: 'Luna', model: { provider: 'openai-codex', id: 'gpt-5.6-luna' }, thinkingLevel: 'xhigh' },
+        };
+      }
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const original = new FakeClient('original');
+  const failedReplacement = new FakeClient('failed-replacement', false);
+  const laterReplacement = new FakeClient('later-replacement');
+  const clients = [original, failedReplacement, laterReplacement];
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    rpcClientFactory: () => clients.shift(),
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
+  );
+  await driver.sendUserMessage(snapshot.ref, { text: 'first turn makes child recyclable' });
+
+  await assert.rejects(() => driver.sendUserMessage(snapshot.ref, { text: 'must not reach old child' }), /replacement unavailable/);
+  assert.equal(original.closed, false);
+  assert.equal(failedReplacement.closed, true);
+  assert.deepEqual(original.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['first turn makes child recyclable']);
+
+  await driver.sendUserMessage(snapshot.ref, { text: 'later retry opens a fresh child' });
+  assert.equal(original.closed, true);
+  assert.deepEqual(laterReplacement.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['later retry opens a fresh child']);
+});
+
+test('PiRpcDriver waits for an internal Luna reopen before sending a concurrent model change', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  let releaseReplacementState;
+  const replacementStateReady = new Promise((resolve) => { releaseReplacementState = resolve; });
+
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    closed = false;
+    constructor(name) { this.name = name; }
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() { this.closed = true; }
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') {
+        if (this.name === 'replacement') await replacementStateReady;
+        return {
+          type: 'response', id, command: 'get_state', success: true,
+          data: { sessionId: 'concurrent-luna-session', sessionName: 'Luna', model: { provider: 'openai-codex', id: 'gpt-5.6-luna' }, thinkingLevel: 'xhigh' },
+        };
+      }
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const original = new FakeClient('original');
+  const replacement = new FakeClient('replacement');
+  const clients = [original, replacement];
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    rpcClientFactory: () => clients.shift(),
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
+  );
+  await driver.sendUserMessage(snapshot.ref, { text: 'first turn' });
+  const originalSetModelCalls = original.commands.filter((command) => command.type === 'set_model').length;
+
+  const modelChange = driver.setSessionModel(snapshot.ref, { provider: 'openai-codex', modelId: 'gpt-5.6-sol' });
+  const secondPrompt = driver.sendUserMessage(snapshot.ref, { text: 'second turn' });
+  await Promise.resolve();
+  assert.equal(original.commands.filter((command) => command.type === 'set_model').length, originalSetModelCalls);
+  assert.equal(replacement.commands.some((command) => command.type === 'set_model'), false);
+
+  releaseReplacementState();
+  await Promise.all([secondPrompt, modelChange]);
+  assert.equal(original.commands.filter((command) => command.type === 'set_model').length, originalSetModelCalls);
+  assert.equal(replacement.commands.some((command) => command.type === 'set_model' && command.modelId === 'gpt-5.6-sol'), true);
+});
+
+test('PiRpcDriver rejects a model change queued after the replacement prompt has started', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  let releaseReplacementState;
+  const replacementStateReady = new Promise((resolve) => { releaseReplacementState = resolve; });
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    constructor(name) { this.name = name; }
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() {}
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') {
+        if (this.name === 'replacement') await replacementStateReady;
+        return {
+          type: 'response', id, command: 'get_state', success: true,
+          data: { sessionId: 'send-first-luna-session', sessionName: 'Luna', model: { provider: 'openai-codex', id: 'gpt-5.6-luna' }, thinkingLevel: 'xhigh' },
+        };
+      }
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        if (this.name === 'original') this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const original = new FakeClient('original');
+  const replacement = new FakeClient('replacement');
+  const clients = [original, replacement];
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    rpcClientFactory: () => clients.shift(),
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
+  );
+  await driver.sendUserMessage(snapshot.ref, { text: 'first turn' });
+  const originalSetModelCalls = original.commands.filter((command) => command.type === 'set_model').length;
+
+  const secondPrompt = driver.sendUserMessage(snapshot.ref, { text: 'second turn starts first' });
+  const modelChange = driver.setSessionModel(snapshot.ref, { provider: 'openai-codex', modelId: 'gpt-5.6-sol' });
+  releaseReplacementState();
+  await secondPrompt;
+  await assert.rejects(modelChange, /session is running/);
+
+  assert.equal(original.commands.filter((command) => command.type === 'set_model').length, originalSetModelCalls);
+  assert.equal(replacement.commands.some((command) => command.type === 'set_model'), false);
+  await driver.closeSession(snapshot.ref);
+});
+
+test('PiRpcDriver replaces only a tainted Luna child before the next prompt and ignores late old-child events', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    lastListener;
+    closed = false;
+
+    constructor(name, sessionId = 'luna-recovery-session') {
+      this.name = name;
+      this.sessionId = sessionId;
+    }
+
+    onEvent(listener) {
+      this.lastListener = listener;
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+
+    close() { this.closed = true; }
+
+    emit(event) { for (const listener of this.listeners) listener(event); }
+
+    emitLate(event) { this.lastListener?.(event); }
+
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') {
+        return {
+          type: 'response', id, command: 'get_state', success: true,
+          data: {
+            sessionId: this.sessionId,
+            sessionName: 'Luna Recovery',
+            model: { provider: 'openai-codex', id: 'gpt-5.6-luna' },
+            thinkingLevel: 'xhigh',
+          },
+        };
+      }
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        if (this.name === 'initial') {
+          this.emit({
+            type: 'message_end',
+            message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-5.6-luna', stopReason: 'error', errorMessage: 'Model not found gpt-5.6-luna' },
+          });
+          this.emit({ type: 'agent_end', willRetry: false });
+        } else {
+          this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'FRESH_CHILD_OK' } });
+          this.emit({ type: 'agent_end', willRetry: false });
+        }
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+
+  const initial = new FakeClient('initial');
+  const replacement = new FakeClient('replacement');
+  const factoryContexts = [];
+  const clients = [initial, replacement];
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: '/tmp/pi-gui-rpc-agent',
+    sessionDir: '/tmp/pi-gui-rpc-sessions',
+    userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent',
+    productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    now: () => '2026-01-01T00:00:00.000Z',
+    rpcClientFactory: (context) => { factoryContexts.push(context); return clients.shift(); },
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
+  );
+  const events = [];
+  driver.subscribe(snapshot.ref, (event) => events.push(event));
+
+  await driver.sendUserMessage(snapshot.ref, { text: 'first Luna turn' });
+  await driver.sendUserMessage(snapshot.ref, { text: 'second Luna turn' });
+
+  assert.equal(factoryContexts.length, 2);
+  assert.equal(factoryContexts[0].sessionId, undefined);
+  assert.equal(factoryContexts[1].sessionId, 'luna-recovery-session');
+  assert.equal(initial.closed, true);
+  assert.deepEqual(initial.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['first Luna turn']);
+  assert.deepEqual(replacement.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['second Luna turn']);
+  assert.equal(events.some((event) => event.type === 'sessionClosed'), false);
+
+  const eventCount = events.length;
+  initial.emitLate({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'STALE_OLD_CHILD' } });
+  initial.emitLate({ type: 'agent_end', willRetry: false });
+  assert.equal(events.length, eventCount);
+  assert.equal(events.some((event) => event.type === 'assistantDelta' && event.text === 'STALE_OLD_CHILD'), false);
+  assert.equal(events.some((event) => event.type === 'assistantDelta' && event.text === 'FRESH_CHILD_OK'), true);
+});
+
+test('PiRpcDriver restores Luna model and thinking configuration from a reopened Pi session', async (t) => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-rpc-reopen-state-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const sessionDir = path.join(tmp, 'sessions');
+  fs.mkdirSync(sessionDir, { recursive: true });
+  fs.writeFileSync(path.join(sessionDir, 'x_existing-luna.jsonl'), '');
+
+  class FakeClient {
+    onEvent() { return () => undefined; }
+    close() {}
+    async sendCommand(command, id) {
+      if (command.type === 'get_state') {
+        return {
+          type: 'response', id, command: 'get_state', success: true,
+          data: {
+            sessionId: 'existing-luna',
+            sessionName: 'Reopened Luna',
+            model: { provider: 'openai-codex', id: 'gpt-5.6-luna' },
+            thinkingLevel: 'xhigh',
+          },
+        };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: path.join(tmp, 'agent'),
+    sessionDir,
+    userDataDir: path.join(tmp, 'user-data'),
+    labWorkspace: path.join(tmp, 'workspace'),
+    expectedLabWorkspaceRoot: path.join(tmp, 'workspace'),
+    productionAgentDir: path.join(tmp, 'prod-agent'),
+    productionUserDataDir: path.join(tmp, 'prod-user-data'),
+    rpcClientFactory: () => new FakeClient(),
+  });
+
+  const snapshot = await driver.openSession({ workspaceId: 'ws', sessionId: 'existing-luna' });
+  assert.deepEqual(snapshot.config, { provider: 'openai-codex', modelId: 'gpt-5.6-luna', thinkingLevel: 'xhigh' });
+});
+
 test('PiRpcDriver creates a chat session and maps fake RPC stream into driver events', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
 
