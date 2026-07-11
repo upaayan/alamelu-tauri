@@ -1,6 +1,6 @@
 # Alamelu Pi Luna Internal Recovery — Implementation
 
-Status: audit complete; package/install verification pending
+Status: deployed and verified in the installed app
 
 ## Scope
 
@@ -79,3 +79,18 @@ pnpm --filter @pi-gui/desktop run package:alpi:dir
 It is the documented AWS-backed explicit-keychain/identity-hash wrapper. No
 manual signing, keychain inspection, friendly-name signing, or action that
 asks the user for an Apple password is introduced.
+
+## Deployment verification
+
+- Packaged only through the documented `package:alpi:dir` wrapper, then
+  verified the candidate and installed `/Applications/Alamelu Pi.app` with
+  strict deep signature verification. The installed bundle identifies as
+  `com.alamelu.pi` / `Alamelu Pi` / `alpi` and continues to use the external
+  Pi runtime.
+- A real Electron run of the installed app used isolated app data and the
+  existing Pi subscription credentials. It created one Luna/xhigh thread and
+  completed two consecutive turns: `ALPI_INSTALLED_LUNA_ONE` followed by
+  `ALPI_INSTALLED_LUNA_TWO`.
+- The second turn therefore ran after the first idle transition, exercising
+  the internal same-thread Pi-child replacement rather than relying on an app
+  quit/reopen. No Apple password prompt was used or required.

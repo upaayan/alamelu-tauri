@@ -41,3 +41,13 @@ Verification reviewed:
   session ID replacement and completed both turns.
 - No signing, authentication, provider, external-Pi source, or credential
   files were changed by the implementation.
+
+## Deployment confirmation
+
+The documented signing wrapper successfully packaged the release without an
+Apple password prompt. Candidate and installed-app signature/runtime checks
+passed. A real Electron test of the installed `/Applications/Alamelu Pi.app`
+then created one Luna/xhigh thread with isolated app data and completed two
+consecutive responses. The second response proved the post-idle internal
+child replacement works in the installed product while preserving the same
+thread.
