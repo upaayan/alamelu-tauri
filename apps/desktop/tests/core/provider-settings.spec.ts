@@ -8,6 +8,7 @@ import {
   makeWorkspace,
   seedAgentDir,
   stubNextOpenDialog,
+  waitForWorkspaceByPath,
 } from "../helpers/electron-app";
 
 test("settings lets the user save an API key for a built-in provider", async () => {
@@ -30,6 +31,7 @@ test("settings lets the user save an API key for a built-in provider", async () 
 
   try {
     const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
     await window.keyboard.press(desktopShortcut(","));
     await expect(window.getByTestId("settings-surface")).toBeVisible();
     await window.getByRole("button", { name: "Providers", exact: true }).click();
@@ -40,7 +42,7 @@ test("settings lets the user save an API key for a built-in provider", async () 
     });
     await allProviders.locator(".settings-disclosure__summary").click();
     const openAiRow = allProviders.locator(".settings-row", {
-      has: window.locator(".settings-row__title", { hasText: /^openai$/ }),
+      has: window.locator(".settings-row__title", { hasText: /^openai$/i }),
     });
     await expect(openAiRow).toContainText("API key");
     await openAiRow.getByRole("button", { name: "Set API key" }).click();
@@ -69,6 +71,118 @@ test("settings lets the user save an API key for a built-in provider", async () 
   }
 });
 
+test("Alamelu Pi's thin external runtime saves an API key through installed Pi", async () => {
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const agentDir = join(userDataDir, "agent");
+  const workspacePath = await makeWorkspace("provider-settings-external-api-key-workspace");
+  await seedAgentDir(agentDir, {
+    withOpenAiAuth: false,
+    withDefaultModel: false,
+    enabledModels: ["openai/gpt-5"],
+  });
+
+  const harness = await launchDesktop(userDataDir, {
+    agentDir,
+    initialWorkspaces: [workspacePath],
+    scrubProviderEnv: true,
+    testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+      PI_GUI_DRIVER: "rpc",
+    },
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
+    await window.keyboard.press(desktopShortcut(","));
+    await window.getByRole("button", { name: "Providers", exact: true }).click();
+
+    const allProviders = window.locator(".settings-section", {
+      has: window.locator(".settings-section__title", { hasText: "All providers" }),
+    });
+    await allProviders.locator(".settings-disclosure__summary").click();
+    const openAiRow = allProviders.locator(".settings-row", {
+      has: window.locator(".settings-row__title", { hasText: /^openai$/i }),
+    });
+    await expect(openAiRow.getByRole("button", { name: "Set API key" })).toBeVisible();
+    await openAiRow.getByRole("button", { name: "Set API key" }).click();
+
+    const dialog = window.getByTestId("provider-api-key-dialog");
+    await dialog.getByLabel("openai API key").fill("test-external-openai-key");
+    await dialog.getByRole("button", { name: "Set API key" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const connectedProviders = window.locator(".settings-section", {
+      has: window.locator(".settings-section__title", { hasText: "Connected" }),
+    });
+    const connectedOpenAiRow = connectedProviders.locator(".settings-row", {
+      has: window.locator(".settings-row__title", { hasText: /^openai$/i }),
+    });
+    await expect(connectedOpenAiRow).toContainText("API key");
+    await expect(connectedOpenAiRow.getByRole("button", { name: "Manage" })).toBeVisible();
+  } finally {
+    await harness.close();
+  }
+});
+
+test("Alamelu Pi exposes subscription and API-key choices when installed Pi supports both", async () => {
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const agentDir = join(userDataDir, "agent");
+  const workspacePath = await makeWorkspace("provider-settings-external-auth-method-workspace");
+  await seedAgentDir(agentDir, {
+    withOpenAiAuth: false,
+    withDefaultModel: false,
+  });
+
+  const harness = await launchDesktop(userDataDir, {
+    agentDir,
+    initialWorkspaces: [workspacePath],
+    scrubProviderEnv: true,
+    testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+      PI_GUI_DRIVER: "rpc",
+    },
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
+    await window.keyboard.press(desktopShortcut(","));
+    await window.getByRole("button", { name: "Providers", exact: true }).click();
+
+    const allProviders = window.locator(".settings-section", {
+      has: window.locator(".settings-section__title", { hasText: "All providers" }),
+    });
+    await allProviders.locator(".settings-disclosure__summary").click();
+    const anthropicRow = allProviders.locator(".settings-row", {
+      has: window.locator(".settings-row__title", { hasText: /anthropic/i }),
+    }).first();
+    await expect(anthropicRow.getByRole("button", { name: "Use subscription" })).toBeVisible();
+    await expect(anthropicRow.getByRole("button", { name: "Set API key" })).toBeVisible();
+    await anthropicRow.getByRole("button", { name: "Set API key" }).click();
+
+    const dialog = window.getByTestId("provider-api-key-dialog");
+    await dialog.getByLabel(/API key/i).fill("test-external-anthropic-key");
+    await dialog.getByRole("button", { name: "Set API key" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const connectedProviders = window.locator(".settings-section", {
+      has: window.locator(".settings-section__title", { hasText: "Connected" }),
+    });
+    const connectedAnthropicRow = connectedProviders.locator(".settings-row", {
+      has: window.locator(".settings-row__title", { hasText: /anthropic/i }),
+    }).first();
+    await expect(connectedAnthropicRow).toContainText("API key");
+    await expect(connectedAnthropicRow.getByRole("button", { name: "Manage" })).toBeVisible();
+  } finally {
+    await harness.close();
+  }
+});
+
 test("settings shows environment-configured providers as managed externally", async () => {
   test.setTimeout(60_000);
   const previousOpenAiKey = process.env.OPENAI_API_KEY;
@@ -87,10 +201,15 @@ test("settings shows environment-configured providers as managed externally", as
     agentDir,
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+      PI_GUI_DRIVER: "rpc",
+    },
   });
 
   try {
     const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
     await window.keyboard.press(desktopShortcut(","));
     await expect(window.getByTestId("settings-surface")).toBeVisible();
     await window.getByRole("button", { name: "Providers", exact: true }).click();
@@ -100,7 +219,7 @@ test("settings shows environment-configured providers as managed externally", as
       has: window.locator(".settings-section__title", { hasText: "Connected" }),
     });
     const openAiRow = connectedProviders.locator(".settings-row", {
-      has: window.locator(".settings-row__title", { hasText: /^openai$/ }),
+      has: window.locator(".settings-row__title", { hasText: /^openai$/i }),
     });
     await expect(openAiRow).toContainText("Environment variable");
     await expect(openAiRow.getByRole("button", { name: "Managed externally" })).toBeDisabled();
@@ -146,10 +265,15 @@ test("settings keeps models.json provider overrides in the external-config state
     initialWorkspaces: [workspacePath],
     scrubProviderEnv: true,
     testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+      PI_GUI_DRIVER: "rpc",
+    },
   });
 
   try {
     const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
     await window.keyboard.press(desktopShortcut(","));
     await expect(window.getByTestId("settings-surface")).toBeVisible();
     await window.getByRole("button", { name: "Providers", exact: true }).click();
@@ -159,7 +283,7 @@ test("settings keeps models.json provider overrides in the external-config state
       has: window.locator(".settings-section__title", { hasText: "Connected" }),
     });
     const openAiRow = connectedProviders.locator(".settings-row", {
-      has: window.locator(".settings-row__title", { hasText: /^openai$/ }),
+      has: window.locator(".settings-row__title", { hasText: /^openai$/i }),
     });
     await expect(openAiRow).toContainText("Configured externally");
     await expect(openAiRow.getByRole("button", { name: "Managed externally" })).toBeDisabled();

@@ -145,24 +145,27 @@ export function ProviderRow({
   readonly onLogoutProvider: (providerId: string) => void;
   readonly onConfigureApiKey: (provider: RuntimeSnapshot["providers"][number]) => void;
 }) {
-  const action = pendingLogin
-    ? { disabled: true, label: "Signing in..." }
-    : resolveProviderAction(provider, onLoginProvider, onLogoutProvider, onConfigureApiKey);
+  const actions = pendingLogin
+    ? [{ disabled: true, label: "Signing in..." }]
+    : resolveProviderActions(provider, onLoginProvider, onLogoutProvider, onConfigureApiKey);
   return (
     <div className="settings-row">
       <div className="settings-row__label">
         <div className="settings-row__title">{provider.name}</div>
         <div className="settings-row__description">{describeProviderStatus(provider)}</div>
       </div>
-      <div className="settings-row__control">
-        <button
-          className="button button--secondary"
-          disabled={action.disabled}
-          type="button"
-          onClick={action.onClick}
-        >
-          {action.label}
-        </button>
+      <div className="settings-row__control settings-row__actions">
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            className="button button--secondary"
+            disabled={action.disabled}
+            type="button"
+            onClick={action.onClick}
+          >
+            {action.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -179,6 +182,9 @@ function describeProviderStatus(provider: RuntimeSnapshot["providers"][number]):
     case "external":
       return provider.hasAuth ? "Configured externally · connected" : "Configure externally";
     default:
+      if (provider.oauthSupported && provider.apiKeySetupSupported) {
+        return "Subscription or API key";
+      }
       if (provider.oauthSupported) {
         return "OAuth";
       }
@@ -189,42 +195,59 @@ function describeProviderStatus(provider: RuntimeSnapshot["providers"][number]):
   }
 }
 
-function resolveProviderAction(
+function resolveProviderActions(
   provider: RuntimeSnapshot["providers"][number],
   onLoginProvider: (providerId: string) => void,
   onLogoutProvider: (providerId: string) => void,
   onConfigureApiKey: (provider: RuntimeSnapshot["providers"][number]) => void,
-): {
+): readonly {
   readonly disabled: boolean;
   readonly label: string;
   readonly onClick?: () => void;
-} {
+}[] {
   if (provider.authSource === "oauth") {
-    return {
+    return [{
       disabled: false,
       label: "Logout",
       onClick: () => onLogoutProvider(provider.id),
-    };
+    }];
   }
 
-  if (provider.oauthSupported && provider.authSource === "none") {
-    return {
-      disabled: false,
-      label: "Login",
-      onClick: () => onLoginProvider(provider.id),
-    };
+  if (provider.authSource === "none") {
+    const actions = [] as {
+      disabled: boolean;
+      label: string;
+      onClick?: () => void;
+    }[];
+    if (provider.oauthSupported) {
+      actions.push({
+        disabled: false,
+        label: provider.apiKeySetupSupported ? "Use subscription" : "Login",
+        onClick: () => onLoginProvider(provider.id),
+      });
+    }
+    if (provider.apiKeySetupSupported) {
+      actions.push({
+        disabled: false,
+        label: "Set API key",
+        onClick: () => onConfigureApiKey(provider),
+      });
+    }
+    if (actions.length > 0) {
+      return actions;
+    }
   }
 
-  if (provider.apiKeySetupSupported && (provider.authSource === "none" || provider.authSource === "auth_file")) {
-    return {
+  if (provider.apiKeySetupSupported && provider.authSource === "auth_file") {
+    return [{
       disabled: false,
-      label: provider.authSource === "auth_file" ? "Manage" : "Set API key",
+      label: "Manage",
       onClick: () => onConfigureApiKey(provider),
-    };
+    }];
   }
 
-  return {
+  return [{
     disabled: true,
     label: provider.authSource === "env" || provider.authSource === "external" ? "Managed externally" : "Configure externally",
-  };
+  }];
 }

@@ -16,6 +16,7 @@ import type {
 } from "@pi-gui/session-driver/runtime-types";
 import type { DesktopRuntimeSupervisor } from "./desktop-driver";
 import { unsupportedRpcDesktopOperation } from "./desktop-driver";
+import { type ExternalPiAuthStatus, ExternalPiAuthBridge, loadExternalPiAuthBridge } from "./external-pi-auth-bridge";
 import { parsePiListModels } from "./external-pi-model-parser";
 
 const LIST_MODELS_TIMEOUT_MS = 30_000;
@@ -43,16 +44,32 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
     return modelSettingsFromRecord(globalSettings);
   }
 
-  login(_workspace: WorkspaceRef, _providerId: string, _callbacks: RuntimeLoginCallbacks): Promise<RuntimeSnapshot> {
-    return Promise.reject(unsupportedRpcDesktopOperation("external pi runtime login"));
+  async login(workspace: WorkspaceRef, providerId: string, callbacks: RuntimeLoginCallbacks): Promise<RuntimeSnapshot> {
+    const authBridge = await this.authBridge();
+    if (!authBridge.getOAuthProviders().some((provider) => provider.id === providerId)) {
+      throw new Error(`Pi does not offer subscription login for provider: ${providerId}`);
+    }
+    await authBridge.login(providerId, callbacks);
+    return this.buildSnapshot(workspace);
   }
 
-  logout(_workspace: WorkspaceRef, _providerId: string): Promise<RuntimeSnapshot> {
-    return Promise.reject(unsupportedRpcDesktopOperation("external pi runtime logout"));
+  async logout(workspace: WorkspaceRef, providerId: string): Promise<RuntimeSnapshot> {
+    const authBridge = await this.authBridge();
+    authBridge.logout(providerId);
+    return this.buildSnapshot(workspace);
   }
 
-  setProviderApiKey(_workspace: WorkspaceRef, _providerId: string, _apiKey: string): Promise<RuntimeSnapshot> {
-    return Promise.reject(unsupportedRpcDesktopOperation("external pi runtime setProviderApiKey"));
+  async setProviderApiKey(workspace: WorkspaceRef, providerId: string, apiKey: string): Promise<RuntimeSnapshot> {
+    const trimmedApiKey = apiKey.trim();
+    if (!trimmedApiKey) {
+      throw new Error("API key cannot be empty.");
+    }
+    const authBridge = await this.authBridge();
+    if (!authBridge.supportsApiKey(providerId)) {
+      throw new Error(`Pi does not offer API-key setup for provider: ${providerId}`);
+    }
+    authBridge.setApiKey(providerId, trimmedApiKey);
+    return this.buildSnapshot(workspace);
   }
 
   async setDefaultModel(workspace: WorkspaceRef, selection: { readonly provider: string; readonly modelId: string }): Promise<RuntimeSnapshot> {
@@ -102,11 +119,11 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
   }
 
   private async buildSnapshot(workspace: WorkspaceRef): Promise<RuntimeSnapshot> {
-    const [settings, auth, modelsJson, listOutput] = await Promise.all([
+    const [settings, modelsJson, listOutput, authBridge] = await Promise.all([
       this.readSettings(),
-      readJsonRecord(join(this.options.agentDir, "auth.json")),
       readJsonRecord(join(this.options.agentDir, "models.json")),
       this.runPi(["--list-models"]),
+      this.authBridge(),
     ]);
     const rows = parsePiListModels(listOutput);
     const customLabels = customModelLabels(modelsJson);
@@ -117,14 +134,20 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
     for (const provider of Object.keys(readRecord(modelsJson.providers))) {
       providerIds.add(provider);
     }
-    for (const provider of Object.keys(auth)) {
+    for (const provider of authBridge.listModelProviderIds()) {
       providerIds.add(provider);
+    }
+    for (const provider of authBridge.listCredentialProviderIds()) {
+      providerIds.add(provider);
+    }
+    for (const provider of authBridge.getOAuthProviders()) {
+      providerIds.add(provider.id);
     }
     if (typeof settings.defaultProvider === "string") {
       providerIds.add(settings.defaultProvider);
     }
 
-    const providers = [...providerIds].sort().map((providerId) => providerRecord(providerId, auth[providerId]));
+    const providers = [...providerIds].sort().map((providerId) => providerRecord(providerId, authBridge));
     const providerById = new Map(providers.map((provider) => [provider.id, provider]));
     const models = rows
       .map<RuntimeModelRecord>((row) => {
@@ -184,6 +207,13 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
     return readJsonRecord(join(this.options.agentDir, "settings.json"));
   }
 
+  private authBridge(): Promise<ExternalPiAuthBridge> {
+    return loadExternalPiAuthBridge({
+      piBin: this.options.piBin,
+      agentDir: this.options.agentDir,
+    });
+  }
+
   private async updateSettings(mutator: (settings: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
     const settingsPath = join(this.options.agentDir, "settings.json");
     const before = await readJsonRecord(settingsPath);
@@ -192,18 +222,37 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
   }
 }
 
-function providerRecord(providerId: string, authEntry: unknown): RuntimeProviderRecord {
-  const auth = readRecord(authEntry);
-  const authType = auth.type === "oauth" ? "oauth" : auth.type === "api_key" ? "api_key" : "none";
+function providerRecord(providerId: string, authBridge: ExternalPiAuthBridge): RuntimeProviderRecord {
+  const oauthProvider = authBridge.getOAuthProviders().find((provider) => provider.id === providerId);
+  const apiKeySetupSupported = authBridge.supportsApiKey(providerId);
+  const authStatus = authBridge.getAuthStatus(providerId);
+  const storedAuthType = authBridge.getStoredAuthType(providerId);
+  const authType = storedAuthType ?? (authStatus.configured && apiKeySetupSupported ? "api_key" : "none");
   return {
     id: providerId,
-    name: providerId,
-    hasAuth: Object.keys(auth).length > 0,
+    name: oauthProvider?.name ?? authBridge.getProviderDisplayName(providerId),
+    hasAuth: authStatus.configured,
     authType,
-    authSource: Object.keys(auth).length > 0 ? "auth_file" : "none",
-    oauthSupported: false,
-    apiKeySetupSupported: false,
+    authSource: providerAuthSource(authStatus, authType),
+    oauthSupported: Boolean(oauthProvider),
+    apiKeySetupSupported,
   };
+}
+
+function providerAuthSource(
+  authStatus: ExternalPiAuthStatus,
+  authType: RuntimeProviderRecord["authType"],
+): RuntimeProviderRecord["authSource"] {
+  if (!authStatus.configured) {
+    return "none";
+  }
+  if (authStatus.source === "stored") {
+    return authType === "oauth" ? "oauth" : authType === "api_key" ? "auth_file" : "external";
+  }
+  if (authStatus.source === "environment") {
+    return "env";
+  }
+  return "external";
 }
 
 function runtimeSettingsFromRecord(record: Record<string, unknown>): RuntimeSettingsSnapshot {
