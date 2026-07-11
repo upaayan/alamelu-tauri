@@ -351,6 +351,86 @@ test('PiRpcDriver cold-opens an existing isolated lab session id', async (t) => 
   assert.equal(snapshot.ref.sessionId, 'existing-session');
 });
 
+test('PiRpcDriver lets Pi generate a new session ID and adopts the returned ID', async (t) => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-rpc-new-session-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const requestedSessionIds = [];
+
+  class FakeClient {
+    onEvent() { return () => undefined; }
+    close() {}
+    async sendCommand(command, id) {
+      if (command.type === 'get_state') {
+        return {
+          type: 'response',
+          id,
+          command: 'get_state',
+          success: true,
+          data: { sessionId: '019f4ffe-4979-775a-ad74-b0d99a56bee8', sessionName: 'Pi Generated' },
+        };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: path.join(tmp, 'agent'),
+    sessionDir: path.join(tmp, 'sessions'),
+    userDataDir: path.join(tmp, 'user-data'),
+    labWorkspace: path.join(tmp, 'workspace'),
+    expectedLabWorkspaceRoot: path.join(tmp, 'workspace'),
+    productionAgentDir: path.join(tmp, 'prod-agent'),
+    productionUserDataDir: path.join(tmp, 'prod-user-data'),
+    rpcClientFactory: ({ sessionId }) => {
+      requestedSessionIds.push(sessionId);
+      return new FakeClient();
+    },
+  });
+
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: path.join(tmp, 'workspace') });
+
+  assert.deepEqual(requestedSessionIds, [undefined]);
+  assert.equal(snapshot.ref.sessionId, '019f4ffe-4979-775a-ad74-b0d99a56bee8');
+  assert.equal(snapshot.title, 'Pi Generated');
+});
+
+test('PiRpcDriver rejects a new session when Pi does not return its generated session ID', async (t) => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-rpc-missing-session-id-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const fake = new class {
+    closed = false;
+    onEvent() { return () => undefined; }
+    close() { this.closed = true; }
+    async sendCommand(command, id) {
+      if (command.type === 'get_state') {
+        return { type: 'response', id, command: 'get_state', success: true, data: { sessionName: 'Missing ID' } };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }();
+
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: path.join(tmp, 'agent'),
+    sessionDir: path.join(tmp, 'sessions'),
+    userDataDir: path.join(tmp, 'user-data'),
+    labWorkspace: path.join(tmp, 'workspace'),
+    expectedLabWorkspaceRoot: path.join(tmp, 'workspace'),
+    productionAgentDir: path.join(tmp, 'prod-agent'),
+    productionUserDataDir: path.join(tmp, 'prod-user-data'),
+    rpcClientFactory: () => fake,
+  });
+
+  await assert.rejects(
+    () => driver.createSession({ workspaceId: 'ws', path: path.join(tmp, 'workspace') }),
+    /did not return a Pi session ID/,
+  );
+  assert.equal(fake.closed, true);
+});
+
 test('PiRpcDriver emits runFailed and returns to idle when prompt command fails', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   let promptTimeoutMs;

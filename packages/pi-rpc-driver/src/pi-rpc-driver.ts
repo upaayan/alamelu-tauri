@@ -44,7 +44,7 @@ export interface PiRpcDriverOptions extends LabPathInput {
   readonly noPromptTemplates?: boolean;
   readonly noThemes?: boolean;
   readonly now?: () => string;
-  readonly rpcClientFactory?: (context: { workspace: WorkspaceRef; paths: ValidatedLabPaths; sessionId: string }) => RpcClientLike;
+  readonly rpcClientFactory?: (context: { workspace: WorkspaceRef; paths: ValidatedLabPaths; sessionId?: string }) => RpcClientLike;
   readonly onStderr?: (line: string) => void;
 }
 
@@ -70,22 +70,23 @@ export class PiRpcDriver implements SessionDriver {
 
   async createSession(workspace: WorkspaceRef, options?: CreateSessionOptions): Promise<SessionSnapshot> {
     this.assertWorkspacePathAllowed(workspace.path);
-    const sessionId = randomUUID();
-    const client = this.createClient(workspace, sessionId, { ensureSessionId: true });
+    const client = this.createClient(workspace);
     try {
-      const state = await client.sendCommand({ type: "get_state" }, `get-state-${sessionId}`);
+      const state = await client.sendCommand({ type: "get_state" }, `get-state-${randomUUID()}`);
       if (!state.success) throw new Error(state.error ?? "RPC get_state failed");
+      const sessionId = sessionIdFromState(state.data);
+      if (!sessionId) throw new Error("RPC get_state did not return a Pi session ID");
 
       if (options?.initialModel) {
-        const modelResponse = await client.sendCommand({ type: "set_model", provider: options.initialModel.provider, modelId: options.initialModel.modelId }, `set-model-${sessionId}`);
+        const modelResponse = await client.sendCommand({ type: "set_model", provider: options.initialModel.provider, modelId: options.initialModel.modelId }, `set-model-${randomUUID()}`);
         if (!modelResponse.success) throw new Error(modelResponse.error ?? "RPC set_model failed");
       }
       if (options?.initialThinkingLevel) {
-        const thinkingResponse = await client.sendCommand({ type: "set_thinking_level", level: options.initialThinkingLevel }, `set-thinking-${sessionId}`);
+        const thinkingResponse = await client.sendCommand({ type: "set_thinking_level", level: options.initialThinkingLevel }, `set-thinking-${randomUUID()}`);
         if (!thinkingResponse.success) throw new Error(thinkingResponse.error ?? "RPC set_thinking_level failed");
       }
 
-      const ref = { workspaceId: workspace.workspaceId, sessionId: sessionIdFromState(state.data) ?? sessionId };
+      const ref = { workspaceId: workspace.workspaceId, sessionId };
       const snapshot = this.makeSnapshot(ref, workspace, {
         title: options?.title ?? sessionNameFromState(state.data) ?? "RPC Session",
         status: "idle",
@@ -316,8 +317,10 @@ export class PiRpcDriver implements SessionDriver {
     return assistantText ? [{ role: "assistant", text: assistantText }] : [];
   }
 
-  private createClient(workspace: WorkspaceRef, sessionId: string, options: { ensureSessionId?: boolean } = {}): RpcClientLike {
-    if (this.options.rpcClientFactory) return this.options.rpcClientFactory({ workspace, paths: this.paths, sessionId });
+  private createClient(workspace: WorkspaceRef, sessionId?: string, options: { ensureSessionId?: boolean } = {}): RpcClientLike {
+    if (this.options.rpcClientFactory) {
+      return this.options.rpcClientFactory({ workspace, paths: this.paths, ...(sessionId ? { sessionId } : {}) });
+    }
     return spawnPiRpcClient({
       piBin: this.options.piBin,
       cwd: this.options.allowRealWorkspace ? workspace.path : this.paths.labWorkspace,
@@ -331,7 +334,7 @@ export class PiRpcDriver implements SessionDriver {
       noSkills: this.options.noSkills ?? true,
       noPromptTemplates: this.options.noPromptTemplates ?? true,
       noThemes: this.options.noThemes ?? true,
-      ...(options.ensureSessionId ? { sessionId } : {}),
+      ...(options.ensureSessionId && sessionId ? { sessionId } : {}),
       ...(this.options.onStderr ? { onStderr: this.options.onStderr } : {}),
     }) as RpcClient;
   }
