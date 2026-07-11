@@ -1,6 +1,6 @@
 # Alamelu Pi Luna WebSocket Recovery — Implementation
 
-Status: implemented; pre-audit verification complete
+Status: deployed and verified
 
 ## Scope
 
@@ -76,8 +76,33 @@ packaging unit test.
   used the normal external Pi agent directory without changing its files,
   authentication, providers, or settings.
 
-The final signed package, installed-app smoke, and affected-session retest are
-intentionally deferred until Implementation Audit PASS.
+## Post-audit package, install, and smoke evidence
+
+Implementation Audit Round 1 passed before packaging.
+
+- The only signing command used was
+  `pnpm --filter @pi-gui/desktop run package:alpi:dir`.  It completed the
+  documented AWS-backed explicit-keychain / identity-hash route without an
+  interactive Apple password prompt.
+- The signed candidate passed `codesign --verify --deep --strict`; its bundle
+  identity is `com.alamelu.pi`, its name is `Alamelu Pi`, and its executable is
+  `alpi`.
+- `PI_APP_PACKAGE_FLAVOR=alpi pnpm --filter @pi-gui/desktop run
+  verify:packaged-runtime-deps` passed, proving the candidate still uses the
+  external Pi runtime and does not package Pi itself.
+- The packaged `.ts` recovery resource loaded successfully inside a fresh
+  external Pi RPC child and returned a successful state response.
+- `pnpm --filter @pi-gui/desktop run smoke:alpi:candidate` passed with an
+  isolated copied app state and external Pi runtime.
+- The prior installed app was preserved at
+  `/Applications/Alamelu Pi.app.before-luna-ws-recovery-20260711`, then the
+  signed candidate replaced `/Applications/Alamelu Pi.app`.
+- An installed-app Electron smoke used a fresh temporary app state, selected
+  `openai-codex/gpt-5.6-luna` at `xhigh`, and completed two consecutive turns:
+  `ALPI_INSTALLED_LUNA_TWO_TURN_OK`.
+
+No provider settings, credentials, subscription state, external Pi source, or
+user session history was modified during verification.
 
 ## Non-goals
 
