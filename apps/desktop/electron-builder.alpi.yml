@@ -16,6 +16,8 @@ files:
 extraResources:
   - from: resources/alpi-icon.png
     to: icon.png
+  - from: resources/alpi-luna-websocket-recovery.ts
+    to: extensions/alpi-luna-websocket-recovery.ts
 
 asar: true
 asarUnpack:

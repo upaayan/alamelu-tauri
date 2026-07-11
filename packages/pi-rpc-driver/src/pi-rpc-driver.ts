@@ -43,6 +43,7 @@ export interface PiRpcDriverOptions extends LabPathInput {
   readonly noSkills?: boolean;
   readonly noPromptTemplates?: boolean;
   readonly noThemes?: boolean;
+  readonly extensionPaths?: readonly string[];
   readonly now?: () => string;
   readonly rpcClientFactory?: (context: { workspace: WorkspaceRef; paths: ValidatedLabPaths; sessionId?: string }) => RpcClientLike;
   readonly onStderr?: (line: string) => void;
@@ -56,6 +57,7 @@ interface SessionRecord {
   snapshot: SessionSnapshot;
   transcriptText: string;
   cancellingRunId?: string;
+  pendingAssistantError?: string;
   suppressRunEvents?: boolean;
 }
 
@@ -334,6 +336,7 @@ export class PiRpcDriver implements SessionDriver {
       noSkills: this.options.noSkills ?? true,
       noPromptTemplates: this.options.noPromptTemplates ?? true,
       noThemes: this.options.noThemes ?? true,
+      ...(this.options.noExtensions === false && this.options.extensionPaths?.length ? { extensionPaths: this.options.extensionPaths } : {}),
       ...(options.ensureSessionId && sessionId ? { sessionId } : {}),
       ...(this.options.onStderr ? { onStderr: this.options.onStderr } : {}),
     }) as RpcClient;
@@ -344,6 +347,7 @@ export class PiRpcDriver implements SessionDriver {
     if (event.type === "agent_start") {
       if (record.suppressRunEvents && !record.snapshot.runningRunId) return;
       delete record.suppressRunEvents;
+      delete record.pendingAssistantError;
       const runId = record.snapshot.runningRunId;
       if (!runId) return;
       record.snapshot = { ...record.snapshot, status: "running", runningRunId: runId, updatedAt: this.now() };
@@ -368,8 +372,19 @@ export class PiRpcDriver implements SessionDriver {
       return;
     }
 
+    const finalizedAssistantError = finalizedAssistantMessageFailure(event);
+    if (finalizedAssistantError) {
+      record.pendingAssistantError = finalizedAssistantError;
+      return;
+    }
+
     if (event.type === "agent_end") {
+      if (event.willRetry === true) return;
       if (!activeRunId) return;
+      if (record.pendingAssistantError) {
+        this.failRun(record, activeRunId, record.pendingAssistantError);
+        return;
+      }
       const { runningRunId: _runningRunId, ...snapshotWithoutRunId } = record.snapshot;
       record.snapshot = { ...snapshotWithoutRunId, status: "idle", updatedAt: this.now() };
     }
@@ -389,6 +404,7 @@ export class PiRpcDriver implements SessionDriver {
     if (record.suppressRunEvents && !record.snapshot.runningRunId) return;
     const { runningRunId: _runningRunId, ...snapshotWithoutRunId } = record.snapshot;
     delete record.cancellingRunId;
+    delete record.pendingAssistantError;
     record.suppressRunEvents = true;
     record.snapshot = { ...snapshotWithoutRunId, status: "idle", updatedAt: this.now() };
     this.emit(record.ref, { type: "sessionUpdated", sessionRef: record.ref, timestamp: this.now(), snapshot: record.snapshot });
@@ -568,6 +584,13 @@ function streamFailureMessage(event: RpcEvent): string | undefined {
   const assistantMessageEvent = event.assistantMessageEvent as Record<string, unknown> | undefined;
   if (assistantMessageEvent?.type !== "error") return undefined;
   return String(assistantMessageEvent.error ?? assistantMessageEvent.reason ?? "Assistant message failed");
+}
+
+function finalizedAssistantMessageFailure(event: RpcEvent): string | undefined {
+  if (event.type !== "message_end") return undefined;
+  const message = event.message as Record<string, unknown> | undefined;
+  if (message?.role !== "assistant" || message.stopReason !== "error") return undefined;
+  return String(message.errorMessage ?? message.error ?? "Assistant message failed");
 }
 
 function sessionIdFromState(data: unknown): string | undefined {

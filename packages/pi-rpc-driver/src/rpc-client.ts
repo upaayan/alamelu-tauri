@@ -168,6 +168,7 @@ export interface SpawnPiRpcOptions {
   readonly noSkills?: boolean;
   readonly noPromptTemplates?: boolean;
   readonly noThemes?: boolean;
+  readonly extensionPaths?: readonly string[];
   readonly sessionId?: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly onStderr?: (line: string) => void;
@@ -195,6 +196,7 @@ export function buildPiRpcSpawnSpec(options: SpawnPiRpcOptions): PiRpcSpawnSpec 
   if (options.noSkills ?? true) args.push("--no-skills");
   if (options.noPromptTemplates ?? true) args.push("--no-prompt-templates");
   if (options.noThemes ?? true) args.push("--no-themes");
+  for (const extensionPath of options.extensionPaths ?? []) args.push("--extension", extensionPath);
   if (options.sessionId) args.push("--session-id", options.sessionId);
 
   return {

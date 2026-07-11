@@ -203,6 +203,26 @@ test('buildPiRpcSpawnSpec omits suppression and forced model flags in parity mod
   assert.equal(spec.env.PI_CODING_AGENT_SESSION_DIR, '/tmp/alpi-sessions');
 });
 
+test('buildPiRpcSpawnSpec loads explicit app-owned recovery extensions without disabling user extensions', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-rpc-extension-spawn-'));
+  const piBin = path.join(tmp, 'pi');
+  fs.writeFileSync(piBin, '#!/bin/sh\n', { mode: 0o755 });
+  const extensionPath = '/tmp/alpi-luna-websocket-recovery.mjs';
+  const spec = buildPiRpcSpawnSpec({
+    piBin,
+    cwd: '/tmp/alpi-workspace',
+    agentDir: path.join(os.homedir(), '.pi', 'agent'),
+    sessionDir: '/tmp/alpi-sessions',
+    noExtensions: false,
+    extensionPaths: [extensionPath],
+  });
+
+  const extensionIndex = spec.args.indexOf('--extension');
+  assert.equal(extensionIndex >= 0, true);
+  assert.equal(spec.args[extensionIndex + 1], extensionPath);
+  assert.equal(spec.args.includes('--no-extensions'), false);
+});
+
 test('spawnPiRpcClient rejects PATH-relative pi binaries', () => {
   assert.throws(
     () => spawnPiRpcClient({
@@ -776,6 +796,102 @@ test('PiRpcDriver marks stream errors failed and suppresses later completion', a
   const lastUpdate = events.filter((event) => event.type === 'sessionUpdated').at(-1);
   assert.equal(lastUpdate.snapshot.status, 'idle');
   assert.equal('runningRunId' in lastUpdate.snapshot, false);
+});
+
+test('PiRpcDriver keeps the run active across Pi retry after a finalized assistant transport error', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  class FakeClient {
+    listeners = new Set();
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() {}
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      if (command.type === 'get_state') return { type: 'response', id, command: 'get_state', success: true, data: { sessionId: 'rpc-message-end-retry', sessionName: 'RPC Message End Retry' } };
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        this.emit({
+          type: 'message_end',
+          message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-5.6-luna', stopReason: 'error', errorMessage: 'WebSocket error' },
+        });
+        this.emit({ type: 'agent_end', willRetry: true });
+        this.emit({ type: 'agent_start' });
+        this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'RECOVERED_AFTER_RETRY' } });
+        this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const fake = new FakeClient();
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: '/tmp/pi-gui-rpc-agent',
+    sessionDir: '/tmp/pi-gui-rpc-sessions',
+    userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent',
+    productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    now: () => '2026-01-01T00:00:00.000Z',
+    rpcClientFactory: () => fake,
+  });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const events = [];
+  driver.subscribe(snapshot.ref, (event) => events.push(event));
+
+  await driver.sendUserMessage(snapshot.ref, { text: 'retry after transport failure' });
+
+  const recoveredDeltaIndex = events.findIndex((event) => event.type === 'assistantDelta' && event.text === 'RECOVERED_AFTER_RETRY');
+  const completedIndex = events.findIndex((event) => event.type === 'runCompleted');
+  assert.equal(events.some((event) => event.type === 'runFailed'), false);
+  assert.equal(recoveredDeltaIndex >= 0, true);
+  assert.equal(completedIndex > recoveredDeltaIndex, true);
+  assert.equal(events.filter((event) => event.type === 'runCompleted').length, 1);
+});
+
+test('PiRpcDriver reports a finalized assistant error only after Pi declines to retry', async () => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  class FakeClient {
+    listeners = new Set();
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() {}
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      if (command.type === 'get_state') return { type: 'response', id, command: 'get_state', success: true, data: { sessionId: 'rpc-message-end-final', sessionName: 'RPC Message End Final' } };
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        this.emit({
+          type: 'message_end',
+          message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-5.6-luna', stopReason: 'error', errorMessage: 'WebSocket error' },
+        });
+        this.emit({ type: 'agent_end', willRetry: false });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const fake = new FakeClient();
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: '/tmp/pi-gui-rpc-agent',
+    sessionDir: '/tmp/pi-gui-rpc-sessions',
+    userDataDir: '/tmp/pi-gui-rpc-user-data',
+    labWorkspace: '/tmp/pi-gui-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    productionAgentDir: '/Users/example/.pi/agent',
+    productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
+    now: () => '2026-01-01T00:00:00.000Z',
+    rpcClientFactory: () => fake,
+  });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const events = [];
+  driver.subscribe(snapshot.ref, (event) => events.push(event));
+
+  await driver.sendUserMessage(snapshot.ref, { text: 'report final transport failure' });
+
+  assert.equal(events.some((event) => event.type === 'runFailed' && event.error.message === 'WebSocket error'), true);
+  assert.equal(events.some((event) => event.type === 'runCompleted'), false);
+  assert.equal(events.filter((event) => event.type === 'sessionUpdated').at(-1).snapshot.status, 'idle');
 });
 
 test('PiRpcDriver creates a chat session and maps fake RPC stream into driver events', async () => {

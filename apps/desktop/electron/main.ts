@@ -12,7 +12,7 @@ import {
 } from "electron";
 import { randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readFile, realpath, stat } from "node:fs/promises";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -369,6 +369,16 @@ const appIconPath = app.isPackaged
   ? path.join(process.resourcesPath, "icon.png")
   : path.join(__dirname, "..", "..", "resources", "icon.png");
 const appIcon = nativeImage.createFromPath(appIconPath);
+
+function resolveAlpiLunaWebSocketRecoveryExtensionPath(): string {
+  const extensionPath = app.isPackaged
+    ? path.join(process.resourcesPath, "extensions", "alpi-luna-websocket-recovery.ts")
+    : path.join(__dirname, "..", "..", "resources", "alpi-luna-websocket-recovery.ts");
+  if (!existsSync(extensionPath)) {
+    throw new Error(`Alamelu Luna recovery extension is missing: ${extensionPath}`);
+  }
+  return extensionPath;
+}
 
 function readClipboardImageAttachment(): ComposerImageAttachment | null {
   const image = clipboard.readImage();
@@ -801,6 +811,10 @@ app.whenReady().then(async () => {
   if (desktopDriverConfig.driver === "rpc" && !desktopDriverConfig.rpc.allowSharedAgentDir) {
     await ensureRpcAuthCopy(desktopDriverConfig.rpc.agentDir);
   }
+  const alpiLunaWebSocketRecoveryExtensionPath =
+    desktopDriverConfig.driver === "rpc" && isAlpiBrand() && desktopDriverConfig.rpc.noExtensions === false
+      ? resolveAlpiLunaWebSocketRecoveryExtensionPath()
+      : undefined;
   const rpcDriver =
     desktopDriverConfig.driver === "rpc"
       ? createRpcDesktopDriver({
@@ -820,6 +834,7 @@ app.whenReady().then(async () => {
           ...(desktopDriverConfig.rpc.noSkills !== undefined ? { noSkills: desktopDriverConfig.rpc.noSkills } : {}),
           ...(desktopDriverConfig.rpc.noPromptTemplates !== undefined ? { noPromptTemplates: desktopDriverConfig.rpc.noPromptTemplates } : {}),
           ...(desktopDriverConfig.rpc.noThemes !== undefined ? { noThemes: desktopDriverConfig.rpc.noThemes } : {}),
+          ...(alpiLunaWebSocketRecoveryExtensionPath ? { extensionPaths: [alpiLunaWebSocketRecoveryExtensionPath] } : {}),
           ...(desktopDriverConfig.rpc.allowRealWorkspace ? { allowRealWorkspace: desktopDriverConfig.rpc.allowRealWorkspace } : {}),
         })
       : undefined;
