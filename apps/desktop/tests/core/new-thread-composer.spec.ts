@@ -25,6 +25,9 @@ test("new thread reuses composer behaviors for slash commands, image previews, a
     agentDir,
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+    },
   });
 
   try {
@@ -32,7 +35,20 @@ test("new thread reuses composer behaviors for slash commands, image previews, a
     await openNewThread(window);
 
     const composer = window.getByTestId("new-thread-composer");
-    await expect(window.getByTestId("new-thread-logo")).toBeVisible();
+    const logo = window.getByTestId("new-thread-logo").locator("img");
+    await expect(logo).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          logo.evaluate((image) => ({
+            complete: image.complete,
+            naturalWidth: image.naturalWidth,
+            naturalHeight: image.naturalHeight,
+          })),
+        { timeout: 15_000 },
+      )
+      .toEqual({ complete: true, naturalWidth: 512, naturalHeight: 512 });
+    await expect.poll(() => logo.getAttribute("src"), { timeout: 15_000 }).toMatch(/alpi-icon-[^/]+\.png$/);
     await expect(window.getByRole("heading", { name: "Let's build" })).toBeVisible();
     await expect(composer).toBeFocused();
     await expect(composer).toHaveAttribute("placeholder", "Ask Alamelu Pi anything, use / for commands and skills");

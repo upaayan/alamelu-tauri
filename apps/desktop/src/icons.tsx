@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-const alameluPiLogoUrl = new URL("../resources/alpi-icon.svg", import.meta.url).href;
+const alameluPiLogoUrl = new URL("../resources/alpi-icon.png", import.meta.url).href;
 
 function Icon({ children }: { readonly children: ReactNode }) {
   return (
