@@ -205,6 +205,7 @@ export default function App() {
   const [newThreadModelId, setNewThreadModelId] = useState<string | undefined>();
   const [newThreadThinkingLevel, setNewThreadThinkingLevel] = useState<string | undefined>();
   const [newThreadComposerError, setNewThreadComposerError] = useState<string | undefined>();
+  const [newThreadComposerErrorDetail, setNewThreadComposerErrorDetail] = useState<string | undefined>();
   const [startingThread, setStartingThread] = useState(false);
   const [switchingModel, setSwitchingModel] = useState(false);
   const [providerLoginState, setProviderLoginState] = useState<ProviderLoginState>({ status: "idle" });
@@ -1983,12 +1984,14 @@ export default function App() {
     };
     wsMenu.expandWorkspace(newThreadRootWorkspaceId);
     setNewThreadComposerError(undefined);
+    setNewThreadComposerErrorDetail(undefined);
     setStartingThread(true);
     void updateSnapshot(api, setSnapshot, () => api.startThread(input))
       .then((next) => {
         // A failed start resolves with the error in state, so only a real thread clears the draft.
         if (next?.lastError) {
           setNewThreadComposerError(next.lastError);
+          setNewThreadComposerErrorDetail(next.lastErrorDetail);
           return;
         }
         setNewThreadPrompt("");
@@ -2333,6 +2336,7 @@ export default function App() {
               prompt={newThreadPrompt}
               attachments={newThreadAttachments}
               lastError={newThreadComposerError}
+              lastErrorDetail={newThreadComposerErrorDetail}
               worktreesUnsupported={snapshot.driverCapabilities.worktrees === false}
               starting={startingThread}
               provider={resolvedNewThreadProvider}

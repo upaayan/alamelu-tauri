@@ -163,3 +163,16 @@ provider-settings.spec.ts  → all 4 branded tests (:74, :130, :186, :236) passe
 Two assertion corrections were needed and made, both proving the gate is real: the branded catalog labels models `OpenAI · gpt-5` (from pi's registry) where the test expected the SDK driver's `GPT-5`, and the badge renders the full label with the raw id in `title`.
 
 **Unbranded specs still fail** (`provider-settings.spec.ts:14, :295, :349, :402` — `firstWindow` timeout, no window). Verified these are exactly the four tests with no `PI_GUI_BRAND` override. This is the pre-existing sdk-driver condition the critic independently verified against the baseline tree during Plan Audit Round 1 and which the plan explicitly does **not** claim green — out of scope, unchanged by this work.
+
+
+## Post-PASS cleanup (Implementation Audit Round 2 LOWs)
+
+Round 2 verdict: **PASS** — 0 HIGH, 0 MEDIUM, 3 LOW. Of the three LOWs:
+
+- **LOW 2 (New-Thread banner headline-only)** — fixed: `newThreadComposerErrorDetail` state threaded `App.tsx` → `new-thread-view.tsx` → `ComposerSurface`, cleared alongside the headline. Rebuild + 55/55 units + branded gate re-run green after the change.
+- **LOW 3 (doc bookkeeping)** — this section is the correction. Specifically: the two Round-1 LOWs referred to (a) the false "dead prop deleted" claim in the Phase 1 table, now corrected in place with a pointer to the repair commit, and (b) the missing note that Phase 3's commit line said "this commit" while the doc was written before the commit existed. **Commit granularity for the record:** `3018bc0` Phase 1 · `556defc` Phase 2 · `107d324` Phase 3 · `d3cfb09` Round-1 repairs · this commit LOW cleanup — five commits, each independently revertable.
+- **LOW 1 (preventive-test tail)** — **NOT waived; owner decision.** Outstanding debt, deliberately not silently absorbed because writing it expands scope beyond the approved plan:
+  - the four plan-named new Playwright specs (worktree-rejection keeps prompt, double-click Start creates one thread, follow-up visible while running, `/tree` absent under RPC) were not written;
+  - unit rows for `readThreadStats` (JSONL parsing / collision detector) were not written — `evaluateModelSwitch` is covered by 11 rows, its JSONL feeder is not;
+  - four pre-existing branded tests in `composer-controls`/`model-scope-toggle` were never run because those whole files are unbranded at baseline.
+  None of this is a regression; it is coverage the plan promised and this round did not deliver. Owner to schedule or waive.

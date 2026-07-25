@@ -22,6 +22,7 @@ interface NewThreadViewProps {
   readonly prompt: string;
   readonly attachments: readonly ComposerAttachment[];
   readonly lastError?: string;
+  readonly lastErrorDetail?: string;
   readonly worktreesUnsupported?: boolean;
   readonly starting?: boolean;
   readonly provider: string | undefined;
@@ -70,6 +71,7 @@ export function NewThreadView({
   prompt,
   attachments,
   lastError,
+  lastErrorDetail,
   worktreesUnsupported,
   starting,
   provider,
@@ -171,6 +173,7 @@ export function NewThreadView({
           <div className="conversation conversation--composer">
             <ComposerSurface
               lastError={lastError}
+              lastErrorDetail={lastErrorDetail}
               activeSlashCommand={activeSlashCommand}
               activeSlashCommandMeta={activeSlashCommandMeta}
               topNotice={(
