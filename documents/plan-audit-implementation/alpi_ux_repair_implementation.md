@@ -19,7 +19,7 @@ Owner rulings honored: **icon/iconset byte-identical**; **no Anthropic auth work
 | 1.2 Model-switch preflight | `electron/model-switch-preflight.ts`; called in `app-store-composer.setSessionModel` after `ensureSessionReady` |
 | 1.2 Metadata plumbing | `external-pi-auth-bridge.ts` gains `listModelMetadata()`; supervisor merges `contextWindow`/`api` into `RuntimeModelRecord` |
 | 1.2 Session-dir/piBin plumbing | `DesktopAppStoreOptions.sessionDir`/`piBin` from main's resolved RPC config |
-| 1.3 Dropdown placement | `new-thread-view.tsx` override removed; dead prop + `--below` CSS deleted |
+| 1.3 Dropdown placement | `new-thread-view.tsx` override removed; dead prop + `--below` CSS deleted (**in the repair commit, not Phase 1 — see Round 2**) |
 | 1.4 New Thread honesty + capabilities | `App.tsx` (`lastError` wiring, success-gated clear, busy Start), `desktop-driver.ts`/`rpc-desktop-driver.ts` flags, `desktop-state.ts` `DriverCapabilities` |
 | 1.5 Cancel ≠ failure | `packages/session-driver` `RunCancelledEvent`; driver `endRun()`; timeline "Stopped by you"; `statusForEvent` → idle |
 | 1.6 Global pi-ai patch | `apps/desktop/scripts/patch-global-pi-ai.mjs` (`--check` / `--apply`) |
@@ -128,3 +128,38 @@ All ≥ 4.5:1.
 - **Patch reverts on `pi update`** — re-run `node apps/desktop/scripts/patch-global-pi-ai.mjs --apply`. Until then preflight rule (b) blocks the dangerous switches, so the app degrades safely.
 - Phase 4 backlog untouched (streaming indicator, timeline rhythm, scrollbars, Esc-to-stop, cross-thread search, deeper fork hygiene).
 - Upstream issue/PR for the pi-ai truncation bug remains the owner's call (outward-facing action).
+
+
+---
+
+## Repair round (after Implementation Audit Round 1 — reviewer: Fable 5)
+
+All five MEDIUM findings accepted and fixed; both LOW doc issues corrected. No scope added.
+
+| Finding | Fix |
+|---|---|
+| M1 — 1.1 not applied at timeline row / notification body; `lastErrorDetail` had no consumer | `app-store-timeline.ts` runFailed row now uses `describeError` (headline as label, raw text in the existing detail slot); `notification-manager.ts` sends the headline; `composer-surface.tsx` renders `lastErrorDetail` as a small mono line under the headline, threaded through `composer-panel.tsx` from `App.tsx` |
+| M2 — preflight `warn` proceeded silently | `app-store-composer.ts` now applies the switch **and** surfaces the reason in the banner |
+| M3 — doc claimed 1.3 dead code was deleted; it survived | Actually deleted now: `dropdownPlacement` prop/param/usages in `model-selector.tsx` and `.model-selector__dropdown--below` in `main.css`; doc row corrected above |
+| M4 — plan-committed test gates skipped; `new-thread-composer.spec.ts:297` contradicted the shipped badge | That test is now branded (`PI_GUI_BRAND: "alpi"`), its badge assertion matches the shipped label (`OpenAI · gpt-4o`) plus a `title="openai:gpt-4o"` assertion, and its catalog assertions were adapted to the seeded pi catalog exactly as plan §3.5 allowed. Branded Playwright gate now actually run — see below |
+| M5 — 3.3 rename-pending and 3.4 SecondarySurface error slot silently missing | `sidebar.tsx` keeps the rename editor open and disabled until the rename resolves (no optimistic close-then-revert); `secondary-surface.tsx` gained a `lastError` slot, wired for Skills and Extensions in `App.tsx` |
+
+### Verification Round 2
+
+```
+build                                    ✓ built in 898ms            BUILD 0
+tsc --noEmit -p tsconfig.json            EXIT 0
+tsc --noEmit -p tsconfig.electron.json   EXIT 0
+node --test apps/desktop/tests/unit/*    ℹ tests 55  pass 55  fail 0
+pnpm --filter @pi-gui/pi-rpc-driver test ℹ tests 52  pass 52  fail 0
+```
+
+**Branded Playwright gate (the check M4 said was missing) — now executed:**
+```
+new-thread-composer.spec.ts --grep "onboarding notice after picking a thread model"
+  1 passed (5.7s)
+provider-settings.spec.ts  → all 4 branded tests (:74, :130, :186, :236) passed
+```
+Two assertion corrections were needed and made, both proving the gate is real: the branded catalog labels models `OpenAI · gpt-5` (from pi's registry) where the test expected the SDK driver's `GPT-5`, and the badge renders the full label with the raw id in `title`.
+
+**Unbranded specs still fail** (`provider-settings.spec.ts:14, :295, :349, :402` — `firstWindow` timeout, no window). Verified these are exactly the four tests with no `PI_GUI_BRAND` override. This is the pre-existing sdk-driver condition the critic independently verified against the baseline tree during Plan Audit Round 1 and which the plan explicitly does **not** claim green — out of scope, unchanged by this work.

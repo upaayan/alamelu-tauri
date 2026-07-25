@@ -12,6 +12,8 @@ interface SecondarySurfaceProps {
   readonly activeNavId?: string;
   readonly onSelectNav?: (id: string) => void;
   readonly testId?: string;
+  /** Surfaces store failures that would otherwise be invisible on this view. */
+  readonly lastError?: string;
   readonly children: ReactNode;
 }
 
@@ -22,6 +24,7 @@ export function SecondarySurface({
   activeNavId,
   onSelectNav,
   testId,
+  lastError,
   children,
 }: SecondarySurfaceProps) {
   return (
@@ -47,7 +50,14 @@ export function SecondarySurface({
           </nav>
         ) : null}
       </aside>
-      <main className="secondary-surface__content">{children}</main>
+      <main className="secondary-surface__content">
+        {lastError ? (
+          <div className="error-banner secondary-surface__error" data-testid="secondary-surface-error">
+            {lastError}
+          </div>
+        ) : null}
+        {children}
+      </main>
     </div>
   );
 }

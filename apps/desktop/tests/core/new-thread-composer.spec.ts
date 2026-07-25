@@ -265,6 +265,9 @@ test("new thread hides the onboarding notice after picking a thread model", asyn
     agentDir,
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: {
+      PI_GUI_BRAND: "alpi",
+    },
   });
 
   try {
@@ -282,19 +285,22 @@ test("new thread hides the onboarding notice after picking a thread model", asyn
 
     await modelBadge.click();
     const dropdown = window.locator(".new-thread__hint .model-selector__dropdown").first();
-    await expect(dropdown).toContainText("GPT-5");
-    await expect(dropdown).toContainText("GPT-4o");
+    // Labels come from the seeded pi catalog under the alpi brand ("OpenAI · gpt-5").
+    await expect(dropdown).toContainText("gpt-5");
+    await expect(dropdown).toContainText("gpt-4o");
     const modelFilter = dropdown.locator(".model-selector__filter-input");
     await expect(modelFilter).toBeFocused();
     await modelFilter.fill("definitely-no-model");
     await expect(dropdown).toContainText("No matching models");
     await expect(modelBadge).toHaveText("Pick a model");
     await modelFilter.fill("4o");
-    await expect(dropdown).toContainText("GPT-4o");
-    await expect(dropdown).not.toContainText("GPT-5");
-    await dropdown.getByRole("button", { name: /GPT-4o/ }).click();
+    await expect(dropdown).toContainText("gpt-4o");
+    await expect(dropdown).not.toContainText("gpt-5");
+    await dropdown.getByRole("button", { name: /gpt-4o/i }).click();
 
-    await expect(modelBadge).toHaveText("openai:gpt-4o");
+    // The badge shows the friendly catalog label; the raw id stays in the title attribute.
+    await expect(modelBadge).toHaveText("OpenAI · gpt-4o");
+    await expect(modelBadge).toHaveAttribute("title", "openai:gpt-4o");
     await expect(startButton).toBeEnabled();
     await expect(notice).toHaveCount(0);
 

@@ -13,6 +13,7 @@ import { QueuedComposerMessages } from "./queued-composer-messages";
 
 interface ComposerSurfaceProps {
   readonly lastError?: string;
+  readonly lastErrorDetail?: string;
   readonly activeSlashCommand?: ComposerSlashCommand;
   readonly activeSlashCommandMeta?: string;
   readonly topNotice?: ReactNode;
@@ -56,6 +57,7 @@ interface ComposerSurfaceProps {
 
 export function ComposerSurface({
   lastError,
+  lastErrorDetail,
   activeSlashCommand,
   activeSlashCommandMeta,
   topNotice,
@@ -216,7 +218,8 @@ export function ComposerSurface({
       ) : null}
       {lastError ? (
         <div className="composer__error error-banner" data-testid="composer-error-banner">
-          {lastError}
+          <span className="error-banner__headline">{lastError}</span>
+          {lastErrorDetail ? <span className="error-banner__detail">{lastErrorDetail}</span> : null}
         </div>
       ) : null}
       <div className="composer__editor">

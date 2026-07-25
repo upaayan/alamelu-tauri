@@ -1359,12 +1359,6 @@
   border-color: var(--accent);
 }
 
-.model-selector__dropdown--below {
-  bottom: auto;
-  top: 100%;
-  margin-bottom: 0;
-  margin-top: 4px;
-}
 
 .model-selector__group-title {
   padding: 6px 10px 4px;
@@ -3569,4 +3563,21 @@ mark.thread-find-active {
 .message__content pre,
 .message__content table {
   overflow-x: auto;
+}
+
+.error-banner__headline {
+  display: block;
+}
+
+.error-banner__detail {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-soft);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+.secondary-surface__error {
+  margin-bottom: 12px;
 }

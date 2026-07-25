@@ -15,7 +15,6 @@ interface ModelSelectorProps {
   readonly disabled?: boolean;
   /** True while a model switch is in flight; the badge shows it instead of dead air. */
   readonly busy?: boolean;
-  readonly dropdownPlacement?: "above" | "below";
   readonly showEmptyModelControl?: boolean;
   readonly unselectedModelLabel?: string;
   readonly emptyModelLabel?: string;
@@ -33,7 +32,6 @@ export function ModelSelector({
   thinkingLevel,
   disabled,
   busy,
-  dropdownPlacement = "above",
   showEmptyModelControl = false,
   unselectedModelLabel = "Choose model",
   emptyModelLabel = "Choose model",
@@ -114,7 +112,7 @@ export function ModelSelector({
           </button>
           {open === "model" ? (
             <div
-              className={`model-selector__dropdown ${dropdownPlacement === "below" ? "model-selector__dropdown--below" : ""}`}
+              className="model-selector__dropdown"
               onWheel={(event) => event.stopPropagation()}
             >
               <div className="model-selector__filter">
@@ -174,7 +172,7 @@ export function ModelSelector({
           </button>
           {open === "thinking" ? (
             <div
-              className={`model-selector__dropdown ${dropdownPlacement === "below" ? "model-selector__dropdown--below" : ""}`}
+              className="model-selector__dropdown"
               onWheel={(event) => event.stopPropagation()}
             >
               <div className="model-selector__group-title">Thinking Level</div>

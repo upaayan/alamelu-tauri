@@ -49,6 +49,7 @@ interface ComposerPanelProps {
   readonly onSteerQueuedMessage: (messageId: string) => void;
   readonly onSelectSlashCommand: (command: ComposerSlashCommand) => void;
   readonly onSelectSlashOption: (option: ComposerSlashOption) => void;
+  readonly lastErrorDetail?: string;
   readonly busy?: boolean;
   readonly onSetModel: (provider: string, modelId: string) => void;
   readonly onSetThinking: (level: string) => void;
@@ -100,6 +101,7 @@ export function ComposerPanel({
   onSteerQueuedMessage,
   onSelectSlashCommand,
   onSelectSlashOption,
+  lastErrorDetail,
   busy,
   onSetModel,
   onSetThinking,
@@ -124,6 +126,7 @@ export function ComposerPanel({
       <div className="conversation conversation--composer">
         <ComposerSurface
           lastError={lastError}
+      lastErrorDetail={lastErrorDetail}
           activeSlashCommand={activeSlashCommand}
           activeSlashCommandMeta={activeSlashCommandMeta}
           topNotice={(

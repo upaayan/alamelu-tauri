@@ -436,6 +436,11 @@ export async function setSessionModel(
 
     await store.driver.setSessionModel(sessionRef, { provider, modelId });
     syncSessionConfig(store, key, { provider, modelId });
+    if (decision.verdict === "warn" && decision.reason) {
+      // The switch is allowed, but the user still needs to know what might bite.
+      finishComposerCommand(store, sessionRef, key, `Model set to ${provider}:${modelId}`);
+      return store.withError(new Error(decision.reason));
+    }
     return finishComposerCommand(store, sessionRef, key, `Model set to ${provider}:${modelId}`);
   });
 }

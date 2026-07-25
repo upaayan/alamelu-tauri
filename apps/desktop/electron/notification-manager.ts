@@ -8,6 +8,7 @@ import { sessionKey } from "@pi-gui/session-driver";
 import type { SessionDriverEvent, SessionRef } from "@pi-gui/session-driver";
 import { getSelectedSession } from "../src/desktop-state";
 import { isSessionActivelyViewed } from "./session-visibility";
+import { describeError } from "./user-facing-errors";
 
 export class NotificationManager {
   private readonly completedRunKeys = new Set<string>();
@@ -126,7 +127,11 @@ export class NotificationManager {
     }
 
     if (event.type === "runFailed") {
-      await this.showNotification(event.sessionRef, this.titleForSession(event.sessionRef), event.error.message);
+      await this.showNotification(
+        event.sessionRef,
+        this.titleForSession(event.sessionRef),
+        describeError(event.error.message).headline,
+      );
       return;
     }
 

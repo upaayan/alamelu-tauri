@@ -9,6 +9,7 @@ import {
   makeTranscriptMessage,
   makeTranscriptMessageWithAttachments,
 } from "./app-store-utils";
+import { describeError } from "./user-facing-errors";
 
 export interface RunMetrics {
   readonly startedAt: string;
@@ -196,11 +197,12 @@ export function applyTimelineEvent(
     case "runFailed": {
       const metrics = currentMetrics;
       clearRunState(transcript, key, event.sessionRef, state);
+      const described = describeError(event.error.message);
       transcript.push(
-        makeActivityItem(event.error.message, {
+        makeActivityItem(described.headline, {
           tone: "error",
           metadata: metrics ? workedForLabel(metrics.startedAt, event.timestamp) : undefined,
-          detail: event.error.code,
+          detail: described.detail ?? event.error.code,
         }),
       );
       break;

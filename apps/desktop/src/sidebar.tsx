@@ -44,7 +44,7 @@ interface SidebarProps {
   readonly onOpenExtensions: (workspaceId?: string) => void;
   readonly onOpenSettings: (workspaceId?: string) => void;
   readonly onArchiveSession: (target: { workspaceId: string; sessionId: string }) => void;
-  readonly onRenameSession: (target: { workspaceId: string; sessionId: string }, title: string) => void;
+  readonly onRenameSession: (target: { workspaceId: string; sessionId: string }, title: string) => void | Promise<unknown>;
   readonly onSelectSession: (target: { workspaceId: string; sessionId: string }) => void;
   readonly onUnarchiveSession: (target: { workspaceId: string; sessionId: string }) => void;
 }
@@ -275,7 +275,7 @@ interface WorkspaceGroupProps {
   readonly wsMenu: WorkspaceMenuState;
   readonly api: PiDesktopApi;
   readonly onArchiveSession: (target: { workspaceId: string; sessionId: string }) => void;
-  readonly onRenameSession: (target: { workspaceId: string; sessionId: string }, title: string) => void;
+  readonly onRenameSession: (target: { workspaceId: string; sessionId: string }, title: string) => void | Promise<unknown>;
   readonly onSelectSession: (target: { workspaceId: string; sessionId: string }) => void;
   readonly onUnarchiveSession: (target: { workspaceId: string; sessionId: string }) => void;
 }
@@ -572,11 +572,12 @@ function ThreadSessionRow({
   readonly archived?: boolean;
   readonly thread: ThreadListEntry;
   readonly onAction: () => void;
-  readonly onRename: (title: string) => void;
+  readonly onRename: (title: string) => void | Promise<unknown>;
   readonly onSelect: () => void;
 }) {
   const indicatorVariant = sessionIndicatorVariant(thread);
   const [renaming, setRenaming] = useState(false);
+  const [renamePending, setRenamePending] = useState(false);
   const [draft, setDraft] = useState(thread.session.title);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -606,17 +607,28 @@ function ThreadSessionRow({
   const submitRename = () => {
     const currentTitle = thread.session.title.trim();
     const nextTitle = draft.trim();
-    setRenaming(false);
     if (!nextTitle || nextTitle === currentTitle) {
+      setRenaming(false);
       setDraft(thread.session.title);
       return;
     }
-    onRename(nextTitle);
+    // Stay open and disabled until the rename actually lands, so a failure is
+    // visible instead of closing optimistically and silently reverting.
+    const result = onRename(nextTitle);
+    if (!result || typeof (result as Promise<unknown>).finally !== "function") {
+      setRenaming(false);
+      return;
+    }
+    setRenamePending(true);
+    void (result as Promise<unknown>).finally(() => {
+      setRenamePending(false);
+      setRenaming(false);
+    });
   };
 
   return (
     <div
-      className={`session-row ${active ? "session-row--active" : ""} ${renaming ? "session-row--renaming" : ""}`}
+      className={`session-row ${active ? "session-row--active" : ""} ${renaming ? "session-row--renaming" : ""} ${renamePending ? "session-row--rename-pending" : ""}`}
       data-sidebar-indicator={indicatorVariant}
       data-session-id={thread.session.id}
       onContextMenu={(event) => {
@@ -635,6 +647,7 @@ function ThreadSessionRow({
           <input
             aria-label={`Rename ${thread.session.title}`}
             className="session-row__rename-input"
+            disabled={renamePending}
             ref={inputRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -645,7 +658,7 @@ function ThreadSessionRow({
               }
             }}
           />
-          <button className="session-row__rename-button session-row__rename-button--primary" type="submit">
+          <button className="session-row__rename-button session-row__rename-button--primary" disabled={renamePending} type="submit">
             Save
           </button>
           <button className="session-row__rename-button" type="button" onClick={cancelRename}>

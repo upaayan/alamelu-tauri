@@ -1910,9 +1910,8 @@ export default function App() {
     void updateSnapshot(api, setSnapshot, () => api.archiveSession(target));
   };
 
-  const handleRenameSession = (target: { workspaceId: string; sessionId: string }, title: string) => {
-    void updateSnapshot(api, setSnapshot, () => api.renameSession(target, title));
-  };
+  const handleRenameSession = (target: { workspaceId: string; sessionId: string }, title: string) =>
+    updateSnapshot(api, setSnapshot, () => api.renameSession(target, title));
 
   const handleSelectSession = (target: { workspaceId: string; sessionId: string }) => {
     setOpenTerminalSessionKey("");
@@ -2175,7 +2174,7 @@ export default function App() {
 
   if (snapshot.activeView === "skills") {
     return (
-      <SecondarySurface onBack={() => setActiveView("threads")} testId="skills-surface" title="Skills">
+      <SecondarySurface lastError={snapshot.lastError} onBack={() => setActiveView("threads")} testId="skills-surface" title="Skills">
         <div className="surface-toolbar">
           <label className="surface-toolbar__field">
             <span>Workspace</span>
@@ -2217,7 +2216,7 @@ export default function App() {
 
   if (snapshot.activeView === "extensions") {
     return (
-      <SecondarySurface onBack={() => setActiveView("threads")} testId="extensions-surface" title="Extensions">
+      <SecondarySurface lastError={snapshot.lastError} onBack={() => setActiveView("threads")} testId="extensions-surface" title="Extensions">
         <div className="surface-toolbar">
           <label className="surface-toolbar__field">
             <span>Workspace</span>
@@ -2459,6 +2458,7 @@ export default function App() {
               runningLabel={runningLabel}
               selectedSession={selectedSession}
               lastError={snapshot.lastError}
+              lastErrorDetail={snapshot.lastErrorDetail}
               selectedSlashCommand={slashMenu.activeSlashOptionCommand ?? slashMenu.selectedSlashCommand}
               selectedSlashOption={slashMenu.selectedSlashOption}
               slashOptionEmptyState={slashMenu.slashOptionEmptyState}
