@@ -240,6 +240,7 @@ export function buildSlashCommandSections(
   compatibilityRecords: readonly ExtensionCommandCompatibilityRecord[] = [],
   options: {
     readonly allowTreeCommand?: boolean;
+    readonly allowCompactCommand?: boolean;
   } = {},
 ): readonly ComposerSlashCommandSection[] {
   const normalizedQuery = query.trim().toLowerCase();
@@ -263,8 +264,13 @@ export function buildSlashCommandSections(
     }))
     .filter((command) => matchesCommand(command, normalizedQuery));
   const allowTreeCommand = options.allowTreeCommand ?? true;
+  const allowCompactCommand = options.allowCompactCommand ?? true;
+  // Commands the active driver cannot run are hidden, never offered and then failed.
   const hostMatches = HOST_ACTION_SLASH_COMMANDS.filter(
-    (command) => (allowTreeCommand || command.kind !== "tree") && matchesCommand(command, normalizedQuery),
+    (command) =>
+      (allowTreeCommand || command.kind !== "tree") &&
+      (allowCompactCommand || command.kind !== "compact") &&
+      matchesCommand(command, normalizedQuery),
   );
 
   const sections: ComposerSlashCommandSection[] = [

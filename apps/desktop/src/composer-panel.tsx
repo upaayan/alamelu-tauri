@@ -49,6 +49,7 @@ interface ComposerPanelProps {
   readonly onSteerQueuedMessage: (messageId: string) => void;
   readonly onSelectSlashCommand: (command: ComposerSlashCommand) => void;
   readonly onSelectSlashOption: (option: ComposerSlashOption) => void;
+  readonly busy?: boolean;
   readonly onSetModel: (provider: string, modelId: string) => void;
   readonly onSetThinking: (level: string) => void;
   readonly modelOnboarding: ModelOnboardingState;
@@ -99,6 +100,7 @@ export function ComposerPanel({
   onSteerQueuedMessage,
   onSelectSlashCommand,
   onSelectSlashOption,
+  busy,
   onSetModel,
   onSetThinking,
   modelOnboarding,
@@ -177,6 +179,7 @@ export function ComposerPanel({
                     disabled={selectedSession.status === "running"}
                     unselectedModelLabel={modelOnboarding.unselectedModelLabel}
                     emptyModelTitle={modelOnboarding.emptyModelTitle}
+                    busy={busy}
                     onSetModel={onSetModel}
                     onSetThinking={onSetThinking}
                   />

@@ -73,6 +73,7 @@ interface UseSlashMenuParams {
     action: () => Promise<DesktopAppState>,
   ) => Promise<DesktopAppState>;
   readonly allowTreeCommand?: boolean;
+  readonly allowCompactCommand?: boolean;
   readonly immediateCommandMode?: "submit" | "prefill";
   readonly onRunTreeCommand?: () => void;
   readonly onSelectModelOption?: (provider: string, modelId: string) => void;
@@ -117,6 +118,7 @@ export function useSlashMenu(params: UseSlashMenuParams): SlashMenuState {
     openSettings,
     updateSnapshot,
     allowTreeCommand = true,
+    allowCompactCommand = true,
     immediateCommandMode = "submit",
     onRunTreeCommand,
     onSelectModelOption,
@@ -136,6 +138,7 @@ export function useSlashMenu(params: UseSlashMenuParams): SlashMenuState {
     activeSlashQuery
       ? buildSlashCommandSections(slashQuery, selectedRuntime, sessionCommands, commandCompatibility, {
           allowTreeCommand,
+          allowCompactCommand,
         })
       : [];
   const slashSuggestions = flattenSlashSections(slashSections);

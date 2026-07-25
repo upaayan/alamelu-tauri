@@ -206,6 +206,7 @@ export default function App() {
   const [newThreadThinkingLevel, setNewThreadThinkingLevel] = useState<string | undefined>();
   const [newThreadComposerError, setNewThreadComposerError] = useState<string | undefined>();
   const [startingThread, setStartingThread] = useState(false);
+  const [switchingModel, setSwitchingModel] = useState(false);
   const [providerLoginState, setProviderLoginState] = useState<ProviderLoginState>({ status: "idle" });
   const [themeMode, setThemeMode] = useState<"system" | "light" | "dark">("system");
   const [notificationPermissionStatus, setNotificationPermissionStatus] =
@@ -929,7 +930,8 @@ export default function App() {
     focusComposer,
     openSettings,
     updateSnapshot,
-    allowTreeCommand: true,
+    allowTreeCommand: snapshot?.driverCapabilities.tree !== false,
+    allowCompactCommand: snapshot?.driverCapabilities.compact !== false,
     onRunTreeCommand: openTreeModal,
     onSelectLoginProvider: (providerId) => {
       if (!selectedWorkspace) {
@@ -1742,9 +1744,10 @@ export default function App() {
     if (!selectedWorkspace || !selectedSession) {
       return;
     }
+    setSwitchingModel(true);
     void updateSnapshot(api, setSnapshot, () =>
       api.setSessionModel(selectedWorkspace.id, selectedSession.id, provider, modelId),
-    );
+    ).finally(() => setSwitchingModel(false));
   };
 
   const handleSetSessionThinking = (level: string) => {
@@ -2189,6 +2192,7 @@ export default function App() {
           </label>
         </div>
         <SkillsView
+          togglesManagedExternally={snapshot?.driverCapabilities.skillToggles === false}
           workspace={skillsWorkspace}
           runtime={skillsRuntime}
           onOpenSkillFolder={handleOpenSkillFolder}
@@ -2230,6 +2234,7 @@ export default function App() {
           </label>
         </div>
         <ExtensionsView
+          togglesManagedExternally={snapshot?.driverCapabilities.skillToggles === false}
           workspace={extensionsWorkspace}
           runtime={extensionsRuntime}
           commandCompatibility={extensionsCommandCompatibility}
@@ -2442,6 +2447,7 @@ export default function App() {
               onSelectSlashOption={(option) => {
                 slashMenu.applySlashOptionSelection(option);
               }}
+              busy={switchingModel}
               onSetModel={handleSetSessionModel}
               onSetThinking={handleSetSessionThinking}
               modelOnboarding={selectedSessionModelOnboarding}

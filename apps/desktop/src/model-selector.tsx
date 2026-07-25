@@ -13,6 +13,8 @@ interface ModelSelectorProps {
   readonly modelId: string | undefined;
   readonly thinkingLevel: string | undefined;
   readonly disabled?: boolean;
+  /** True while a model switch is in flight; the badge shows it instead of dead air. */
+  readonly busy?: boolean;
   readonly dropdownPlacement?: "above" | "below";
   readonly showEmptyModelControl?: boolean;
   readonly unselectedModelLabel?: string;
@@ -30,6 +32,7 @@ export function ModelSelector({
   modelId,
   thinkingLevel,
   disabled,
+  busy,
   dropdownPlacement = "above",
   showEmptyModelControl = false,
   unselectedModelLabel = "Choose model",
@@ -58,7 +61,12 @@ export function ModelSelector({
   const hasAvailableModelOptions = modelOptions.length > 0;
   const hasModelControl = Boolean(provider && modelId) || hasAvailableModelOptions;
   const shouldRenderModelControl = hasModelControl || showEmptyModelControl;
-  const modelBadgeLabel = provider && modelId ? `${provider}:${modelId}` : hasAvailableModelOptions ? unselectedModelLabel : emptyModelLabel;
+  const activeOption = provider && modelId
+    ? modelOptions.find((option) => option.providerId === provider && option.modelId === modelId)
+    : undefined;
+  const modelBadgeLabel = provider && modelId
+    ? activeOption?.label ?? `${provider}:${modelId}`
+    : hasAvailableModelOptions ? unselectedModelLabel : emptyModelLabel;
   const noMatchingModels = hasAvailableModelOptions && modelFilter.trim().length > 0 && groupedModels.length === 0;
 
   useEffect(() => {
@@ -96,12 +104,13 @@ export function ModelSelector({
       {shouldRenderModelControl ? (
         <span className="model-selector__anchor">
           <button
-            className="model-selector__badge"
+            className={`model-selector__badge${busy ? " model-selector__badge--busy" : ""}`}
             type="button"
-            disabled={disabled}
+            disabled={disabled || busy}
+            title={provider && modelId ? `${provider}:${modelId}` : undefined}
             onClick={() => setOpen(open === "model" ? "none" : "model")}
           >
-            {modelBadgeLabel}
+            {busy ? "Switching…" : modelBadgeLabel}
           </button>
           {open === "model" ? (
             <div

@@ -45,6 +45,7 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
   readonly supportsTree = false;
   readonly supportsCompact = false;
   readonly supportsQueueEditing = false;
+  readonly supportsSkillToggles = false;
   readonly runtimeSupervisor: DesktopRuntimeSupervisor;
 
   constructor(private readonly options: RpcDesktopDriverOptions) {

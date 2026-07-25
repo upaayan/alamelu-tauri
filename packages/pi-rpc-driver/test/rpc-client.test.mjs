@@ -521,7 +521,7 @@ test('PiRpcDriver rejects a second user message while a run is active', async ()
   await assert.rejects(() => driver.sendUserMessage(snapshot.ref, { text: 'second' }), /already running/);
 });
 
-test('PiRpcDriver cancel success returns running session to idle and emits runFailed', async () => {
+test('PiRpcDriver cancel success returns running session to idle and emits runCancelled', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   class FakeClient {
     onEvent() { return () => undefined; }
@@ -550,7 +550,9 @@ test('PiRpcDriver cancel success returns running session to idle and emits runFa
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'hang' });
   await driver.cancelCurrentRun(snapshot.ref);
-  assert.equal(events.some((event) => event.type === 'runFailed' && event.error.message === 'Run cancelled'), true);
+  // A user-initiated stop is reported as a cancellation, never as a failure.
+  assert.equal(events.some((event) => event.type === 'runCancelled'), true);
+  assert.equal(events.some((event) => event.type === 'runFailed'), false);
   const lastUpdate = events.filter((event) => event.type === 'sessionUpdated').at(-1);
   assert.equal(lastUpdate.snapshot.status, 'idle');
   assert.equal('runningRunId' in lastUpdate.snapshot, false);

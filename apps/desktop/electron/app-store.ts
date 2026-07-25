@@ -776,6 +776,7 @@ export class DesktopAppStore implements AppStoreInternals {
           tree: this.driver.supportsTree,
           compact: this.driver.supportsCompact,
           queueEditing: this.driver.supportsQueueEditing,
+          skillToggles: this.driver.supportsSkillToggles,
         },
         activeView: persisted.activeView ?? this.state.activeView,
         modelSettingsScopeMode: persisted.modelSettingsScopeMode ?? this.state.modelSettingsScopeMode,

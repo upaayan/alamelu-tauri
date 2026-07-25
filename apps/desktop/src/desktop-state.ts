@@ -190,6 +190,7 @@ export interface DriverCapabilities {
   readonly tree?: boolean;
   readonly compact?: boolean;
   readonly queueEditing?: boolean;
+  readonly skillToggles?: boolean;
 }
 
 export interface CreateSessionInput {

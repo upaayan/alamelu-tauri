@@ -26,6 +26,8 @@ export interface DesktopSessionDriver extends SessionDriver {
   readonly supportsTree?: boolean;
   readonly supportsCompact?: boolean;
   readonly supportsQueueEditing?: boolean;
+  /** False when skill/extension enablement is owned by the pi CLI, not this app. */
+  readonly supportsSkillToggles?: boolean;
   shutdown?(): Promise<void>;
   listWorkspaces(): Promise<WorkspaceCatalogSnapshot>;
   listSessions(workspaceId?: WorkspaceId): Promise<SessionCatalogSnapshot>;

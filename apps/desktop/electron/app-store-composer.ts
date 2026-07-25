@@ -291,9 +291,14 @@ export async function submitComposer(
     : undefined;
 
   if (text.startsWith("/") && !runtimeSlashCommand) {
-    const handled = await runComposerCommand(store, sessionRef, text);
-    if (handled) {
-      return handled;
+    // A host command that throws must surface in the banner, not vanish silently.
+    try {
+      const handled = await runComposerCommand(store, sessionRef, text);
+      if (handled) {
+        return handled;
+      }
+    } catch (error) {
+      return store.withError(error);
     }
   }
 
@@ -351,7 +356,9 @@ export async function submitComposer(
       store.setQueuedComposerEditState(sessionRef, undefined);
       await store.persistComposerAttachments(key, []);
       const nextSessionQueuedMessages = toSessionQueuedMessages(nextQueuedMessages);
-      optimisticSteerMessage = deliverAs === "steer"
+      // Both steer and follow-up are echoed immediately; otherwise a message typed
+      // during a run disappears until (or unless) the driver reports it back.
+      optimisticSteerMessage = deliverAs
         ? nextSessionQueuedMessages.find((message) => message.id === nextMessage.id)
         : undefined;
       if (optimisticSteerMessage) {

@@ -10,6 +10,7 @@ interface ExtensionsViewProps {
   readonly onRefresh: () => void;
   readonly onOpenExtensionFolder: (filePath: string) => void;
   readonly onToggleExtension: (filePath: string, enabled: boolean) => void;
+  readonly togglesManagedExternally?: boolean;
 }
 
 export function ExtensionsView({
@@ -19,6 +20,7 @@ export function ExtensionsView({
   onRefresh,
   onOpenExtensionFolder,
   onToggleExtension,
+  togglesManagedExternally,
 }: ExtensionsViewProps) {
   const [query, setQuery] = useState("");
   const [selectedExtensionPath, setSelectedExtensionPath] = useState<string | undefined>();
@@ -160,6 +162,8 @@ export function ExtensionsView({
                   <button
                     className="button button--secondary"
                     type="button"
+                    disabled={togglesManagedExternally}
+                    title={togglesManagedExternally ? "Managed by the pi CLI in this build" : undefined}
                     onClick={() => onToggleExtension(selectedExtension.path, !selectedExtension.enabled)}
                   >
                     {selectedExtension.enabled ? "Disable" : "Enable"}

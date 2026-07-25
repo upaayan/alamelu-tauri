@@ -10,6 +10,7 @@ interface SkillsViewProps {
   readonly onRefresh: () => void;
   readonly onOpenSkillFolder: (filePath: string) => void;
   readonly onToggleSkill: (filePath: string, enabled: boolean) => void;
+  readonly togglesManagedExternally?: boolean;
   readonly onTrySkill: (skill: RuntimeSkillRecord) => void;
 }
 
@@ -19,6 +20,7 @@ export function SkillsView({
   onRefresh,
   onOpenSkillFolder,
   onToggleSkill,
+  togglesManagedExternally,
   onTrySkill,
 }: SkillsViewProps) {
   const [query, setQuery] = useState("");
@@ -161,6 +163,8 @@ export function SkillsView({
                   <button
                     className="button button--secondary"
                     type="button"
+                    disabled={togglesManagedExternally}
+                    title={togglesManagedExternally ? "Managed by the pi CLI in this build" : undefined}
                     onClick={() => onToggleSkill(selectedSkill.filePath, !selectedSkill.enabled)}
                   >
                     {selectedSkill.enabled ? "Disable" : "Enable"}

@@ -41,7 +41,7 @@ export function SettingsGeneralSection({
           value={connectedCount > 0 ? String(connectedCount) : "None"}
         />
         <SettingsInfoRow label="Discovered skills" value={String(runtime?.skills.length ?? 0)} />
-        <SettingsRow title="Model settings scope" description="Choose whether model defaults apply everywhere or per repo.">
+        <SettingsRow title="Model settings scope" description={modelSettingsScopeMode === "per-repo" ? "Model defaults are saved to .pi/settings.json inside each repository." : "Choose whether model defaults apply everywhere or per repo."}>
           <div className="settings-pill-row">
             <button
               className={`settings-pill${modelSettingsScopeMode === "app-global" ? " settings-pill--active" : ""}`}
