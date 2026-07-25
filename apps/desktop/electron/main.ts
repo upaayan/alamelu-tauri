@@ -416,7 +416,7 @@ function createWindow(): BrowserWindow {
     transparent: enableTransparency,
     vibrancy: process.platform === "darwin" && enableTransparency ? "under-window" : undefined,
     titleBarStyle: "hiddenInset",
-    backgroundColor: enableTransparency ? "#00000000" : "#f3f4f8",
+    backgroundColor: enableTransparency ? "#00000000" : themeManager.getResolvedTheme() === "dark" ? "#1e1f22" : "#f8f8fb",
     trafficLightPosition: { x: 18, y: 18 },
     show: false,
     icon: appIcon,
@@ -589,7 +589,7 @@ async function runManualUpdateCheck(): Promise<void> {
   if (result.status === "up-to-date") {
     const options: MessageBoxOptions = {
       type: "info",
-      title: "pi-gui",
+      title: appBrand.appName,
       message: `You're up to date on version ${result.currentVersion}.`,
       buttons: ["OK"],
     };
@@ -603,7 +603,7 @@ async function runManualUpdateCheck(): Promise<void> {
 
   const options: MessageBoxOptions = {
     type: "warning",
-    title: "pi-gui",
+    title: appBrand.appName,
     message: "Could not check for updates right now.",
     detail: result.message,
     buttons: ["OK"],
