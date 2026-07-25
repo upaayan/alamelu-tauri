@@ -20,6 +20,12 @@ import {
   toTranscriptAttachments,
 } from "./app-store-utils";
 import type { AppStoreInternals } from "./app-store-internals";
+import {
+  evaluateModelSwitch,
+  isPiPatchApplied,
+  readThreadStats,
+  type PreflightDecision,
+} from "./model-switch-preflight";
 
 /* ── Public methods ─────────────────────────────────────── */
 
@@ -415,6 +421,12 @@ export async function setSessionModel(
     // the RPC driver. Hydrate/open it first so the mutation is not sent to a
     // missing RPC session.
     await store.ensureSessionReady(sessionRef);
+
+    const decision = preflightModelSwitch(store, sessionRef, provider, modelId);
+    if (decision.verdict === "block") {
+      return store.withError(new Error(decision.reason ?? "This model can't be used for this thread."));
+    }
+
     await store.driver.setSessionModel(sessionRef, { provider, modelId });
     syncSessionConfig(store, key, { provider, modelId });
     return finishComposerCommand(store, sessionRef, key, `Model set to ${provider}:${modelId}`);
@@ -458,6 +470,34 @@ export async function cancelCurrentRun(store: AppStoreInternals): Promise<Deskto
 }
 
 /* ── Internal helpers ───────────────────────────────────── */
+
+/**
+ * Checks a model switch against the thread before sending it, so a switch that
+ * would certainly fail on the next prompt is refused with a readable reason.
+ */
+function preflightModelSwitch(
+  store: AppStoreInternals,
+  sessionRef: SessionRef,
+  provider: string,
+  modelId: string,
+): PreflightDecision {
+  if (!store.sessionDir) return { verdict: "ok" };
+  const runtime = store.state.runtimeByWorkspace[sessionRef.workspaceId];
+  const record = runtime?.models.find((model) => model.providerId === provider && model.modelId === modelId);
+  const providerRecord = runtime?.providers.find((entry) => entry.id === provider);
+  const stats = readThreadStats(store.sessionDir, sessionRef.sessionId);
+  return evaluateModelSwitch(
+    stats,
+    {
+      providerId: provider,
+      modelId,
+      ...(record?.contextWindow !== undefined ? { contextWindow: record.contextWindow } : {}),
+      ...(record?.api !== undefined ? { api: record.api } : {}),
+      ...(providerRecord ? { connected: providerRecord.hasAuth !== false } : {}),
+    },
+    isPiPatchApplied(store.piBin),
+  );
+}
 
 export async function sendMessageToSession(
   store: AppStoreInternals,

@@ -205,6 +205,7 @@ export default function App() {
   const [newThreadModelId, setNewThreadModelId] = useState<string | undefined>();
   const [newThreadThinkingLevel, setNewThreadThinkingLevel] = useState<string | undefined>();
   const [newThreadComposerError, setNewThreadComposerError] = useState<string | undefined>();
+  const [startingThread, setStartingThread] = useState(false);
   const [providerLoginState, setProviderLoginState] = useState<ProviderLoginState>({ status: "idle" });
   const [themeMode, setThemeMode] = useState<"system" | "light" | "dark">("system");
   const [notificationPermissionStatus, setNotificationPermissionStatus] =
@@ -1979,16 +1980,23 @@ export default function App() {
       ...modelConfig,
     };
     wsMenu.expandWorkspace(newThreadRootWorkspaceId);
-    void updateSnapshot(api, setSnapshot, () =>
-      api.startThread(input),
-    ).then(() => {
-      setNewThreadPrompt("");
-      setNewThreadAttachments([]);
-      setNewThreadProvider(undefined);
-      setNewThreadModelId(undefined);
-      setNewThreadThinkingLevel(undefined);
-      setNewThreadEnvironment("local");
-    });
+    setNewThreadComposerError(undefined);
+    setStartingThread(true);
+    void updateSnapshot(api, setSnapshot, () => api.startThread(input))
+      .then((next) => {
+        // A failed start resolves with the error in state, so only a real thread clears the draft.
+        if (next?.lastError) {
+          setNewThreadComposerError(next.lastError);
+          return;
+        }
+        setNewThreadPrompt("");
+        setNewThreadAttachments([]);
+        setNewThreadProvider(undefined);
+        setNewThreadModelId(undefined);
+        setNewThreadThinkingLevel(undefined);
+        setNewThreadEnvironment("local");
+      })
+      .finally(() => setStartingThread(false));
   };
 
   const handleTimelineScroll = () => {
@@ -2321,6 +2329,8 @@ export default function App() {
               prompt={newThreadPrompt}
               attachments={newThreadAttachments}
               lastError={newThreadComposerError}
+              worktreesUnsupported={snapshot.driverCapabilities.worktrees === false}
+              starting={startingThread}
               provider={resolvedNewThreadProvider}
               modelId={resolvedNewThreadModelId}
               thinkingLevel={resolvedNewThreadThinkingLevel}

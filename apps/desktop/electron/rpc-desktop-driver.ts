@@ -42,6 +42,9 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
   private readonly paths: ValidatedLabPaths;
   private readonly openSessions = new Map<string, SessionRef>();
   readonly supportsWorktrees = false;
+  readonly supportsTree = false;
+  readonly supportsCompact = false;
+  readonly supportsQueueEditing = false;
   readonly runtimeSupervisor: DesktopRuntimeSupervisor;
 
   constructor(private readonly options: RpcDesktopDriverOptions) {

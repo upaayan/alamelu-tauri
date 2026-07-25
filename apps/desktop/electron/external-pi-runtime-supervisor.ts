@@ -154,11 +154,15 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
       providerIds.add(settings.defaultProvider);
     }
 
+    const metadataByKey = new Map(
+      authBridge.listModelMetadata().map((entry) => [`${entry.providerId}/${entry.modelId}`, entry]),
+    );
     const providers = [...providerIds].sort().map((providerId) => providerRecord(providerId, authBridge));
     const providerById = new Map(providers.map((provider) => [provider.id, provider]));
     const models = rows
       .map<RuntimeModelRecord>((row) => {
         const provider = providerById.get(row.providerId);
+        const metadata = metadataByKey.get(`${row.providerId}/${row.modelId}`);
         return {
           providerId: row.providerId,
           providerName: provider?.name ?? row.providerId,
@@ -168,6 +172,8 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
           authType: provider?.authType ?? "none",
           reasoning: row.reasoning,
           supportsImages: row.supportsImages,
+          ...(metadata?.contextWindow !== undefined ? { contextWindow: metadata.contextWindow } : {}),
+          ...(metadata?.api !== undefined ? { api: metadata.api } : {}),
         };
       })
       .sort((left, right) =>

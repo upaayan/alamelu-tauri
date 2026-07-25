@@ -23,6 +23,9 @@ export interface DesktopRuntimeSupervisor extends RuntimeResourceDriver {
 export interface DesktopSessionDriver extends SessionDriver {
   readonly runtimeSupervisor: DesktopRuntimeSupervisor;
   readonly supportsWorktrees?: boolean;
+  readonly supportsTree?: boolean;
+  readonly supportsCompact?: boolean;
+  readonly supportsQueueEditing?: boolean;
   shutdown?(): Promise<void>;
   listWorkspaces(): Promise<WorkspaceCatalogSnapshot>;
   listSessions(workspaceId?: WorkspaceId): Promise<SessionCatalogSnapshot>;

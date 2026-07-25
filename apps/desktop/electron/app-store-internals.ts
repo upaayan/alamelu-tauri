@@ -35,6 +35,8 @@ export interface AppStoreInternals {
   readonly catalogStore: JsonCatalogStore;
   readonly worktreeManager: GitWorktreeManager;
   readonly attachmentStore: JsonFileStore<ComposerAttachment[]>;
+  readonly sessionDir: string | undefined;
+  readonly piBin: string | undefined;
 
   /* ── Shared helpers (called by extracted method groups) ── */
   initialize(): Promise<void>;

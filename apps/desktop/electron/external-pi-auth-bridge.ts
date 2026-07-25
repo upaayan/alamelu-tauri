@@ -14,10 +14,18 @@ export interface ExternalPiOAuthProvider {
   readonly name: string;
 }
 
+export interface ExternalPiModelMetadata {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly api?: string;
+  readonly contextWindow?: number;
+}
+
 interface ExternalPiAuthAdapter {
   getOAuthProviders(): readonly ExternalPiOAuthProvider[];
   listCredentialProviderIds(): readonly string[];
   listModelProviderIds(): readonly string[];
+  listModelMetadata(): readonly ExternalPiModelMetadata[];
   getAuthStatus(providerId: string): ExternalPiAuthStatus;
   getStoredAuthType(providerId: string): "oauth" | "api_key" | undefined;
   getProviderDisplayName(providerId: string): string;
@@ -94,6 +102,15 @@ export class ExternalPiAuthBridge {
     return this.adapter.listModelProviderIds();
   }
 
+  /** Per-model metadata from pi's own registry. Empty when the installed pi cannot supply it. */
+  listModelMetadata(): readonly ExternalPiModelMetadata[] {
+    try {
+      return this.adapter.listModelMetadata();
+    } catch {
+      return [];
+    }
+  }
+
   getAuthStatus(providerId: string): ExternalPiAuthStatus {
     const storageStatus = this.adapter.getAuthStatus(providerId);
     const storedAuthType = this.getStoredAuthType(providerId);
@@ -137,6 +154,7 @@ export function createUnavailableExternalPiAuthBridge(reason: string): ExternalP
   return new ExternalPiAuthBridge({
     getOAuthProviders: () => [],
     listCredentialProviderIds: () => [],
+    listModelMetadata: () => [],
     listModelProviderIds: () => [],
     getAuthStatus: () => ({ configured: false }),
     getStoredAuthType: () => undefined,
@@ -234,6 +252,7 @@ async function createModernAuthBridge(runtime: ModernPiModelRuntime): Promise<Ex
         .map((model) => asRecord(model).provider)
         .filter((providerId): providerId is string => typeof providerId === "string"),
     )].sort(),
+    listModelMetadata: () => modelMetadataFrom(runtime.getModels()),
     getAuthStatus: (providerId) => normalizeAuthStatus(runtime.getProviderAuthStatus(providerId)),
     getStoredAuthType: (providerId) => storedAuthTypes.get(providerId),
     getProviderDisplayName: (providerId) => {
@@ -277,6 +296,7 @@ async function createLegacyAuthBridge(
   const apiKeyLoginProvider = legacyApiKeyLoginProvider(interactiveModule);
 
   return new ExternalPiAuthBridge({
+    listModelMetadata: () => modelMetadataFrom(modelRegistry.getAll()),
     getOAuthProviders: () => authStorage.getOAuthProviders().flatMap(normalizeOAuthProvider),
     listCredentialProviderIds: () => authStorage.list().filter((providerId): providerId is string => typeof providerId === "string"),
     listModelProviderIds: () => [...new Set(
@@ -471,4 +491,24 @@ function asRecord(value: unknown): Record<string, unknown> {
   return (typeof value === "object" && value !== null) || typeof value === "function"
     ? value as Record<string, unknown>
     : {};
+}
+
+/** Maps pi `Model` records to the subset Alamelu Pi needs for switch preflight. */
+function modelMetadataFrom(models: readonly unknown[]): readonly ExternalPiModelMetadata[] {
+  const out: ExternalPiModelMetadata[] = [];
+  for (const model of models) {
+    const record = asRecord(model);
+    const providerId = record.provider;
+    const modelId = record.id;
+    if (typeof providerId !== "string" || typeof modelId !== "string") continue;
+    out.push({
+      providerId,
+      modelId,
+      ...(typeof record.api === "string" ? { api: record.api } : {}),
+      ...(typeof record.contextWindow === "number" && Number.isFinite(record.contextWindow)
+        ? { contextWindow: record.contextWindow }
+        : {}),
+    });
+  }
+  return out;
 }

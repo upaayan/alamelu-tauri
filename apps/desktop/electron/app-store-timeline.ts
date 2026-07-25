@@ -205,6 +205,16 @@ export function applyTimelineEvent(
       );
       break;
     }
+    case "runCancelled": {
+      const metrics = currentMetrics;
+      clearRunState(transcript, key, event.sessionRef, state);
+      transcript.push(
+        makeActivityItem("Stopped by you", {
+          metadata: metrics ? workedForLabel(metrics.startedAt, event.timestamp) : relativeDetail(event.timestamp),
+        }),
+      );
+      break;
+    }
     case "sessionClosed":
       clearRunState(transcript, key, event.sessionRef, state);
       transcript.push(makeActivityItem("Stopped", { metadata: relativeDetail(event.timestamp) }));

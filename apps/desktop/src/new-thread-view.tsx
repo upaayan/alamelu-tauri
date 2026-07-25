@@ -22,6 +22,8 @@ interface NewThreadViewProps {
   readonly prompt: string;
   readonly attachments: readonly ComposerAttachment[];
   readonly lastError?: string;
+  readonly worktreesUnsupported?: boolean;
+  readonly starting?: boolean;
   readonly provider: string | undefined;
   readonly modelId: string | undefined;
   readonly thinkingLevel: string | undefined;
@@ -68,6 +70,8 @@ export function NewThreadView({
   prompt,
   attachments,
   lastError,
+  worktreesUnsupported,
+  starting,
   provider,
   modelId,
   thinkingLevel,
@@ -207,7 +211,9 @@ export function NewThreadView({
                 <NewThreadComposerFooter
                   runtime={runtime}
                   environment={environment}
-                  worktreeDisabled={workspace.specialKind === "no-repository"}
+                  worktreeDisabled={workspace.specialKind === "no-repository" || worktreesUnsupported === true}
+                  worktreeUnsupported={worktreesUnsupported === true}
+                  starting={starting === true}
                   provider={provider}
                   modelId={modelId}
                   thinkingLevel={thinkingLevel}
@@ -233,6 +239,8 @@ interface NewThreadComposerFooterProps {
   readonly runtime?: RuntimeSnapshot;
   readonly environment: NewThreadEnvironment;
   readonly worktreeDisabled: boolean;
+  readonly worktreeUnsupported?: boolean;
+  readonly starting?: boolean;
   readonly provider: string | undefined;
   readonly modelId: string | undefined;
   readonly thinkingLevel: string | undefined;
@@ -250,6 +258,8 @@ function NewThreadComposerFooter({
   runtime,
   environment,
   worktreeDisabled,
+  worktreeUnsupported,
+  starting,
   provider,
   modelId,
   thinkingLevel,
@@ -279,6 +289,7 @@ function NewThreadComposerFooter({
                 className={`new-thread__environment ${environment === "worktree" ? "new-thread__environment--active" : ""}`}
                 type="button"
                 disabled={worktreeDisabled}
+                title={worktreeUnsupported ? "Not available in this build" : undefined}
                 onClick={() => onSelectEnvironment("worktree")}
               >
                 <span>Worktree</span>
@@ -290,7 +301,6 @@ function NewThreadComposerFooter({
               provider={provider}
               modelId={modelId}
               thinkingLevel={thinkingLevel}
-              dropdownPlacement="below"
               showEmptyModelControl
               unselectedModelLabel={modelOnboarding.unselectedModelLabel}
               emptyModelLabel={MODEL_OPTIONS_EMPTY_TITLE}
@@ -326,7 +336,7 @@ function NewThreadComposerFooter({
               aria-label="Start thread"
               className="button button--primary button--cta-icon"
               type="button"
-              disabled={!hasContent || modelOnboarding.requiresModelSelection}
+              disabled={!hasContent || modelOnboarding.requiresModelSelection || starting}
               onClick={onSubmit}
             >
               <ArrowUpIcon />

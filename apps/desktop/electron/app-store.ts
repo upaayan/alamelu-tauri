@@ -92,6 +92,7 @@ import * as workspace from "./app-store-workspace";
 import * as worktree from "./app-store-worktree";
 import * as composer from "./app-store-composer";
 import { isSessionActivelyViewed } from "./session-visibility";
+import { describeError } from "./user-facing-errors";
 
 type StateListener = (state: DesktopAppState) => void;
 type SelectedTranscriptListener = (payload: SelectedTranscriptRecord | null) => void;
@@ -126,6 +127,10 @@ export interface DesktopAppStoreOptions {
     options: GenerateThreadTitleOptions,
   ) => Promise<string | null | undefined>;
   readonly driver?: DesktopSessionDriver;
+  /** Where pi writes session JSONL. Used to size a thread before a model switch. */
+  readonly sessionDir?: string;
+  /** Resolved pi binary, used to detect whether the local pi-ai patch is applied. */
+  readonly piBin?: string;
 }
 
 export class DesktopAppStore implements AppStoreInternals {
@@ -151,6 +156,8 @@ export class DesktopAppStore implements AppStoreInternals {
   private persistUiStateTimer: NodeJS.Timeout | undefined;
   private readonly transcriptPersistTimers = new Map<string, NodeJS.Timeout>();
   private readonly restoredSelectedSessionKeysAwaitingSelection = new Set<string>();
+  readonly sessionDir: string | undefined;
+  readonly piBin: string | undefined;
   private initPromise: Promise<void> | undefined;
   private selectionEpoch = 0;
   private refreshStateDepth = 0;
@@ -171,6 +178,8 @@ export class DesktopAppStore implements AppStoreInternals {
     this.enableNoRepositoryWorkspace = options.enableNoRepositoryWorkspace ?? false;
     this.getWindow = options.getWindow ?? (() => null);
     this.noRepositoryWorkspacePath = join(options.userDataDir, NO_REPOSITORY_WORKSPACE_NAME);
+    this.sessionDir = options.sessionDir;
+    this.piBin = options.piBin;
   }
 
   /* ── Lifecycle ──────────────────────────────────────────── */
@@ -762,6 +771,12 @@ export class DesktopAppStore implements AppStoreInternals {
     try {
       this.state = {
         ...this.state,
+        driverCapabilities: {
+          worktrees: this.driver.supportsWorktrees,
+          tree: this.driver.supportsTree,
+          compact: this.driver.supportsCompact,
+          queueEditing: this.driver.supportsQueueEditing,
+        },
         activeView: persisted.activeView ?? this.state.activeView,
         modelSettingsScopeMode: persisted.modelSettingsScopeMode ?? this.state.modelSettingsScopeMode,
         globalModelSettings: persisted.appGlobalModelSettings ?? this.state.globalModelSettings,
@@ -1411,11 +1426,17 @@ export class DesktopAppStore implements AppStoreInternals {
           await this.refreshSessionCommands(event.sessionRef);
         }
         break;
-      case "runFailed":
+      case "runFailed": {
+        const described = describeError(event.error.message);
         this.state = {
           ...this.state,
-          lastError: event.error.message,
+          lastError: described.headline,
+          ...(described.detail ? { lastErrorDetail: described.detail } : { lastErrorDetail: undefined }),
         };
+        await this.refreshSessionCommands(event.sessionRef);
+        break;
+      }
+      case "runCancelled":
         await this.refreshSessionCommands(event.sessionRef);
         break;
       case "extensionCompatibilityIssue":
@@ -1447,8 +1468,8 @@ export class DesktopAppStore implements AppStoreInternals {
     }
 
     if (event.type === "runFailed") {
-      this.sessionState.sessionErrorsBySession.set(key, event.error.message);
-    } else if (event.type === "runCompleted" || event.type === "sessionClosed") {
+      this.sessionState.sessionErrorsBySession.set(key, describeError(event.error.message).headline);
+    } else if (event.type === "runCompleted" || event.type === "runCancelled" || event.type === "sessionClosed") {
       this.sessionState.sessionErrorsBySession.delete(key);
     }
 
@@ -1476,7 +1497,7 @@ export class DesktopAppStore implements AppStoreInternals {
     if (event.type !== "hostUiRequest") {
       this.persistTranscriptCacheForSession(event.sessionRef);
     }
-    if (event.type === "runCompleted" || event.type === "runFailed" || event.type === "sessionClosed") {
+    if (event.type === "runCompleted" || event.type === "runFailed" || event.type === "runCancelled" || event.type === "sessionClosed") {
       await this.persistUiState();
     } else if (event.type !== "hostUiRequest") {
       this.schedulePersistUiState();
@@ -1904,7 +1925,9 @@ export class DesktopAppStore implements AppStoreInternals {
   }
 
   async withError(error: unknown): Promise<DesktopAppState> {
-    const message = error instanceof Error ? error.message : String(error);
+    const raw = error instanceof Error ? error.message : String(error);
+    const described = describeError(raw);
+    const message = described.headline;
     if (process.env.ALPI_BOOT_LOG === "1") {
       console.error("[alpi-boot] withError", error instanceof Error ? error.stack ?? error.message : String(error));
     }
@@ -1915,6 +1938,7 @@ export class DesktopAppStore implements AppStoreInternals {
     this.state = {
       ...this.state,
       lastError: message,
+      ...(described.detail ? { lastErrorDetail: described.detail } : { lastErrorDetail: undefined }),
       revision: this.state.revision + 1,
     };
     await this.persistUiState();

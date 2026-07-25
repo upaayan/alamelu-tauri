@@ -33,6 +33,9 @@ export interface RuntimeModelRecord {
   readonly authType: RuntimeAuthType;
   readonly reasoning: boolean;
   readonly supportsImages: boolean;
+  /** From pi's own model registry; undefined when the installed pi cannot supply it. */
+  readonly contextWindow?: number;
+  readonly api?: string;
 }
 
 export interface RuntimeSkillRecord {

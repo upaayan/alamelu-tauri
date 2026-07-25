@@ -850,6 +850,9 @@ app.whenReady().then(async () => {
     getWindow: () => mainWindow,
     generateThreadTitleOverride: async (workspace, options) => generateThreadTitleOverride?.(workspace, options),
     ...(rpcDriver ? { driver: rpcDriver } : {}),
+    ...(desktopDriverConfig.driver === "rpc"
+      ? { sessionDir: desktopDriverConfig.rpc.sessionDir, piBin: desktopDriverConfig.rpc.piBin }
+      : {}),
   });
   bootLog(`store config userData=${configuredUserDataDir} driver=${desktopDriverConfig.driver} appPath=${app.getAppPath()} cwd=${process.cwd()} path=${process.env.PATH || ""}`);
   await store.initialize();

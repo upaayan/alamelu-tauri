@@ -193,6 +193,12 @@ export interface RunFailedEvent extends SessionEventBase {
   readonly error: SessionErrorInfo;
 }
 
+/** A run the user stopped on purpose. Not a failure: no error state, no failure notification. */
+export interface RunCancelledEvent extends SessionEventBase {
+  readonly type: "runCancelled";
+  readonly runId: string;
+}
+
 export type HostUiResponse =
   | {
       readonly requestId: string;
@@ -297,6 +303,7 @@ export type SessionDriverEvent =
   | ToolFinishedEvent
   | RunCompletedEvent
   | RunFailedEvent
+  | RunCancelledEvent
   | HostUiRequestEvent
   | ExtensionCompatibilityIssueEvent
   | SessionClosedEvent;

@@ -233,7 +233,7 @@ export class PiRpcDriver implements SessionDriver {
     try {
       const response = await record.client.sendCommand({ type: "abort" }, `abort-${randomUUID()}`);
       if (!response.success) throw new Error(response.error ?? "RPC abort failed");
-      if (runId) this.failRun(record, runId, "Run cancelled");
+      if (runId) this.endRun(record, runId, { cancelled: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (runId) this.failRun(record, runId, message);
@@ -489,8 +489,8 @@ export class PiRpcDriver implements SessionDriver {
     if (record.suppressRunEvents) return;
 
     if (record.cancellingRunId && record.snapshot.runningRunId === record.cancellingRunId) {
-      const cancellingFailure = streamFailureMessage(event);
-      if (cancellingFailure) this.failRun(record, record.cancellingRunId, cancellingFailure);
+      // A stream failure arriving mid-cancel is the user's own stop landing, not an error.
+      if (streamFailureMessage(event)) this.endRun(record, record.cancellingRunId, { cancelled: true });
       return;
     }
 
@@ -534,6 +534,14 @@ export class PiRpcDriver implements SessionDriver {
   }
 
   private failRun(record: SessionRecord, runId: string, message: string): void {
+    this.endRun(record, runId, { message });
+  }
+
+  /**
+   * Terminates a run. `cancelled` runs are the user's own stop: same teardown, but
+   * reported as `runCancelled` so the UI never paints them as an error.
+   */
+  private endRun(record: SessionRecord, runId: string, outcome: { message: string } | { cancelled: true }): void {
     if (record.suppressRunEvents && !record.snapshot.runningRunId) return;
     const { runningRunId: _runningRunId, ...snapshotWithoutRunId } = record.snapshot;
     delete record.cancellingRunId;
@@ -542,7 +550,12 @@ export class PiRpcDriver implements SessionDriver {
     record.snapshot = { ...snapshotWithoutRunId, status: "idle", updatedAt: this.now() };
     if (isLunaSession(record.snapshot)) record.lunaChildNeedsRotation = true;
     this.emit(record.ref, { type: "sessionUpdated", sessionRef: record.ref, timestamp: this.now(), snapshot: record.snapshot });
-    this.emit(record.ref, { type: "runFailed", sessionRef: record.ref, timestamp: this.now(), runId, error: { message } });
+    this.emit(
+      record.ref,
+      "cancelled" in outcome
+        ? { type: "runCancelled", sessionRef: record.ref, timestamp: this.now(), runId }
+        : { type: "runFailed", sessionRef: record.ref, timestamp: this.now(), runId, error: { message: outcome.message } },
+    );
   }
 
   private emit(sessionRef: SessionRef, event: SessionDriverEvent): void {

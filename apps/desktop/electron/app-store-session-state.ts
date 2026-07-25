@@ -88,6 +88,7 @@ function statusForEvent(sessionStatus: SessionRecord["status"], event: SessionDr
       return event.snapshot.status;
     case "runFailed":
       return "failed";
+    case "runCancelled":
     case "sessionClosed":
       return "idle";
     default:

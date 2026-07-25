@@ -179,6 +179,17 @@ export interface DesktopAppState {
   readonly enableTransparency: boolean;
   readonly revision: number;
   readonly lastError?: string;
+  /** Raw text behind `lastError`, kept for debugging; the headline is what users read. */
+  readonly lastErrorDetail?: string;
+  readonly driverCapabilities: DriverCapabilities;
+}
+
+/** What the active driver can actually do. `undefined` means supported. */
+export interface DriverCapabilities {
+  readonly worktrees?: boolean;
+  readonly tree?: boolean;
+  readonly compact?: boolean;
+  readonly queueEditing?: boolean;
 }
 
 export interface CreateSessionInput {
@@ -221,6 +232,7 @@ export function createEmptyDesktopAppState(): DesktopAppState {
     },
     sidebarCollapsed: false,
     enableTransparency: false,
+    driverCapabilities: {},
     revision: 0,
   };
 }
