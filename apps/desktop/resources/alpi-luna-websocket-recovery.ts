@@ -85,15 +85,28 @@ async function loadPiWebSocketReset() {
   // is intentionally not an extension import alias, so derive its real file.
   const piEntryPath = require.resolve("@earendil-works/pi-coding-agent");
   const piPackageRoot = path.resolve(path.dirname(piEntryPath), "..");
-  const providerModulePath = path.join(
-    piPackageRoot,
-    "node_modules",
-    "@earendil-works",
-    "pi-ai",
-    "dist",
-    "providers",
-    "openai-codex-responses.js",
-  );
+  // Pi 0.80.10 moved the Codex transport module from `dist/providers` to
+  // `dist/api`. Keep the old path as a fallback for older Pi installations.
+  const providerModulePath = [
+    path.join(
+      piPackageRoot,
+      "node_modules",
+      "@earendil-works",
+      "pi-ai",
+      "dist",
+      "api",
+      "openai-codex-responses.js",
+    ),
+    path.join(
+      piPackageRoot,
+      "node_modules",
+      "@earendil-works",
+      "pi-ai",
+      "dist",
+      "providers",
+      "openai-codex-responses.js",
+    ),
+  ].find((candidate) => existsSync(candidate));
   if (!existsSync(providerModulePath)) {
     throw new Error("Alamelu Luna recovery could not locate Pi's Codex provider module");
   }

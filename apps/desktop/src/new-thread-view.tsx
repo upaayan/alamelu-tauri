@@ -139,8 +139,7 @@ export function NewThreadView({
           <div className="new-thread__logo" data-testid="new-thread-logo">
             <AlameluPiLogoMark />
           </div>
-          <div className="new-thread__eyebrow">New thread</div>
-          <h1 className="new-thread__title">Let&apos;s build</h1>
+          <h1 className="new-thread__title">Alamelu Pi</h1>
           <label className="new-thread__workspace-picker">
             <span className="sr-only">Repository</span>
             <select

@@ -18,8 +18,14 @@ export function isSystemWorkspacePathOrName(pathOrName: string | undefined): boo
     return false;
   }
   const normalized = pathOrName.replaceAll("\\", "/");
+  const normalizedLower = normalized.toLowerCase();
   const name = normalized.split("/").filter(Boolean).at(-1) ?? normalized;
-  return name.startsWith("alpi-provider-login-workspace-") || name.startsWith("alpi-state-workspace-");
+  return (
+    name.startsWith("alpi-provider-login-workspace-") ||
+    name.startsWith("alpi-state-workspace-") ||
+    normalizedLower.endsWith("/library/application support/alamelu pi/workspace") ||
+    normalizedLower.endsWith("/appdata/roaming/alamelu pi/workspace")
+  );
 }
 
 export function resolveRepoWorkspaceId<T extends RepoRootWorkspaceLike>(

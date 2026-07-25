@@ -16,7 +16,12 @@ import type {
 } from "@pi-gui/session-driver/runtime-types";
 import type { DesktopRuntimeSupervisor } from "./desktop-driver";
 import { unsupportedRpcDesktopOperation } from "./desktop-driver";
-import { type ExternalPiAuthStatus, ExternalPiAuthBridge, loadExternalPiAuthBridge } from "./external-pi-auth-bridge";
+import {
+  type ExternalPiAuthStatus,
+  ExternalPiAuthBridge,
+  createUnavailableExternalPiAuthBridge,
+  loadExternalPiAuthBridge,
+} from "./external-pi-auth-bridge";
 import { parsePiListModels } from "./external-pi-model-parser";
 
 const LIST_MODELS_TIMEOUT_MS = 30_000;
@@ -29,6 +34,8 @@ interface ExternalPiRuntimeSupervisorOptions {
 }
 
 export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
+  private listModelsInFlight: Promise<string> | undefined;
+
   constructor(private readonly options: ExternalPiRuntimeSupervisorOptions) {}
 
   async getRuntimeSnapshot(workspace: WorkspaceRef): Promise<RuntimeSnapshot> {
@@ -55,7 +62,7 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
 
   async logout(workspace: WorkspaceRef, providerId: string): Promise<RuntimeSnapshot> {
     const authBridge = await this.authBridge();
-    authBridge.logout(providerId);
+    await authBridge.logout(providerId);
     return this.buildSnapshot(workspace);
   }
 
@@ -68,7 +75,7 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
     if (!authBridge.supportsApiKey(providerId)) {
       throw new Error(`Pi does not offer API-key setup for provider: ${providerId}`);
     }
-    authBridge.setApiKey(providerId, trimmedApiKey);
+    await authBridge.setApiKey(providerId, trimmedApiKey);
     return this.buildSnapshot(workspace);
   }
 
@@ -122,8 +129,8 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
     const [settings, modelsJson, listOutput, authBridge] = await Promise.all([
       this.readSettings(),
       readJsonRecord(join(this.options.agentDir, "models.json")),
-      this.runPi(["--list-models"]),
-      this.authBridge(),
+      this.runListModels(),
+      this.authBridgeForSnapshot(),
     ]);
     const rows = parsePiListModels(listOutput);
     const customLabels = customModelLabels(modelsJson);
@@ -207,11 +214,43 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
     return readJsonRecord(join(this.options.agentDir, "settings.json"));
   }
 
+  private runListModels(): Promise<string> {
+    if (this.listModelsInFlight) {
+      return this.listModelsInFlight;
+    }
+
+    const request = this.runPi(["--list-models"]);
+    this.listModelsInFlight = request;
+    void request.then(
+      () => {
+        if (this.listModelsInFlight === request) {
+          this.listModelsInFlight = undefined;
+        }
+      },
+      () => {
+        if (this.listModelsInFlight === request) {
+          this.listModelsInFlight = undefined;
+        }
+      },
+    );
+    return request;
+  }
+
   private authBridge(): Promise<ExternalPiAuthBridge> {
     return loadExternalPiAuthBridge({
       piBin: this.options.piBin,
       agentDir: this.options.agentDir,
     });
+  }
+
+  private async authBridgeForSnapshot(): Promise<ExternalPiAuthBridge> {
+    try {
+      return await this.authBridge();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Alamelu Pi could not load Pi provider authentication metadata: ${message}`);
+      return createUnavailableExternalPiAuthBridge(message);
+    }
   }
 
   private async updateSettings(mutator: (settings: Record<string, unknown>) => Record<string, unknown>): Promise<void> {

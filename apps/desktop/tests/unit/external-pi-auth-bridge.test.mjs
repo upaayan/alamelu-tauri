@@ -40,6 +40,78 @@ test("derives the installed Pi public auth module from its CLI entrypoint", () =
   );
 });
 
+test("supports Pi's ModelRuntime auth API", async () => {
+  const calls = [];
+  const runtime = {
+    getProviders: () => [
+      {
+        id: "openai-codex",
+        name: "OpenAI Codex",
+        auth: { oauth: { name: "OpenAI (ChatGPT Plus/Pro)" } },
+      },
+      {
+        id: "nvidia",
+        name: "NVIDIA",
+        auth: { apiKey: { name: "NVIDIA API key", login: async () => ({ type: "api_key", key: "unused" }) } },
+      },
+    ],
+    getModels: () => [{ provider: "openai-codex" }, { provider: "nvidia" }],
+    getProviderAuthStatus: (providerId) =>
+      providerId === "openai-codex"
+        ? { configured: true, source: "stored" }
+        : { configured: false },
+    getProvider: (providerId) =>
+      runtime.getProviders().find((provider) => provider.id === providerId),
+    getProviderDisplayName: (providerId) => runtime.getProvider(providerId)?.name ?? providerId,
+    listCredentials: async () => [{ providerId: "openai-codex", type: "oauth" }],
+    login: async (providerId, type, interaction) => {
+      calls.push(["login", providerId, type]);
+      await interaction.prompt({ type: "secret", message: "API key" });
+      interaction.notify({ type: "progress", message: "done" });
+    },
+    logout: async (providerId) => {
+      calls.push(["logout", providerId]);
+    },
+  };
+  class ModelRuntime {
+    static async create(options) {
+      calls.push(["create-runtime", options]);
+      return runtime;
+    }
+  }
+
+  const bridge = await loadExternalPiAuthBridge({
+    piBin: "/Users/example/.pi/agent/bin/pi",
+    agentDir: "/Users/example/.pi/agent",
+    resolvePiBin: async () => "/opt/pi/dist/cli.js",
+    importModule: async (moduleUrl) => (moduleUrl.endsWith("/dist/index.js") ? { ModelRuntime } : {}),
+  });
+
+  assert.deepEqual(bridge.getOAuthProviders(), [
+    { id: "openai-codex", name: "OpenAI (ChatGPT Plus/Pro)" },
+  ]);
+  assert.deepEqual(bridge.listModelProviderIds(), ["nvidia", "openai-codex"]);
+  assert.deepEqual(bridge.listCredentialProviderIds(), ["openai-codex"]);
+  assert.deepEqual(bridge.getAuthStatus("openai-codex"), { configured: true, source: "stored" });
+  assert.equal(bridge.getStoredAuthType("openai-codex"), "oauth");
+  assert.equal(bridge.supportsApiKey("nvidia"), true);
+  assert.equal(bridge.supportsApiKey("openai-codex"), false);
+
+  await bridge.login("openai-codex", {
+    onAuth: () => undefined,
+    onPrompt: async () => "response",
+  });
+  await bridge.setApiKey("nvidia", "test-api-key");
+  await bridge.logout("nvidia");
+
+  assert.deepEqual(calls.map(([name, providerId, type]) => [name, providerId, type]), [
+    ["create-runtime", { authPath: "/Users/example/.pi/agent/auth.json", modelsPath: "/Users/example/.pi/agent/models.json", allowModelNetwork: false }, undefined],
+    ["login", "openai-codex", "oauth"],
+    ["login", "nvidia", "api_key"],
+    ["logout", "nvidia", undefined],
+  ]);
+});
+
 test("delegates login and API-key persistence to the installed Pi AuthStorage", async () => {
   const calls = [];
   const authStorage = {
@@ -124,19 +196,24 @@ test("delegates login and API-key persistence to the installed Pi AuthStorage", 
     onPrompt: async () => "response",
   };
   await bridge.login("openai-codex", callbacks);
-  bridge.setApiKey("openai", "test-api-key");
-  bridge.logout("openai");
+  await bridge.setApiKey("openai", "test-api-key");
+  await bridge.logout("openai");
 
-  assert.deepEqual(calls, [
+  assert.deepEqual(calls.slice(0, 2), [
     ["create", "/Users/example/.pi/agent/auth.json"],
     ["create-model-registry", authStorage, "/Users/example/.pi/agent/models.json"],
-    ["login", "openai-codex", callbacks],
+  ]);
+  assert.equal(calls[2][0], "login");
+  assert.equal(calls[2][1], "openai-codex");
+  assert.equal(typeof calls[2][2].onAuth, "function");
+  assert.equal(typeof calls[2][2].onPrompt, "function");
+  assert.deepEqual(calls.slice(3), [
     ["set", "openai", { type: "api_key", key: "test-api-key" }],
     ["logout", "openai"],
   ]);
 });
 
-test("fails clearly when an installed Pi lacks API-key capability metadata", async () => {
+test("keeps legacy auth loading when API-key capability metadata is absent", async () => {
   const authStorage = {
     get: () => undefined,
     getOAuthProviders: () => [],
@@ -162,14 +239,11 @@ test("fails clearly when an installed Pi lacks API-key capability metadata", asy
     }
   }
 
-  await assert.rejects(
-    () =>
-      loadExternalPiAuthBridge({
-        piBin: "/Users/example/.pi/agent/bin/pi",
-        agentDir: "/Users/example/.pi/agent",
-        resolvePiBin: async () => "/opt/pi/dist/cli.js",
-        importModule: async (moduleUrl) => (moduleUrl.endsWith("/dist/index.js") ? { AuthStorage, ModelRegistry } : {}),
-      }),
-    /does not expose API-key provider support/,
-  );
+  const bridge = await loadExternalPiAuthBridge({
+    piBin: "/Users/example/.pi/agent/bin/pi",
+    agentDir: "/Users/example/.pi/agent",
+    resolvePiBin: async () => "/opt/pi/dist/cli.js",
+    importModule: async (moduleUrl) => (moduleUrl.endsWith("/dist/index.js") ? { AuthStorage, ModelRegistry } : {}),
+  });
+  assert.equal(bridge.supportsApiKey("openai"), false);
 });

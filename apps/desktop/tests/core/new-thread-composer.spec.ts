@@ -49,7 +49,8 @@ test("new thread reuses composer behaviors for slash commands, image previews, a
       )
       .toEqual({ complete: true, naturalWidth: 512, naturalHeight: 512 });
     await expect.poll(() => logo.getAttribute("src"), { timeout: 15_000 }).toMatch(/alpi-icon-[^/]+\.png$/);
-    await expect(window.getByRole("heading", { name: "Let's build" })).toBeVisible();
+    await expect(window.getByRole("heading", { name: "Alamelu Pi" })).toBeVisible();
+    await expect(window.locator(".new-thread__eyebrow")).toHaveCount(0);
     await expect(composer).toBeFocused();
     await expect(composer).toHaveAttribute("placeholder", "Ask Alamelu Pi anything, use / for commands and skills");
 
@@ -98,7 +99,7 @@ test("new thread reuses composer behaviors for slash commands, image previews, a
   }
 });
 
-test("new thread composer uses the lower canvas while keeping a small bottom gap", async () => {
+test("new thread centers the branded block above the composer while keeping a small bottom gap", async () => {
   test.setTimeout(60_000);
   const userDataDir = await makeUserDataDir();
   const workspacePath = await makeWorkspace("new-thread-spacing-workspace");
@@ -116,24 +117,31 @@ test("new thread composer uses the lower canvas while keeping a small bottom gap
 
     const metrics = await window.evaluate(() => {
       const canvas = document.querySelector<HTMLElement>(".canvas--new-thread");
+      const layout = document.querySelector<HTMLElement>(".new-thread");
       const hero = document.querySelector<HTMLElement>(".new-thread__hero");
       const composer = document.querySelector<HTMLElement>(".new-thread__composer");
-      if (!canvas || !hero || !composer) {
+      if (!canvas || !layout || !hero || !composer) {
         throw new Error("New-thread layout elements were unavailable");
       }
 
       const canvasBox = canvas.getBoundingClientRect();
+      const layoutBox = layout.getBoundingClientRect();
       const heroBox = hero.getBoundingClientRect();
       const composerBox = composer.getBoundingClientRect();
+      const layoutStyle = window.getComputedStyle(layout);
+      const layoutGap = Number.parseFloat(layoutStyle.rowGap || layoutStyle.gap || "0");
       return {
         bottomGap: Math.round(canvasBox.bottom - composerBox.bottom),
         heroGap: Math.round(composerBox.top - heroBox.bottom),
-        composerCenterY: Math.round(composerBox.top + composerBox.height / 2),
-        canvasCenterY: Math.round(canvasBox.top + canvasBox.height / 2),
+        heroCenterX: Math.round(heroBox.left + heroBox.width / 2),
+        layoutCenterX: Math.round(layoutBox.left + layoutBox.width / 2),
+        availableCenterY: Math.round((layoutBox.top + composerBox.top - layoutGap) / 2),
+        heroCenterY: Math.round(heroBox.top + heroBox.height / 2),
       };
     });
 
-    expect(metrics.composerCenterY).toBeGreaterThan(metrics.canvasCenterY);
+    expect(Math.abs(metrics.heroCenterX - metrics.layoutCenterX)).toBeLessThanOrEqual(1);
+    expect(Math.abs(metrics.heroCenterY - metrics.availableCenterY)).toBeLessThanOrEqual(8);
     expect(metrics.bottomGap).toBeGreaterThanOrEqual(28);
     expect(metrics.bottomGap).toBeLessThanOrEqual(96);
     expect(metrics.heroGap).toBeGreaterThanOrEqual(18);

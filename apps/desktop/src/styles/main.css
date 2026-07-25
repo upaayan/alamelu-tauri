@@ -2007,22 +2007,22 @@
 
 .new-thread {
   --new-thread-bottom-gap: clamp(36px, 4.5vh, 60px);
-  --new-thread-hero-gap: clamp(22px, 3vh, 34px);
+  --new-thread-hero-gap: clamp(20px, 3vh, 34px);
 
-  flex: 1 0 auto;
-  min-height: 520px;
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-rows: minmax(max-content, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   align-content: stretch;
   gap: var(--new-thread-hero-gap);
   padding-bottom: var(--new-thread-bottom-gap);
 }
 
 .new-thread__hero {
-  align-self: end;
+  align-self: center;
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 12px;
   text-align: center;
 }
 
@@ -2040,14 +2040,6 @@
   display: block;
 }
 
-.new-thread__eyebrow {
-  color: var(--muted-soft);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
 .new-thread__hero h1 {
   margin: 0;
   color: var(--text-strong);
@@ -2063,9 +2055,12 @@
 .new-thread__workspace-picker {
   display: grid;
   justify-items: center;
+  width: min(480px, 100%);
 }
 
 .new-thread__workspace {
+  box-sizing: border-box;
+  width: 100%;
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid #dfe4ee;

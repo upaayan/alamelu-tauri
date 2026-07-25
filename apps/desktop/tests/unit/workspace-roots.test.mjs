@@ -35,11 +35,16 @@ test('classifies Alpi helper workspace names as system workspaces', () => {
   assert.equal(isSystemWorkspacePathOrName('alpi-state-workspace-XjBLYL'), true);
   assert.equal(isSystemWorkspacePathOrName('/tmp/alpi-provider-login-workspace-abc123'), true);
   assert.equal(isSystemWorkspacePathOrName('/tmp/nested/alpi-state-workspace-XjBLYL'), true);
+  assert.equal(
+    isSystemWorkspacePathOrName('/Users/sudhirjha/Library/Application Support/Alamelu Pi/workspace'),
+    true,
+  );
 });
 
 test('does not classify user project or no-repository names as system workspaces', () => {
   assert.equal(isSystemWorkspacePathOrName('alamelu'), false);
   assert.equal(isSystemWorkspacePathOrName('/Users/sudhirjha/playground/lazydata'), false);
+  assert.equal(isSystemWorkspacePathOrName('/Users/sudhirjha/playground/workspace'), false);
   assert.equal(isSystemWorkspacePathOrName('No Repository'), false);
 });
 

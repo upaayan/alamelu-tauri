@@ -411,6 +411,10 @@ export async function setSessionModel(
   const key = sessionKey(sessionRef);
 
   return store.withErrorHandling(async () => {
+    // Model controls can be used before the selected thread has been opened by
+    // the RPC driver. Hydrate/open it first so the mutation is not sent to a
+    // missing RPC session.
+    await store.ensureSessionReady(sessionRef);
     await store.driver.setSessionModel(sessionRef, { provider, modelId });
     syncSessionConfig(store, key, { provider, modelId });
     return finishComposerCommand(store, sessionRef, key, `Model set to ${provider}:${modelId}`);
@@ -425,6 +429,7 @@ export async function setSessionThinkingLevel(
   await store.initialize();
   const key = sessionKey(sessionRef);
   return store.withErrorHandling(async () => {
+    await store.ensureSessionReady(sessionRef);
     await store.driver.setSessionThinkingLevel(sessionRef, thinkingLevel);
     syncSessionConfig(store, key, { thinkingLevel });
     return finishComposerCommand(store, sessionRef, key, `Thinking set to ${thinkingLevel}`);
