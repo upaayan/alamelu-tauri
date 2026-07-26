@@ -8,6 +8,7 @@ import type {
   SessionRef,
   SessionTreeSnapshot,
   WorkspaceRef,
+  SessionTranscriptItem,
 } from "@alamelu-pi/session-driver";
 import type {
   ModelSettingsSnapshot,
@@ -34,7 +35,7 @@ export interface DesktopSessionDriver extends SessionDriver {
   syncWorkspace(path: string, displayName?: string): Promise<SyncWorkspaceResult>;
   renameWorkspace(workspaceId: WorkspaceId, displayName: string): Promise<void>;
   removeWorkspace(workspaceId: WorkspaceId): Promise<void>;
-  getTranscript(sessionRef: SessionRef): Promise<SessionTranscriptMessage[]>;
+  getTranscript(sessionRef: SessionRef): Promise<readonly SessionTranscriptItem[]>;
   getSessionTree(sessionRef: SessionRef): Promise<SessionTreeSnapshot>;
   navigateSessionTree(
     sessionRef: SessionRef,

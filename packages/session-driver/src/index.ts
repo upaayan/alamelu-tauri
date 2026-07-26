@@ -70,6 +70,8 @@ export type {
   SessionTranscriptFileAttachment,
   SessionTranscriptImageAttachment,
   SessionTranscriptMessage,
+  SessionTranscriptToolCall,
+  SessionTranscriptItem,
   SessionTranscriptRole,
 } from "./transcript.js";
 export {

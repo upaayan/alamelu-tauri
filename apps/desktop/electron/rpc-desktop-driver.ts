@@ -15,6 +15,7 @@ import {
   type SessionQueuedMessage,
   type SessionRef,
   type SessionSnapshot,
+  type SessionTranscriptItem,
   type SessionTranscriptMessage,
   type SessionTreeSnapshot,
   type SyncWorkspaceResult,
@@ -202,8 +203,9 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
     await this.catalogs.workspaces.deleteWorkspace(workspaceId);
   }
 
-  getTranscript(sessionRef: SessionRef): Promise<SessionTranscriptMessage[]> {
-    return this.rpc.getTranscript(sessionRef) as Promise<SessionTranscriptMessage[]>;
+  getTranscript(sessionRef: SessionRef): Promise<readonly SessionTranscriptItem[]> {
+    // No cast: the RPC driver now returns real transcript items, tool calls included.
+    return this.rpc.getTranscript(sessionRef);
   }
 
   generateThreadTitle(_workspace: WorkspaceRef, options: GenerateThreadTitleOptions): Promise<string | null> {

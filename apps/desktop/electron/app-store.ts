@@ -1117,7 +1117,7 @@ export class DesktopAppStore implements AppStoreInternals {
     const cachedTranscript = await this.readPersistedTranscript(key);
     const transcript = cachedTranscript
       ? await this.resolveLoadedTranscript(sessionRef, cachedTranscript)
-      : await this.driver.getTranscript(sessionRef);
+      : [...(await this.driver.getTranscript(sessionRef))];
 
     if (!cachedTranscript || cachedTranscript.format === "legacy") {
       await this.writePersistedTranscript(key, transcript);
@@ -1129,7 +1129,7 @@ export class DesktopAppStore implements AppStoreInternals {
 
   async reloadTranscriptFromDriver(sessionRef: SessionRef): Promise<void> {
     const key = sessionKey(sessionRef);
-    const transcript = await this.driver.getTranscript(sessionRef);
+    const transcript = [...(await this.driver.getTranscript(sessionRef))];
     this.sessionState.loadedTranscriptKeys.add(key);
     this.sessionState.transcriptCache.set(key, transcript);
     void this.writePersistedTranscript(key, transcript);
@@ -1866,8 +1866,11 @@ export class DesktopAppStore implements AppStoreInternals {
       return persisted.transcript;
     }
 
-    const driverTranscript = await this.driver.getTranscript(sessionRef);
-    return shouldReplaceLegacyTranscript(persisted.transcript, driverTranscript) ? driverTranscript : persisted.transcript;
+    const driverTranscript = [...(await this.driver.getTranscript(sessionRef))];
+    // The legacy comparison only counts message rows; tool rows are new information
+    // and never make a driver transcript look shorter than the cached one.
+    const driverMessages = driverTranscript.filter(isTranscriptMessageRow);
+    return shouldReplaceLegacyTranscript(persisted.transcript, driverMessages) ? driverTranscript : persisted.transcript;
   }
 
   private isPossiblyTrimmedLegacyTranscript(transcript: readonly TranscriptMessage[]): boolean {

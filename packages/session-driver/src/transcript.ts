@@ -25,3 +25,22 @@ export interface SessionTranscriptMessage {
   readonly createdAt: string;
   readonly id: string;
 }
+
+/**
+ * A tool call reconstructed from a stored session. Structurally matches the desktop
+ * timeline's tool row so a resumed thread shows the same cards a live one does.
+ */
+export interface SessionTranscriptToolCall {
+  readonly kind: "tool";
+  readonly id: string;
+  readonly callId: string;
+  readonly toolName: string;
+  readonly status: "running" | "success" | "error";
+  readonly label: string;
+  readonly detail?: string;
+  readonly createdAt: string;
+  readonly input?: unknown;
+  readonly output?: unknown;
+}
+
+export type SessionTranscriptItem = SessionTranscriptMessage | SessionTranscriptToolCall;

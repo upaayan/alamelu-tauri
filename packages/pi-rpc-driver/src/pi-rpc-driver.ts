@@ -17,6 +17,8 @@ import type {
   SessionSnapshot,
   SessionTreeSnapshot,
   SessionTreeNodeSnapshot,
+  SessionTranscriptItem,
+  SessionTranscriptToolCall,
   Unsubscribe,
   WorkspaceRef,
 } from "@alamelu-pi/session-driver";
@@ -377,7 +379,7 @@ export class PiRpcDriver implements SessionDriver {
     this.emit(sessionRef, { type: "sessionClosed", sessionRef, timestamp: this.now(), reason: "manual" });
   }
 
-  async getTranscript(sessionRef: SessionRef): Promise<readonly { role: "user" | "assistant"; text: string }[]> {
+  async getTranscript(sessionRef: SessionRef): Promise<readonly SessionTranscriptItem[]> {
     const localTranscript = transcriptFromLocalSessionFile(this.paths.sessionDir, sessionRef.sessionId);
     if (localTranscript.length > 0) return localTranscript;
 
@@ -395,7 +397,9 @@ export class PiRpcDriver implements SessionDriver {
 
     const response = await record.client.sendCommand({ type: "get_last_assistant_text" }, `last-${randomUUID()}`);
     const assistantText = response.success ? String((response.data as { text?: unknown } | undefined)?.text ?? "") : "";
-    return assistantText ? [{ role: "assistant", text: assistantText }] : [];
+    return assistantText
+      ? [{ kind: "message", role: "assistant", text: assistantText, createdAt: new Date(0).toISOString(), id: randomUUID() }]
+      : [];
   }
 
   private createClient(workspace: WorkspaceRef, sessionId?: string, options: { ensureSessionId?: boolean } = {}): RpcClientLike {
@@ -663,7 +667,13 @@ export function createPiRpcDriver(options: PiRpcDriverOptions): PiRpcDriver {
   return new PiRpcDriver(options);
 }
 
-function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): { role: "user" | "assistant"; text: string }[] {
+/**
+ * Rebuilds a stored session into timeline items. pi records an assistant turn's tool
+ * calls as `toolCall` content parts and their results as separate `toolResult`
+ * messages keyed by `toolCallId`, so the two are paired here — otherwise a resumed
+ * thread shows bare text where the live view showed tool cards and diffs.
+ */
+function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): SessionTranscriptItem[] {
   try {
     const entries = fs.readdirSync(sessionDir, { withFileTypes: true });
     const match = entries.find((entry) => entry.isFile() && entry.name.endsWith(`_${sessionId}.jsonl`));
@@ -671,7 +681,10 @@ function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): 
     const filePath = path.join(sessionDir, match.name);
     const resolved = fs.realpathSync.native(filePath);
     if (!resolved.startsWith(`${sessionDir}${path.sep}`)) return [];
-    const rows: { role: "user" | "assistant"; text: string }[] = [];
+
+    const items: SessionTranscriptItem[] = [];
+    const toolIndexByCallId = new Map<string, number>();
+
     for (const line of fs.readFileSync(resolved, "utf8").split(/\n/)) {
       if (!line.trim()) continue;
       let event: unknown;
@@ -680,10 +693,62 @@ function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): 
       } catch {
         continue;
       }
-      const row = transcriptRowFromJsonlEvent(event);
-      if (row) rows.push(row);
+      if (typeof event !== "object" || event === null) continue;
+      const record = event as Record<string, unknown>;
+      if (record.type !== "message" || typeof record.message !== "object" || record.message === null) continue;
+
+      const message = record.message as Record<string, unknown>;
+      const entryId = typeof record.id === "string" ? record.id : randomUUID();
+      const timestamp = typeof record.timestamp === "string" ? record.timestamp : new Date(0).toISOString();
+
+      if (message.role === "toolResult") {
+        const callId = typeof message.toolCallId === "string" ? message.toolCallId : undefined;
+        if (!callId) continue;
+        const index = toolIndexByCallId.get(callId);
+        if (index === undefined) continue;
+        const existing = items[index] as SessionTranscriptToolCall;
+        const output = textFromJsonlContent(message.content).trim();
+        const failed = message.isError === true;
+        items[index] = {
+          ...existing,
+          status: failed ? "error" : "success",
+          ...(output ? { output } : {}),
+        };
+        continue;
+      }
+
+      const role = normalizeTranscriptRole(message.role);
+      if (!role) continue;
+
+      const text = textFromJsonlContent(message.content).trim();
+      if (text) {
+        items.push({ kind: "message", role, text, createdAt: timestamp, id: entryId });
+      }
+
+      if (role === "assistant" && Array.isArray(message.content)) {
+        for (const part of message.content) {
+          if (typeof part !== "object" || part === null) continue;
+          const partRecord = part as Record<string, unknown>;
+          if (partRecord.type !== "toolCall") continue;
+          const callId = typeof partRecord.id === "string" ? partRecord.id : randomUUID();
+          const toolName = typeof partRecord.name === "string" ? partRecord.name : "tool";
+          toolIndexByCallId.set(callId, items.length);
+          items.push({
+            kind: "tool",
+            id: callId,
+            callId,
+            toolName,
+            // A call with no stored result never reported one; "running" would imply
+            // it is still in flight, which it is not on a resumed thread.
+            status: "success",
+            label: toolName,
+            createdAt: timestamp,
+            ...(partRecord.arguments !== undefined ? { input: partRecord.arguments } : {}),
+          });
+        }
+      }
     }
-    return rows;
+    return items;
   } catch {
     return [];
   }
@@ -715,22 +780,24 @@ function textFromJsonlContent(content: unknown): string {
   }).filter(Boolean).join("\n");
 }
 
-function transcriptFromRpcMessages(data: unknown): { role: "user" | "assistant"; text: string }[] {
+function transcriptFromRpcMessages(data: unknown): SessionTranscriptItem[] {
   const messages = typeof data === "object" && data !== null && Array.isArray((data as { messages?: unknown }).messages)
     ? (data as { messages: unknown[] }).messages
     : [];
   return messages
     .map((message) => transcriptRowFromRpcMessage(message))
-    .filter((row): row is { role: "user" | "assistant"; text: string } => Boolean(row));
+    .filter((row): row is SessionTranscriptItem => Boolean(row));
 }
 
-function transcriptRowFromRpcMessage(message: unknown): { role: "user" | "assistant"; text: string } | undefined {
+function transcriptRowFromRpcMessage(message: unknown): SessionTranscriptItem | undefined {
   if (typeof message !== "object" || message === null) return undefined;
   const record = message as Record<string, unknown>;
   const role = normalizeTranscriptRole(record.role ?? record.type);
   if (!role) return undefined;
   const text = textFromRpcMessage(record).trim();
-  return text ? { role, text } : undefined;
+  return text
+    ? { kind: "message", role, text, createdAt: new Date(0).toISOString(), id: randomUUID() }
+    : undefined;
 }
 
 function normalizeTranscriptRole(value: unknown): "user" | "assistant" | undefined {
