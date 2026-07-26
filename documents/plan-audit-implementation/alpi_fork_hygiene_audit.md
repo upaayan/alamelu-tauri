@@ -52,3 +52,53 @@
 8. **[LOW — grep gates match their own text] Accepted.** Gates switch to `git grep` with `:!documents/plan-audit-implementation` and `:!LICENSE` exclusions.
 
 Score: 8/8 accepted, one of which corrected a factual error of mine (`tsconfig.base.json`). Rev 2 ready for Round 2.
+
+---
+
+## Plan Audit Round 2
+
+**Reviewer:** codex (gpt-5.6-sol)
+
+### Findings
+
+- [severity: MEDIUM] Section C2 still treats `video/` as standalone, but the tree has two consumers that the deletion must remove. `video` is an explicit workspace entry at `pnpm-workspace.yaml:4` with a lockfile importer at `pnpm-lock.yaml:210`, and `apps/desktop/scripts/capture-showcase.mts:22` writes its captures into that tree (and recreates the directory at `apps/desktop/scripts/capture-showcase.mts:327`). The claim at `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:42` that no workspace or script references it is therefore false. Remove the workspace entry and the now-orphaned showcase capture script as part of the marketing-video deletion, then let `pnpm install` remove the importer.
+
+- [severity: MEDIUM] The `electron-builder.yml` decision still leaves broken packaged commands and an old-output verifier, so it does not yet satisfy the delegated constraint that nothing break. The plan deletes `package`, but `test:prod:applications-relaunch` and `test:prod:release-zip-smoke` still invoke it at `apps/desktop/package.json:75` and `apps/desktop/package.json:76`; the CI variant at line 77 and the ZIP helpers/specs rooted at `apps/desktop/tests/helpers/electron-app.ts:424` also expect an artefact that the dir-only Alpi config does not produce (`apps/desktop/electron-builder.alpi.yml:40`). Separately, the retained `verify:packaged-runtime-deps` command at `apps/desktop/package.json:31` still defaults to the removed `release/pi-gui.app` layout at `apps/desktop/scripts/assert-packaged-runtime-deps.mjs:40` and `apps/desktop/scripts/assert-packaged-runtime-deps.mjs:83`; the Linux verifier at `apps/desktop/package.json:32` is stranded when the Linux package scripts are deleted. The two gates named at `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:56` do not exercise these paths. Revise section D to retarget or remove every dependent script/spec/helper and its documentation, make the retained runtime-dependency verifier default to Alpi, and remove the then-orphaned `apps/desktop/scripts/bun-package-wrapper.mjs`.
+
+- [severity: MEDIUM] Pi's RPC capability is real, but section G still does not define a coherent path from `get_state` to the Settings toggle. Today `PiRpcDriver` consumes `get_state` during create/open but maps only session ID, name, model, and thinking level (`packages/pi-rpc-driver/src/pi-rpc-driver.ts:83`, `packages/pi-rpc-driver/src/pi-rpc-driver.ts:871`); `RuntimeSettingsSnapshot` has no auto-compaction field (`packages/session-driver/src/runtime-types.ts:93`), and Settings General receives only that runtime snapshot plus callbacks (`apps/desktop/src/settings-general-section.tsx:6`). No renderer API, preload bridge, main-process IPC handler, AppStore mutation, or state field is named in `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:79` through `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:84`. Also, the cited “idle queue” serializes operations but rejects a configuration mutation while a run is active rather than waiting (`packages/pi-rpc-driver/src/pi-rpc-driver.ts:431`, `packages/pi-rpc-driver/src/pi-rpc-driver.ts:446`). Specify the state shape and full renderer-to-driver bridge, behavior when no session is open or the selected session is running, and how already-open RPC sessions are synchronized without inventing a second app-owned preference that can overwrite Pi's global source of truth.
+
+- [severity: LOW] The accepted update-checker correction is internally inconsistent: section A still says to remove an “IPC handler” at `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:17`, immediately before correctly stating that no IPC channel exists at line 18. The tree confirms only the import and main-process wiring in `apps/desktop/electron/main.ts:27`, `apps/desktop/electron/main.ts:584`, `apps/desktop/electron/main.ts:632`, and `apps/desktop/electron/main.ts:948`. Remove the stale phrase.
+
+- [severity: LOW] The concrete zero-hit commands were not fully converted to the phase-aware `git grep` gates promised at `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:92`: sections A, B, and D still spell plain recursive `grep` at lines 19, 26, and 59. More importantly, A's username gate cannot be zero after commit A because later phases intentionally retain hits in `README.md:18`, `apps/desktop/electron-builder.yml:67`, and `video/src/scenes/ClosingCard.tsx:29`; and C2's “audited grep gate” at plan line 43 never searches for the literal author name. Make A's gate update-specific, reserve the author/username zero-hit check for the final hygiene gate, and include both `Matthew Lam` and `minghinmatthewlam` while excluding `LICENSE` and the plan/audit documents.
+
+### Confirmed claims
+
+- `apps/desktop/electron/update-checker.ts` has no consumer outside `apps/desktop/electron/main.ts`; there is no preload, renderer, or IPC update surface.
+- Deleting `apps/website` needs no `pnpm-workspace.yaml` edit because of the `apps/*` glob at `pnpm-workspace.yaml:2`. The revised plan now handles both non-lockfile consumers before deletion.
+- The current baseline has exactly 67 tracked files containing `@pi-gui/`; `apps/desktop/tsconfig.paths.json:5` is the only scoped path-map source, and `tsconfig.base.json` has none. The revised target list includes the previously missed executable and test-guidance consumers.
+- `patches/@mariozechner__pi-ai@0.60.0.patch` remains functionally orphaned: no manifest, workspace configuration, lockfile setting, source, or script declares a patched dependency or consumes it.
+- `/Users/sudhirjha/playground/pi-gui-rpc-lab` currently has 101 uncommitted paths (38 modified, 63 untracked), and its two tracked workflows are the only tracked workflow files across the two repositories.
+- Installed Pi 0.80.10 declares `set_auto_compaction` at `/Users/sudhirjha/.nvm/versions/node/v24.16.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/modes/rpc/rpc-types.d.ts:72`, handles it at `dist/modes/rpc/rpc-mode.js:415`, reports it in `get_state` at `dist/modes/rpc/rpc-mode.js:354`, and persists it as a global setting whose fallback is `true` at `dist/core/settings-manager.js:509`.
+- The claimed existing suites remain green: desktop unit tests passed 69/69 and the Pi RPC driver suite passed 58/58.
+
+**Verdict: REVISE.** There are 0 HIGH, 3 MEDIUM, and 2 LOW findings, so the PASS threshold is not met.
+
+---
+
+## Response to Plan Audit Round 2
+
+**Builder:** Claude (Opus 5) · Plan revised in place to rev 3. All 5 findings accepted; each re-verified first.
+
+1. **[MEDIUM — `video/` is not standalone] Accepted, and this was a false claim of mine, not an omission.** Verified: `pnpm-workspace.yaml:4` lists `video` as an explicit member, and `capture-showcase.mts:22`/`:327` writes into it. Rev 2 said "verified standalone" because the check grepped `video/` **with a trailing slash** and so missed the bare workspace entry — a bad check reported as a verification. Corrected in place, with the cause recorded. Deletion now also removes the workspace entry, the orphaned `capture-showcase.mts` and its script entry. The owner was told of the error directly.
+
+2. **[MEDIUM — builder-config decision still leaves dangling consumers] Accepted.** Deleting `package` orphaned `test:prod:applications-relaunch` (`:75`), `test:prod:release-zip-smoke` (`:76`) and its CI variant (`:77`), plus the ZIP helper path (`tests/helpers/electron-app.ts:424`) and specs, while `verify:packaged-runtime-deps` still pointed at `release/pi-gui.app` and the Linux verifier and `bun-package-wrapper.mjs` were stranded. Rev 3 deletes the release-distribution lanes (dead by rulings 2 and 5), **retargets** the runtime-deps verifier to `release-alpi/mac-arm64/alpi.app`, deletes the Linux verifier and bun wrapper, and adds a reconciliation rule that every surviving script must resolve to something that exists. This is what the owner's "it should not break anything" actually requires.
+
+3. **[MEDIUM — auto-compaction bridge undefined] Accepted, and the design changed because of it.** Your two observations — the idle queue *rejects* rather than waits during a run, and there is no path from `get_state` to Settings — killed the per-session RPC approach. Rev 3 instead reuses the mechanism pi's other global settings already use: `setDefaultThinkingLevel` → `updateSettings()` → `buildSnapshot()`. So the supervisor writes the same settings file pi reads, it works with no session open, and pi's file stays the single source of truth rather than the app inventing a competing preference. `RuntimeSettingsSnapshot` gains `autoCompactionEnabled`, the renderer path mirrors the existing thinking-level control end to end, and open idle sessions get a best-effort `set_auto_compaction` so a live thread does not lag.
+
+4. **[LOW — stale "IPC handler" phrase] Accepted.** Removed; section A now describes only the `main.ts` wiring.
+
+5. **[LOW — grep gates not phase-aware and never checked the author name] Accepted.** Per-phase gates are now specific to their phase (and A no longer asserts a username zero-hit it cannot satisfy). A single **final hygiene gate** runs `git grep -nE "Matthew Lam|minghinmatthewlam" -- ':!LICENSE' ':!documents/plan-audit-implementation'` and must return zero.
+
+Also noted in rev 3: `docs/readme/{demo.gif,demo.mp4,demo-poster.png}` are the rendered output of the same marketing pipeline and `README.md:7` embeds one. Recommended for deletion but **awaiting the owner's word** — not actioned.
+
+Score: 5/5 accepted, one of which corrected a false verification claim of mine. Rev 3 ready for Round 3.
