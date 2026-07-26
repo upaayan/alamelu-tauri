@@ -684,10 +684,26 @@ async function ensurePiAiPatched(piBin: string, userDataDir: string): Promise<vo
       bootLog(`pi-ai patch skipped: installed source no longer matches the expected shape (pi ${currentVersion})`);
       return;
     }
-    if (!shouldReapplyPatch(storedVersion, currentVersion, state)) return;
+    if (!shouldReapplyPatch(storedVersion, currentVersion, state)) {
+      // Record the evaluation even when nothing was applied, so the state file
+      // shows which pi version was last checked and why no patch was needed.
+      if (storedVersion !== currentVersion) {
+        await writeFile(
+          statePath,
+          `${JSON.stringify({ piVersion: currentVersion, state, checkedAt: new Date().toISOString() }, null, 2)}\n`,
+          "utf8",
+        );
+        bootLog(`pi-ai patch not needed for pi ${currentVersion} (${state})`);
+      }
+      return;
+    }
 
     const result = applyPiAiPatch(target);
-    await writeFile(statePath, `${JSON.stringify({ piVersion: currentVersion, patchedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+    await writeFile(
+      statePath,
+      `${JSON.stringify({ piVersion: currentVersion, state: "patched", patchedAt: new Date().toISOString() }, null, 2)}\n`,
+      "utf8",
+    );
     bootLog(`pi-ai patch ${result.changed ? "applied" : "already present"} for pi ${currentVersion}`);
   } catch (error) {
     bootLog(`pi-ai patch check failed: ${error instanceof Error ? error.message : String(error)}`);
