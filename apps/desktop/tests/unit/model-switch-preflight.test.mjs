@@ -117,3 +117,80 @@ test("lets a connected-but-expired provider through (run-time error explains it)
   const decision = evaluateModelSwitch(NO_COLLISION, { providerId: "openai-codex", modelId: "gpt-5.6-sol", connected: true }, false);
   assert.equal(decision.verdict, "ok");
 });
+
+/* ── readThreadStats: the JSONL feeder behind rule (b) ─────────────────── */
+
+const { readThreadStats } = await import(path.toNamespacedPath(tempModulePath));
+
+function writeSession(dir, sessionId, lines) {
+  const file = path.join(dir, `2026-07-26T10-00-00-000Z_${sessionId}.jsonl`);
+  writeFileSync(file, lines.map((line) => (typeof line === "string" ? line : JSON.stringify(line))).join("\n"), "utf8");
+  return file;
+}
+
+function toolCallTurn(ids) {
+  return {
+    message: { role: "assistant", content: ids.map((id) => ({ type: "toolCall", id })) },
+  };
+}
+
+test("readThreadStats detects tool-call ids that collide after truncation", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-collide-"));
+  writeSession(dir, "collide", [
+    { type: "model_change", provider: "xai", modelId: "grok-4.5" },
+    toolCallTurn([
+      "call-cadbc1ea-fd79-4982-ba1a-60a9fad1c089-0|fc_a",
+      "call-cadbc1ea-fd79-4982-ba1a-60a9fad1c089-1|fc_b",
+    ]),
+  ]);
+  const stats = readThreadStats(dir, "collide");
+  assert.equal(stats.hasCollidingToolCallIds, true);
+  assert.equal(stats.historyProvider, "xai");
+  assert.equal(stats.historyModelId, "grok-4.5");
+  assert.ok(stats.estTokens > 0);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("readThreadStats reports no collision when truncated ids stay distinct", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-distinct-"));
+  writeSession(dir, "distinct", [
+    toolCallTurn(["call-short-a|fc_a", "call-short-b|fc_b"]),
+  ]);
+  assert.equal(readThreadStats(dir, "distinct").hasCollidingToolCallIds, false);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("readThreadStats ignores non-composite ids, which pi never truncates", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-plain-"));
+  writeSession(dir, "plain", [
+    toolCallTurn(["toolu_01aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "toolu_01aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"]),
+  ]);
+  assert.equal(readThreadStats(dir, "plain").hasCollidingToolCallIds, false);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("readThreadStats skips malformed lines instead of throwing", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-malformed-"));
+  writeSession(dir, "malformed", [
+    "{ not json at all",
+    "",
+    toolCallTurn(["call-cadbc1ea-fd79-4982-ba1a-60a9fad1c089-0|fc_a", "call-cadbc1ea-fd79-4982-ba1a-60a9fad1c089-1|fc_b"]),
+  ]);
+  assert.equal(readThreadStats(dir, "malformed").hasCollidingToolCallIds, true);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("readThreadStats returns zeroed stats for a missing session", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-missing-"));
+  const stats = readThreadStats(dir, "nope");
+  assert.equal(stats.estTokens, 0);
+  assert.equal(stats.hasCollidingToolCallIds, false);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("readThreadStats refuses a traversal-shaped session id", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-traversal-"));
+  const stats = readThreadStats(dir, "../escape");
+  assert.equal(stats.estTokens, 0);
+  rmSync(dir, { recursive: true, force: true });
+});
