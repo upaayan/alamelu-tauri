@@ -95,6 +95,8 @@ export interface RuntimeSettingsSnapshot {
   readonly defaultModelId?: string;
   readonly defaultThinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   readonly enableSkillCommands: boolean;
+  /** pi's own global auto-compaction switch. Defaults to true, as pi does. */
+  readonly autoCompactionEnabled: boolean;
   readonly enabledModelPatterns: readonly string[];
 }
 
@@ -170,6 +172,8 @@ export interface RuntimeResourceDriver {
     thinkingLevel: RuntimeSettingsSnapshot["defaultThinkingLevel"],
   ): Promise<RuntimeSnapshot>;
   setEnableSkillCommands(workspace: WorkspaceRef, enabled: boolean): Promise<RuntimeSnapshot>;
+  /** Toggles pi's global auto-compaction switch (shared with the pi CLI). */
+  setAutoCompaction(workspace: WorkspaceRef, enabled: boolean): Promise<RuntimeSnapshot>;
   setScopedModelPatterns(workspace: WorkspaceRef, patterns: readonly string[]): Promise<RuntimeSnapshot>;
   setSkillEnabled(workspace: WorkspaceRef, filePath: string, enabled: boolean): Promise<RuntimeSnapshot>;
   setExtensionEnabled(workspace: WorkspaceRef, filePath: string, enabled: boolean): Promise<RuntimeSnapshot>;

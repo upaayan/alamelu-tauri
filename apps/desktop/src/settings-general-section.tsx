@@ -10,6 +10,7 @@ interface SettingsGeneralSectionProps {
   readonly onSetModelSettingsScopeMode: (mode: ModelSettingsScopeMode) => void;
   readonly onSetIntegratedTerminalShell: (shellPath: string) => void;
   readonly onToggleSkillCommands: (enabled: boolean) => void;
+  readonly onToggleAutoCompaction: (enabled: boolean) => void;
 }
 
 export function SettingsGeneralSection({
@@ -19,6 +20,7 @@ export function SettingsGeneralSection({
   onSetModelSettingsScopeMode,
   onSetIntegratedTerminalShell,
   onToggleSkillCommands,
+  onToggleAutoCompaction,
 }: SettingsGeneralSectionProps) {
   const connectedCount = runtime?.providers.filter((p) => p.hasAuth).length ?? 0;
   const [terminalShellDraft, setTerminalShellDraft] = useState(integratedTerminalShell);
@@ -67,6 +69,17 @@ export function SettingsGeneralSection({
             checked={runtime?.settings.enableSkillCommands ?? true}
             type="checkbox"
             onChange={(event) => onToggleSkillCommands(event.target.checked)}
+          />
+        </SettingsRow>
+        <SettingsRow
+          title="Compact long threads automatically"
+          description="Lets pi shorten a thread's history before it outgrows the model's context window. This is pi's own global setting, so it also applies to the pi CLI in your terminal."
+        >
+          <input
+            aria-label="Compact long threads automatically"
+            checked={runtime?.settings.autoCompactionEnabled ?? true}
+            type="checkbox"
+            onChange={(event) => onToggleAutoCompaction(event.target.checked)}
           />
         </SettingsRow>
         <SettingsRow title="Shell of integrated terminal" description="Leave blank to use your default login shell.">

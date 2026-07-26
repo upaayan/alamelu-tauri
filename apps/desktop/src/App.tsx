@@ -1787,6 +1787,13 @@ export default function App() {
     void updateSnapshot(api, setSnapshot, () => api.setEnableSkillCommands(settingsWorkspace.id, enabled));
   };
 
+  const handleToggleAutoCompaction = (enabled: boolean) => {
+    if (!settingsWorkspace) {
+      return;
+    }
+    void updateSnapshot(api, setSnapshot, () => api.setAutoCompaction(settingsWorkspace.id, enabled));
+  };
+
   const handleSetScopedModelPatterns = (patterns: readonly string[]) => {
     if (!settingsWorkspace) {
       return;
@@ -2167,6 +2174,7 @@ export default function App() {
             onSetThemeMode={handleSetThemeMode}
             onSetThinkingLevel={handleSetThinkingLevel}
             onToggleSkillCommands={handleToggleSkillCommands}
+            onToggleAutoCompaction={handleToggleAutoCompaction}
             onSetEnableTransparency={(enabled) => {
               void updateSnapshot(api, setSnapshot, () => api.setEnableTransparency(enabled));
             }}

@@ -1000,6 +1000,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(desktopIpc.setProviderApiKey, (_event, workspaceId: string, providerId: string, apiKey: string) =>
     store.setProviderApiKey(workspaceId, providerId, apiKey),
   );
+  ipcMain.handle(desktopIpc.setAutoCompaction, (_event, workspaceId: string, enabled: boolean) =>
+    store.setAutoCompaction(workspaceId, enabled),
+  );
   ipcMain.handle(desktopIpc.setEnableSkillCommands, (_event, workspaceId: string, enabled: boolean) =>
     store.setEnableSkillCommands(workspaceId, enabled),
   );

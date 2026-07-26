@@ -286,6 +286,7 @@ class RpcDesktopRuntimeSupervisor implements DesktopRuntimeSupervisor {
       defaultModelId: options.model,
       defaultThinkingLevel: undefined,
       enableSkillCommands: false,
+      autoCompactionEnabled: true,
       enabledModelPatterns: [],
     };
   }
@@ -331,6 +332,11 @@ class RpcDesktopRuntimeSupervisor implements DesktopRuntimeSupervisor {
 
   async setEnableSkillCommands(workspace: WorkspaceRef, enabled: boolean): Promise<RuntimeSnapshot> {
     this.settings = { ...this.settings, enableSkillCommands: enabled };
+    return this.snapshot(workspace);
+  }
+
+  async setAutoCompaction(workspace: WorkspaceRef, enabled: boolean): Promise<RuntimeSnapshot> {
+    this.settings = { ...this.settings, autoCompactionEnabled: enabled };
     return this.snapshot(workspace);
   }
 

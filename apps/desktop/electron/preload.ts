@@ -180,6 +180,8 @@ contextBridge.exposeInMainWorld("piApp", {
     ipcRenderer.invoke(desktopIpc.setProviderApiKey, workspaceId, providerId, apiKey) as Promise<DesktopAppState>,
   setEnableSkillCommands: (workspaceId: string, enabled: boolean) =>
     ipcRenderer.invoke(desktopIpc.setEnableSkillCommands, workspaceId, enabled) as Promise<DesktopAppState>,
+  setAutoCompaction: (workspaceId: string, enabled: boolean) =>
+    ipcRenderer.invoke(desktopIpc.setAutoCompaction, workspaceId, enabled) as Promise<DesktopAppState>,
   setScopedModelPatterns: (workspaceId: string, patterns: readonly string[]) =>
     ipcRenderer.invoke(desktopIpc.setScopedModelPatterns, workspaceId, patterns) as Promise<DesktopAppState>,
   setSkillEnabled: (workspaceId: string, filePath: string, enabled: boolean) =>

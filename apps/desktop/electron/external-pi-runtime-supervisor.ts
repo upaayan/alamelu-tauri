@@ -109,6 +109,20 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
     return this.buildSnapshot(workspace);
   }
 
+  /**
+   * Writes pi's global auto-compaction switch — the same setting the `pi` CLI reads,
+   * so this is deliberately not an app-local preference that could drift from it.
+   */
+  async setAutoCompaction(workspace: WorkspaceRef, enabled: boolean): Promise<RuntimeSnapshot> {
+    await this.updateSettings((settings) => {
+      const compaction = typeof settings.compaction === "object" && settings.compaction !== null
+        ? (settings.compaction as Record<string, unknown>)
+        : {};
+      return { ...settings, compaction: { ...compaction, enabled } };
+    });
+    return this.buildSnapshot(workspace);
+  }
+
   async setScopedModelPatterns(workspace: WorkspaceRef, patterns: readonly string[]): Promise<RuntimeSnapshot> {
     await this.updateSettings((settings) => ({
       ...settings,
@@ -300,12 +314,20 @@ function providerAuthSource(
   return "external";
 }
 
+/** pi's fallback is `true`, so absence means enabled. */
+function autoCompactionFromRecord(record: Record<string, unknown>): boolean {
+  const compaction = record.compaction;
+  if (typeof compaction !== "object" || compaction === null) return true;
+  return (compaction as { enabled?: unknown }).enabled !== false;
+}
+
 function runtimeSettingsFromRecord(record: Record<string, unknown>): RuntimeSettingsSnapshot {
   return {
     ...(typeof record.defaultProvider === "string" ? { defaultProvider: record.defaultProvider } : {}),
     ...(typeof record.defaultModel === "string" ? { defaultModelId: record.defaultModel } : {}),
     ...(isThinkingLevel(record.defaultThinkingLevel) ? { defaultThinkingLevel: record.defaultThinkingLevel } : {}),
     enableSkillCommands: record.enableSkillCommands !== false,
+    autoCompactionEnabled: autoCompactionFromRecord(record),
     enabledModelPatterns: enabledModelPatternsFromRecord(record),
   };
 }

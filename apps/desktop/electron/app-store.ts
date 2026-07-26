@@ -660,6 +660,37 @@ export class DesktopAppStore implements AppStoreInternals {
     );
   }
 
+  /**
+   * Toggles pi's global auto-compaction. Because the setting is global, every cached
+   * workspace snapshot is refreshed — otherwise another already-loaded workspace would
+   * keep showing the old value.
+   */
+  async setAutoCompaction(workspaceId: string, enabled: boolean): Promise<DesktopAppState> {
+    const state = await this.withRuntimeUpdate(workspaceId, (ws) =>
+      this.driver.runtimeSupervisor.setAutoCompaction(ws, enabled),
+    );
+    await this.refreshAllRuntimeSnapshots(workspaceId);
+    return state;
+  }
+
+  private async refreshAllRuntimeSnapshots(exceptWorkspaceId: string): Promise<void> {
+    for (const workspace of this.state.workspaces) {
+      if (workspace.id === exceptWorkspaceId) continue;
+      const ws = this.workspaceRefFromState(workspace.id);
+      if (!ws) continue;
+      try {
+        const snapshot = await this.driver.runtimeSupervisor.refreshRuntime(ws);
+        this.state = {
+          ...this.state,
+          runtimeByWorkspace: { ...this.state.runtimeByWorkspace, [workspace.id]: snapshot },
+        };
+      } catch {
+        // A workspace that cannot refresh keeps its previous snapshot.
+      }
+    }
+    this.emit();
+  }
+
   async setScopedModelPatterns(workspaceId: string, patterns: readonly string[]): Promise<DesktopAppState> {
     const targetWorkspaceId = this.resolveModelSettingsWorkspaceId(workspaceId);
     if (this.state.modelSettingsScopeMode !== "per-repo") {

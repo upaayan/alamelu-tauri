@@ -68,6 +68,7 @@ export const desktopIpc = {
   logoutProvider: "alamelu-pi:logout-provider",
   setProviderApiKey: "alamelu-pi:set-provider-api-key",
   setEnableSkillCommands: "alamelu-pi:set-enable-skill-commands",
+  setAutoCompaction: "alamelu-pi:set-auto-compaction",
   setScopedModelPatterns: "alamelu-pi:set-scoped-model-patterns",
   setSkillEnabled: "alamelu-pi:set-skill-enabled",
   setExtensionEnabled: "alamelu-pi:set-extension-enabled",
@@ -319,6 +320,7 @@ export interface PiDesktopApi {
   logoutProvider(workspaceId: string, providerId: string): Promise<DesktopAppState>;
   setProviderApiKey(workspaceId: string, providerId: string, apiKey: string): Promise<DesktopAppState>;
   setEnableSkillCommands(workspaceId: string, enabled: boolean): Promise<DesktopAppState>;
+  setAutoCompaction(workspaceId: string, enabled: boolean): Promise<DesktopAppState>;
   setScopedModelPatterns(workspaceId: string, patterns: readonly string[]): Promise<DesktopAppState>;
   setSkillEnabled(workspaceId: string, filePath: string, enabled: boolean): Promise<DesktopAppState>;
   setExtensionEnabled(workspaceId: string, filePath: string, enabled: boolean): Promise<DesktopAppState>;
