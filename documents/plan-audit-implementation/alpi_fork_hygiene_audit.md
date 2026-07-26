@@ -102,3 +102,32 @@ Score: 8/8 accepted, one of which corrected a factual error of mine (`tsconfig.b
 Also noted in rev 3: `docs/readme/{demo.gif,demo.mp4,demo-poster.png}` are the rendered output of the same marketing pipeline and `README.md:7` embeds one. Recommended for deletion but **awaiting the owner's word** — not actioned.
 
 Score: 5/5 accepted, one of which corrected a false verification claim of mine. Rev 3 ready for Round 3.
+
+---
+
+## Plan Audit Round 3
+
+**Reviewer:** codex (gpt-5.6-sol)
+
+### Findings
+
+- [severity: MEDIUM] The release-ZIP cleanup still understates the helper's blast radius and would leave broken production specs. Section D says to delete the ZIP helper and “the two specs” (`documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:56`), but `extractPackagedReleaseZipAppBundle` has four spec consumers: `apps/desktop/tests/production/applications-relaunch.spec.ts:7`, `apps/desktop/tests/production/release-zip-smoke.spec.ts:3`, `apps/desktop/tests/production/finder-env-open-folder.spec.ts:6`, and `apps/desktop/tests/production/release-zip-reopen-new-thread.spec.ts:5`. The latter two have no deletion or retargeting instruction, so removing the export at `apps/desktop/tests/helpers/electron-app.ts:438` leaves dangling imports discoverable by the surviving general runner under `apps/desktop/playwright.config.ts:4`. The accepted documentation cleanup is also still absent: `apps/desktop/README.md:39` and `apps/desktop/README.md:93` retain the deleted Linux commands, lines 76-77 and 138-139 retain the deleted release scripts, lines 170-171 describe deleted specs, and `apps/desktop/electron/main.ts:366` still names the deleted config. Revise the plan to decide all four spec consumers and clean the surviving docs/comment; checking only surviving package-script targets at plan line 59 cannot catch these broken imports.
+
+- [severity: MEDIUM] The persisted, no-session auto-compaction path is now coherent, but the live-session synchronization is not. The claim that a running session can be skipped because “its next child picks the setting up” (`documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:91`) is false for Sol and Terra: only Luna is marked for child rotation after a run (`packages/pi-rpc-driver/src/pi-rpc-driver.ts:560`), the rotation path is Luna-only (`packages/pi-rpc-driver/src/pi-rpc-driver.ts:457`), and the explicit regression test proves Sol/Terra reuse one child across prompts (`packages/pi-rpc-driver/test/rpc-client.test.mjs:1007`, `packages/pi-rpc-driver/test/rpc-client.test.mjs:1045`). Pi reads the setting from that child's in-memory `SettingsManager` (`/Users/sudhirjha/.nvm/versions/node/v24.16.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js:1741`); an external file edit is observed only after an explicit reload (`dist/core/settings-manager.js:273`). Therefore a toggle made during a Sol/Terra run can remain stale for later prompts indefinitely. Specify a pending post-run/pre-next-prompt RPC sync (or another safe equivalent), including the contract/owner that reaches `RpcDesktopDriver`'s private session map (`apps/desktop/electron/rpc-desktop-driver.ts:40`) from the AppStore/runtime mutation. Also account for the setting's global UI state: the existing thinking-level helper updates only one cached workspace snapshot (`apps/desktop/electron/app-store.ts:742`, `apps/desktop/electron/app-store.ts:756`), so copying it literally can show a stale toggle in another already-loaded workspace. The verification at plan line 94 must exercise the primary settings-file/snapshot/UI bridge and a toggle during an active reused-child run, not only the idle driver command.
+
+- [severity: LOW] The phase-A zero-hit gate still cannot pass at the point where it is scheduled. After deleting the desktop updater, `apps/website/app/page.tsx:10` continues to match `releases/latest` until phase B, while the other two patterns at `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:19` miss the actual singular/capitalized symbols `checkForUpdate`, `initUpdateChecker`, and `stopUpdateChecker` at `apps/desktop/electron/main.ts:27` and `apps/desktop/electron/main.ts:67`. Scope the gate to `apps/desktop` and search the actual updater filename/symbols (including the API URL), or defer the cross-tree URL check.
+
+- [severity: LOW] Three cleanup bullets still claim package-script entries that do not exist in the tree: `verify-install-copy` at plan line 23, `capture-showcase` at line 42, and the Homebrew scripts at line 62. The complete root script block is `package.json:11`, the desktop script block is `apps/desktop/package.json:9`, and the only video scripts are preview/render/build at `video/package.json:5`. The file deletions remain valid; remove the nonexistent-entry instructions so the implementation inventory and “each deleted entry” reconciliation are factual.
+
+### Confirmed claims
+
+- `apps/desktop/electron/update-checker.ts` still has no consumer outside `apps/desktop/electron/main.ts`; the corrected six-site main-process description is accurate.
+- `apps/*` at `pnpm-workspace.yaml:2` means deleting `apps/website` needs no workspace edit, and rev 3 handles both hidden consumers first. Conversely, the explicit `video` member at `pnpm-workspace.yaml:4` and `capture-showcase.mts` consumer are now correctly included.
+- The current baseline still has exactly 67 tracked files containing `@pi-gui/`; the expanded namespace target set, `tsconfig.paths.json` correction, bundle resolver fallback, Alpi output path, and retained packaged-dir direction are accurate subject to the release-spec finding above.
+- `patches/@mariozechner__pi-ai@0.60.0.patch` is functionally orphaned. The only other current `mariozechner` hit is the unrelated website link removed earlier in phase B.
+- The sibling repository still has 101 uncommitted paths (38 modified, 63 untracked).
+- Installed Pi 0.80.10 exposes and handles `set_auto_compaction`, reports `autoCompactionEnabled`, persists it globally, and defaults it to `true`. The 120-second explicit-compaction timeout remains separate.
+- The baseline suites still pass: desktop unit tests 69/69 and Pi RPC driver tests 58/58.
+- The deferred `docs/readme` demo-asset decision is recorded as owner-controlled and is non-blocking under the binding scope ruling.
+
+**Verdict: REVISE.** There are 0 HIGH, 2 MEDIUM, and 2 LOW findings, so the PASS threshold is not met.
