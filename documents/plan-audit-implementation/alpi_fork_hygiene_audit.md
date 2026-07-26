@@ -147,3 +147,31 @@ Score: 5/5 accepted, one of which corrected a false verification claim of mine. 
 4. **[LOW — three cleanup bullets cite package-script entries that do not exist] Accepted.** Verified against the two script blocks; `verify-install-copy`, `capture-showcase` and the Homebrew scripts have **no** entries. The file deletions stand; the phantom entry-removal instructions are gone so the implementation inventory is factual.
 
 Score: 4/4 accepted, two of which corrected false statements of mine (the two-spec count and the Sol/Terra rotation claim). Rev 4 ready for Round 4.
+
+---
+
+## Plan Audit Round 4
+
+**Reviewer:** codex (gpt-5.6-sol)
+
+### Findings
+
+- [severity: LOW] One of the three phantom script-entry instructions survived the revision. Section C2 still says deleting `apps/desktop/scripts/capture-showcase.mts` also removes “its script entry” (`documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:42`), although neither the root script block (`package.json:11`) nor the desktop script block (`apps/desktop/package.json:9`) contains such an entry; `video/package.json:5` contains only preview/render/build. Remove that parenthetical. The actual file, workspace-member, lockfile-importer, and video-directory deletions remain correct.
+
+- [severity: LOW] The two pre-revision auto-compaction bullets are now stale and internally contradict the corrected design. The plan still says `setAutoCompaction` “sends the command on the idle queue” and is applied against Pi's “per-session default” (`documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:85`, `documents/plan-audit-implementation/alpi_fork_hygiene_plan.md:86`), while lines 87 and 92-93 correctly establish that the source is global and that a running session records a pending value rather than sending immediately. Installed Pi confirms the global/default-true semantics at `/Users/sudhirjha/.nvm/versions/node/v24.16.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/settings-manager.js:509` and `:512`. Replace those two bullets with the idle-versus-running behavior from lines 92-93; new children already read the persisted global setting.
+
+- [severity: LOW] The revised bridge is implementable, but the plan does not name the TypeScript contracts needed to expose it. `DesktopAppStore` sees its driver only as `DesktopSessionDriver` (`apps/desktop/electron/app-store.ts:141`), whose current contract has neither synchronization method nor a runtime auto-compaction method (`apps/desktop/electron/desktop-driver.ts:19`, `apps/desktop/electron/desktop-driver.ts:23`). State whether the AppStore calls a new `DesktopSessionDriver` method that wraps both operations or calls separate session/runtime contract methods. If `setAutoCompaction` is added to `RuntimeResourceDriver`/`DesktopRuntimeSupervisor`, the dormant but typechecked `RpcDesktopRuntimeSupervisor` implementation at `apps/desktop/electron/rpc-desktop-driver.ts:280` must implement it or be deleted. This is localized and the required typecheck gate will catch it, so it does not invalidate the design.
+
+### Confirmed claims
+
+- The update-checker gate now scopes the real filename and symbols to `apps/desktop`; the updater still has no consumer outside `electron/main.ts`, and the release URL is correctly deferred until website deletion.
+- `extractPackagedReleaseZipAppBundle` has nine spec-side occurrences across exactly four production specs. Rev 4 deletes all four, removes the three dependent package scripts and helper path, and now requires cleanup of the surviving documentation/comment references.
+- The builder-config decision is coherent after those deletions: `package:dir` and the notification-onboarding packaging lane can use `electron-builder.alpi.yml`, the helper can resolve `release-alpi/mac-arm64/alpi.app`, and the retained packaged-smoke lane remains available.
+- `docs/readme/` contains exactly the three newly approved demo assets, and `video` remains the explicit workspace member at `pnpm-workspace.yaml:4`; rev 4 now removes both sets while leaving icon/iconset assets untouched.
+- The pending auto-compaction design is coherent with the current queue and lifecycle: normal prompts use the serialized idle-operation queue (`packages/pi-rpc-driver/src/pi-rpc-driver.ts:191`), and PiRpcDriver owns every success, failure, and cancellation transition to idle (`packages/pi-rpc-driver/src/pi-rpc-driver.ts:553`, `packages/pi-rpc-driver/src/pi-rpc-driver.ts:584`). Enqueuing the pending flush before publishing the terminal run event can therefore order it before the next prompt.
+- The current baseline still has 67 tracked `@pi-gui/` files; the sibling repository still has 101 uncommitted paths (38 modified, 63 untracked); and the patch remains functionally orphaned.
+- Installed Pi 0.80.10 still declares, handles, and reports `set_auto_compaction`; its persisted global fallback remains `true`.
+- Baseline verification remains green: desktop unit tests passed 69/69 and the Pi RPC driver suite passed 58/58.
+- The binding rulings remain respected: Matthew Lam's notice stays in `LICENSE`, no update/release/Homebrew/notarisation work is introduced, and the approved demo deletion does not touch icons or authentication.
+
+**Verdict: PASS.** There are 0 HIGH, 0 MEDIUM, and 3 LOW findings, which meets the PASS threshold.

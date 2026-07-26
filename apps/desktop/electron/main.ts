@@ -8,7 +8,6 @@ import {
   nativeImage,
   shell,
   type MenuItemConstructorOptions,
-  type MessageBoxOptions,
 } from "electron";
 import { randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
@@ -24,7 +23,6 @@ import { NotificationManager } from "./notification-manager";
 import {
   NotificationPermissionService,
 } from "./notification-permission";
-import { checkForUpdate, initUpdateChecker } from "./update-checker";
 import { ThemeManager } from "./theme-manager";
 import { TerminalService } from "./terminal-service";
 import { createRpcDesktopDriver } from "./rpc-desktop-driver";
@@ -64,7 +62,6 @@ let stopPublishingState: (() => void) | undefined;
 let stopPublishingSelectedTranscript: (() => void) | undefined;
 let stopTrackingWindowActivation: (() => void) | undefined;
 let stopNotifications: (() => void) | undefined;
-let stopUpdateChecker: (() => void) | undefined;
 let stopPruningTerminals: (() => void) | undefined;
 let retainedTerminalWorkspacePathSignature = "";
 
@@ -106,7 +103,6 @@ let quittingAfterStoreFlush = false;
 const SUPPORTED_IMAGE_TYPES = SUPPORTED_COMPOSER_IMAGE_TYPES;
 const SUPPORTED_IMAGE_MIME_TYPES = new Set<string>(SUPPORTED_IMAGE_TYPES.map((type) => type.mimeType));
 const OPEN_FOLDER_MENU_ITEM_ID = "file.open-folder";
-const CHECK_FOR_UPDATES_MENU_ITEM_ID = "app.check-for-updates";
 const MAX_CLIPBOARD_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_CLIPBOARD_IMAGE_DIMENSION = 8_192;
 
@@ -579,43 +575,6 @@ async function pickWorkspaceViaDialog(): Promise<DesktopAppState> {
   return newThreadState;
 }
 
-async function runManualUpdateCheck(): Promise<void> {
-  const window = mainWindow && canPublishToWindow(mainWindow) ? mainWindow : undefined;
-  const result = await checkForUpdate();
-
-  if (result.status === "update-available") {
-    return;
-  }
-
-  if (result.status === "up-to-date") {
-    const options: MessageBoxOptions = {
-      type: "info",
-      title: appBrand.appName,
-      message: `You're up to date on version ${result.currentVersion}.`,
-      buttons: ["OK"],
-    };
-    if (window) {
-      await dialog.showMessageBox(window, options);
-    } else {
-      await dialog.showMessageBox(options);
-    }
-    return;
-  }
-
-  const options: MessageBoxOptions = {
-    type: "warning",
-    title: appBrand.appName,
-    message: "Could not check for updates right now.",
-    detail: result.message,
-    buttons: ["OK"],
-  };
-  if (window) {
-    await dialog.showMessageBox(window, options);
-  } else {
-    await dialog.showMessageBox(options);
-  }
-}
-
 function installApplicationMenu(): void {
   if (process.platform !== "darwin") {
     return;
@@ -626,14 +585,6 @@ function installApplicationMenu(): void {
       label: app.name,
       submenu: [
         { role: "about" },
-        { type: "separator" },
-        {
-          id: CHECK_FOR_UPDATES_MENU_ITEM_ID,
-          label: "Check for Updates…",
-          click: () => {
-            void runManualUpdateCheck();
-          },
-        },
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -671,7 +622,6 @@ interface AppBrandConfig {
   readonly appName: string;
   readonly defaultDriver?: DesktopDriverKind;
   readonly defaultRpc?: (defaultUserDataDir: string) => DesktopDefaultRpcConfig;
-  readonly disableUpdateChecks: boolean;
 }
 
 function resolveAppBrand(): AppBrandConfig {
@@ -687,14 +637,12 @@ function resolveAppBrand(): AppBrandConfig {
   if (!isAlpi) {
     return {
       appName: process.env.PI_GUI_APP_NAME?.trim() || "pi",
-      disableUpdateChecks: false,
     };
   }
 
   return {
     appName: process.env.PI_GUI_APP_NAME?.trim() || "Alamelu Pi",
     defaultDriver: "rpc",
-    disableUpdateChecks: true,
     defaultRpc: (defaultUserDataDir) => ({
       piBin: resolveInstalledPiBin({ homeDir: homedir() }),
       agentDir: "~/.pi/agent",
@@ -945,9 +893,6 @@ app.whenReady().then(async () => {
   });
   notificationManager = new NotificationManager(store, () => mainWindow, notificationPermissionService);
   stopNotifications = notificationManager.start();
-  if (!isDev && !appBrand.disableUpdateChecks) {
-    stopUpdateChecker = initUpdateChecker();
-  }
 
   ipcMain.handle(desktopIpc.ping, () =>
     devReloadMarkersEnabled ? `pi desktop ready:${MAIN_DEV_RELOAD_MARKER}` : "pi desktop ready",
@@ -1264,8 +1209,6 @@ app.on("window-all-closed", () => {
     notificationManager = undefined;
     notificationPermissionService?.dispose();
     notificationPermissionService = undefined;
-    stopUpdateChecker?.();
-    stopUpdateChecker = undefined;
     stopPruningTerminals?.();
     stopPruningTerminals = undefined;
     terminalService?.dispose();
@@ -1281,8 +1224,6 @@ app.on("before-quit", (event) => {
   notificationManager = undefined;
   notificationPermissionService?.dispose();
   notificationPermissionService = undefined;
-  stopUpdateChecker?.();
-  stopUpdateChecker = undefined;
   stopPruningTerminals?.();
   stopPruningTerminals = undefined;
   terminalService?.dispose();
