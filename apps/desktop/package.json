@@ -2,9 +2,9 @@
   "name": "@pi-gui/desktop",
   "private": true,
   "version": "0.1.0",
-  "author": "Matthew Lam",
+  "author": "Sudhir Jha",
   "license": "MIT",
-  "description": "Codex-style desktop shell for pi",
+  "description": "Alamelu Pi \u2014 desktop app for pi sessions",
   "main": "out/main/main.js",
   "scripts": {
     "build:deps": "pnpm --dir ../.. --filter @pi-gui/session-driver --filter @pi-gui/pi-rpc-driver --filter @pi-gui/catalogs run build",

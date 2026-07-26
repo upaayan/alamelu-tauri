@@ -1,135 +1,85 @@
-# Alamelu Pi GUI
+# Alamelu Pi
 
-Electron desktop shell for `pi` sessions. Built for local agent workflows.
+A desktop app for `pi` sessions. macOS, local, single-user.
 
-This repo packages the Alamelu Pi desktop UI as a thin GUI over the installed `pi` command. It is not a standalone coding agent runtime and does not bundle Pi runtime packages; the installed `pi` is the source of truth for session RPC, model metadata, auth, and provider configuration.
+## What this is
 
-![pi-gui demo](./docs/readme/demo.gif)
+Alamelu Pi is a **thin wrapper over the `pi` CLI you already have installed**. It does not bundle a Pi runtime and does not keep its own copy of your sessions, models, auth or configuration — the installed `pi` remains the single source of truth for all of it, and the app drives it over `pi --mode rpc`.
 
-## Status
+That is the main difference from the upstream project this is derived from, which bundled its own Pi runtime. Here, whatever you do in the terminal and whatever you do in the app are the same sessions, the same providers, the same settings.
 
-- Beta (macOS arm64, Linux AppImage)
-- Public source repo
+## Scope
 
-## Install
+This is a personal build, not a product:
 
-### From GitHub Releases
+- **macOS only** (Apple Silicon). Windows would need a rewrite off Electron; not planned.
+- **No releases, no Homebrew tap, no auto-update.** The app never phones home and has no update mechanism at all.
+- **Built and installed locally** from this repo by its owner.
 
-Download the latest `.dmg` or `.AppImage` from [Releases](https://github.com/minghinmatthewlam/pi-gui/releases).
+## Requirements
 
-Signed and notarized beta releases are the primary direct install path. Drag `pi-gui.app` into `/Applications`, then launch it normally.
+- A working `pi` installation on your `PATH`, already authenticated with whichever providers you use (`pi --list-models` should print a catalogue).
+- Node 24 and `pnpm` (via `corepack enable`).
 
-Linux releases ship as AppImages.
-
-To update a DMG install, download the latest release and replace the app in `/Applications`.
-
-### With Homebrew
-
-Install from [`minghinmatthewlam/homebrew-tap`](https://github.com/minghinmatthewlam/homebrew-tap):
+## Build and install
 
 ```bash
-brew tap minghinmatthewlam/tap
-brew install --cask pi-gui
+pnpm install
+pnpm --filter @alamelu-pi/desktop run package:alpi:dir
 ```
 
-To update a Homebrew install:
+That produces a signed `alpi.app` under `apps/desktop/release-alpi/mac-arm64/`. Back up the current app before replacing it:
 
 ```bash
-brew upgrade --cask pi-gui
+cp -R "/Applications/Alamelu Pi.app" "/Applications/Alamelu Pi.app.backup-$(date +%Y%m%d)"
+rm -rf "/Applications/Alamelu Pi.app"
+cp -R apps/desktop/release-alpi/mac-arm64/alpi.app "/Applications/Alamelu Pi.app"
 ```
 
-Homebrew upgrades may behave more like reinstall than in-place patching on macOS. During beta, you may need to re-confirm Dock placement or some permission prompts after upgrading.
-
-### From Source
-
-See [Development](#development) below. Source install is intended for contributors and local development, not the primary end-user install path.
-
-## What It Does
-
-- Opens local workspaces in a desktop shell
-- Lists and resumes `pi` sessions associated with each workspace
-- Creates new sessions and sends prompts through the `pi` runtime
-- Persists desktop UI state such as selected workspace, selected session, and composer draft
-
-## Prerequisites
-
-- Valid model/provider authentication supported by `pi`
-
-On first launch, go to **Settings > Providers** to connect your AI provider via OAuth.
+Signing uses an AWS Secrets Manager–backed identity; the packaging script fails loudly if the secret is unavailable rather than falling back to an unsigned build. The app is signed but **not notarized**, which is fine on the machine that built it and would matter only if it were given to someone else.
 
 ## Development
 
-Install dependencies:
-
 ```bash
-corepack enable
-pnpm install
+pnpm --filter @alamelu-pi/desktop dev        # run the app from source
+pnpm --filter @alamelu-pi/desktop build      # compile main, preload and renderer
+pnpm --filter @alamelu-pi/desktop typecheck  # both TypeScript projects
 ```
 
-Run the desktop app in development:
+Tests:
 
 ```bash
-pnpm dev
+node --test apps/desktop/tests/unit/*.test.mjs      # unit
+pnpm --filter @alamelu-pi/pi-rpc-driver test        # RPC driver suite
 ```
 
-Build everything:
+End-to-end specs run under Playwright against a real Electron window. Specs must set `PI_GUI_BRAND=alpi` and an isolated `PI_APP_USER_DATA_DIR`; unbranded specs select a driver this fork no longer has and cannot boot. Run them by name:
 
 ```bash
-pnpm build
+pnpm --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/ux-repair.spec.ts
 ```
 
-Run the default test suite:
+## The pi-ai patch
+
+`pi-ai` truncates composite tool-call IDs to 40 characters, which makes parallel tool calls from one turn collapse into the same ID; providers then reject the replayed history with `400 Duplicate value for 'tool_call_id'` after a model switch. The app patches the installed `pi-ai` to make that truncation collision-proof, and **re-applies the patch automatically whenever the installed `pi` version changes**, since `pi update` reinstalls the library and reverts it. Manual control if you want it:
 
 ```bash
-pnpm test
+node apps/desktop/scripts/patch-global-pi-ai.mjs --check
+node apps/desktop/scripts/patch-global-pi-ai.mjs --apply
 ```
 
-Desktop E2E lanes and setup are documented in [`apps/desktop/README.md`](./apps/desktop/README.md). The default desktop test command runs the `core` lane; use `pnpm --filter @pi-gui/desktop run test:e2e:all` when you need `core`, `live`, and `native`.
+The patcher refuses to touch the file if pi's source no longer matches what it expects, rather than guessing.
 
-Package a Linux AppImage locally:
+## Repository layout
 
-```bash
-pnpm --filter @pi-gui/desktop run package:linux
-```
+- `apps/desktop` — the Electron app: `electron/` (main process), `src/` (renderer)
+- `packages/pi-rpc-driver` — adapter to the installed `pi --mode rpc` process
+- `packages/session-driver` — shared session/driver types
+- `packages/catalogs` — workspace and session catalog state
+- `documents/plan-audit-implementation` — plans, audits and implementation records
 
-Production-like packaged-app checks:
+## Credits and licence
 
-```bash
-pnpm --filter @pi-gui/desktop run test:prod:packaged-smoke
-```
+Derived from the **pi-gui** project, used under the MIT licence; see [LICENSE](./LICENSE) for the original copyright holder and terms. The agent runtime is [`earendil-works/pi`](https://github.com/earendil-works/pi).
 
-Release automation expects these GitHub Actions secrets for signed/notarized macOS builds:
-
-- `CSC_LINK`
-- `CSC_KEY_PASSWORD`
-- `APPLE_API_KEY`
-- `APPLE_API_KEY_ID`
-- `APPLE_API_ISSUER`
-
-Regenerate the README demo assets:
-
-```bash
-pnpm --filter @pi-gui/desktop demo:readme
-```
-
-## Repository Layout
-
-- `apps/desktop`: Electron app and renderer UI
-- `packages/session-driver`: shared session driver types
-- `packages/catalogs`: lightweight workspace/session catalog state
-- `packages/pi-rpc-driver`: adapter from the desktop app to the installed `pi --mode rpc` process
-
-## Known Limitations
-
-- The app currently relies on upstream `pi` behavior and local auth state.
-- Live end-to-end validation may require model credentials not stored in this repo.
-- Homebrew beta upgrades may require macOS to re-confirm some app permissions or Dock placement.
-
-## Acknowledgements
-
-- Uses the installed `pi` command as its runtime and model/config source of truth
-- Upstream runtime and ecosystem by [`earendil-works/pi`](https://github.com/earendil-works/pi)
-
-## License
-
-MIT. See [LICENSE](./LICENSE).
+MIT.
