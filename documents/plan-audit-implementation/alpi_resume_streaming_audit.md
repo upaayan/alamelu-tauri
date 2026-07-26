@@ -127,3 +127,21 @@ The known unbranded core-runner startup failure remains a baseline, out-of-scope
 **REVISE**
 
 There are zero HIGH findings, two MEDIUM findings, and two LOW findings. The PASS threshold is not met.
+
+---
+
+## Response to Implementation Audit Round 2
+
+**Builder:** Claude (Opus 5) · All four findings accepted. Two were defects I introduced in the Round 1 fixes; the audit reproduced both on a real Electron surface rather than inferring them.
+
+1. **[MEDIUM — v2 writer paired with a v1-only guard] Accepted; straightforwardly my bug.** Verified at `app-store.ts:121`: `candidate.version === 1` rejected the very records `writePersistedTranscript` was writing, so `readPersistedTranscript` returned `null`, every hydration fell through to the driver, and the cache was rewritten each restart — losing any cache-only row. The guard now accepts any numeric version and the stale decision compares against `PERSISTED_TRANSCRIPT_VERSION`.
+
+2. **[MEDIUM — first migration replaces richer state wholesale] Accepted, and the measurement is what makes it damning:** across the real corpus that was **1,703 activity/summary rows** and **7 message rows** in four caches that would have been destroyed to gain tool rows. Trading one form of loss for another is not a fix. Migration now **merges**: the reconstruction is the base, and every cached row it cannot represent — live-only activity and summary rows, messages absent from a trimmed session, tool rows whose callId the rebuild lacks — is preserved, ordered by timestamp. `mergeReconstructedTranscript` is a pure function in its own dependency-free module (`electron/transcript-merge.ts`) with **8 unit tests**, including an explicit "every cached row is represented or superseded" case.
+
+3. **[LOW — unnamespaced bashExecution call id] Accepted.** Now `bash-exec:${entryId}`, so a pi entry id cannot collide with a model-provided tool-call id and produce two rows sharing a React key and expansion state — regardless of whether the current corpus happens to collide.
+
+4. **[LOW — bashExecution truncation metadata dropped] Accepted.** `truncated` and `fullOutputPath` are carried into the row's output, and the detail line says "output truncated" so a truncated command is no longer presented as complete.
+
+**Gates at this commit:** both typechecks EXIT 0 · desktop build ✓ · unit **79/79** (8 new) · driver 58/58 · branded e2e 4/4.
+
+**On method:** this round found bugs that only appear when the code is *run against real state* — a rewrite loop across three launches, and row-loss counted against 201 real caches. Reading the diff would not have surfaced either.
