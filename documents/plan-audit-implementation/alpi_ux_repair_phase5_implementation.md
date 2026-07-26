@@ -40,3 +40,29 @@ compact  → pi answered "Nothing to compact (session too small)"   (pi's own ru
 + "lastError": "OpenAI API error (401): ... Incorrect API key provided: test-ope***-key ..."
 ```
 The seeded test key is fake, pi really calls OpenAI, and the 401 lands in `lastError` while the test asserts it stays empty. On this branch the same failure shows the shortened mapped message instead of raw JSON. Pre-existing and out of scope; reported rather than silently fixed or quietly left unmentioned.
+
+## D — packaged, signed and installed
+
+Backup taken first: `/Applications/Alamelu Pi.app.backup-20260726` (the Jul 20 build). Packaged via the sanctioned path only — `pnpm --filter @pi-gui/desktop run package:alpi:dir`, AWS-Secrets-Manager-backed keychain unlock and identity-hash signing. No Apple password prompt, no alternate signing path.
+
+```
+alpi.app: replacing existing signature
+alpi.app: valid on disk
+alpi.app: satisfies its Designated Requirement
+codesign --verify --deep --strict /Applications/Alamelu Pi.app  → OK
+```
+
+**Verified on the installed bundle** (launched from `/Applications`, isolated user-data dir, and deliberately WITHOUT `PI_APP_TEST_MODE` so the real startup path — including the self-healing hook — ran exactly as a normal launch does):
+
+```
+window title:         "Alamelu Pi"                       (was "pi")
+driver capabilities:  {"worktrees":false,"tree":true,"compact":true,
+                       "queueEditing":false,"skillToggles":false}
+pi-patch-state.json:  { "piVersion": "0.80.10", "patchedAt": "2026-07-26T04:57:43.458Z" }
+```
+
+That state file is the plan's D-step gate for item A: it can only exist if the bundled module, the resolved-`piBin` parameter and the startup hook all executed **inside the shipped bundle**. `tree:true`/`compact:true` prove item B shipped. Window renders, workspaces load, icon untouched.
+
+## Status
+
+A, B, C, D complete. Owner-facing follow-ups that remain their call: filing the upstream pi-ai truncation bug on `earendil-works/pi`, and the pre-existing `No Repository` spec failure documented above (fails identically at `74e351e`).
