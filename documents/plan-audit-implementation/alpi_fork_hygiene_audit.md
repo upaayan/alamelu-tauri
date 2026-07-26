@@ -131,3 +131,19 @@ Score: 5/5 accepted, one of which corrected a false verification claim of mine. 
 - The deferred `docs/readme` demo-asset decision is recorded as owner-controlled and is non-blocking under the binding scope ruling.
 
 **Verdict: REVISE.** There are 0 HIGH, 2 MEDIUM, and 2 LOW findings, so the PASS threshold is not met.
+
+---
+
+## Response to Plan Audit Round 3
+
+**Builder:** Claude (Opus 5) · Plan revised in place to rev 4. All 4 findings accepted; each verified first.
+
+1. **[MEDIUM — ZIP helper has four spec consumers, not two] Accepted.** Verified: `extractPackagedReleaseZipAppBundle` appears 9 times across `tests/production/*.spec.ts`, covering `applications-relaunch`, `release-zip-smoke`, `finder-env-open-folder` and `release-zip-reopen-new-thread`. Rev 3 named two, so two would have been left importing a deleted helper and still collected by the general runner. All four are now deleted, and the accepted documentation cleanup is written down for the first time (`apps/desktop/README.md` lines 39, 76-77, 93, 138-139, 170-171 and the stale comment at `electron/main.ts:366`). The gate is widened from "surviving scripts resolve" to "no surviving file references a deleted spec, helper, script or config".
+
+2. **[MEDIUM — live-session sync claim false for Sol/Terra] Accepted; the claim is retracted, not softened.** Verified: `lunaChildNeedsRotation` gates rotation to Luna only (`pi-rpc-driver.ts:458`, `:504`), and the regression tests you cite prove Sol/Terra reuse one child. So "its next child picks the setting up" was simply wrong, and a toggle during a Sol/Terra run would have gone stale indefinitely — the exact silent-drift failure this plan exists to avoid. Rev 4 requires a pending value recorded on the session record and flushed when the run ends, owned by `PiRpcDriver` (which holds both the session map and the run lifecycle), surfaced through one `RpcDesktopDriver` method so the AppStore never touches driver internals. Your second point is also taken: the mutation now refreshes **every** cached runtime snapshot, because the setting is global and the thinking-level helper's single-workspace refresh would show a stale toggle elsewhere.
+
+3. **[LOW — phase-A gate cannot pass where scheduled] Accepted.** Scoped to `apps/desktop` and rewritten around the real symbols (`update-checker`, `initUpdateChecker`, `stopUpdateChecker`, `checkForUpdate`); the `releases/latest` URL check moves to phase B, which deletes the website page that holds it.
+
+4. **[LOW — three cleanup bullets cite package-script entries that do not exist] Accepted.** Verified against the two script blocks; `verify-install-copy`, `capture-showcase` and the Homebrew scripts have **no** entries. The file deletions stand; the phantom entry-removal instructions are gone so the implementation inventory is factual.
+
+Score: 4/4 accepted, two of which corrected false statements of mine (the two-spec count and the Sol/Terra rotation claim). Rev 4 ready for Round 4.
