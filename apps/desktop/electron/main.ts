@@ -11,7 +11,7 @@ import {
   type MessageBoxOptions,
 } from "electron";
 import { randomUUID } from "node:crypto";
-import { chmod, copyFile, mkdir, readFile, realpath, stat } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { appendFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -29,6 +29,7 @@ import { ThemeManager } from "./theme-manager";
 import { TerminalService } from "./terminal-service";
 import { createRpcDesktopDriver } from "./rpc-desktop-driver";
 import { resolveDesktopDriverConfig, type DesktopDefaultRpcConfig, type DesktopDriverKind } from "./rpc-driver-config";
+import { applyPiAiPatch, checkPiAiPatch, readPiVersion, resolvePiAiTarget, shouldReapplyPatch } from "./pi-ai-patch.mjs";
 import { normalizeProcessPathForPackagedApp, resolveInstalledPiBin } from "./process-path";
 import type { DesktopAppState, ThemeMode } from "../src/desktop-state";
 import { desktopIpc, getDesktopCommandFromShortcut } from "../src/ipc";
@@ -711,6 +712,40 @@ function resolveAppBrand(): AppBrandConfig {
   };
 }
 
+/**
+ * Keeps the installed pi-ai carrying our tool-call-id patch. `pi update` reinstalls the
+ * library and silently reverts it, which brings back the duplicate-id 400 on model
+ * switches — so the app re-applies it whenever the installed pi version changes.
+ * Never runs under test: Playwright boots must not mutate the global npm tree.
+ */
+async function ensurePiAiPatched(piBin: string, userDataDir: string): Promise<void> {
+  if (process.env.PI_APP_TEST_MODE) return;
+  const statePath = path.join(userDataDir, "pi-patch-state.json");
+  try {
+    const currentVersion = readPiVersion(piBin);
+    let storedVersion: string | undefined;
+    try {
+      storedVersion = JSON.parse(await readFile(statePath, "utf8")).piVersion;
+    } catch {
+      // No state yet (first launch, or a fresh user-data dir).
+    }
+
+    const target = resolvePiAiTarget(piBin);
+    const state = checkPiAiPatch(target);
+    if (state === "drifted") {
+      bootLog(`pi-ai patch skipped: installed source no longer matches the expected shape (pi ${currentVersion})`);
+      return;
+    }
+    if (!shouldReapplyPatch(storedVersion, currentVersion, state)) return;
+
+    const result = applyPiAiPatch(target);
+    await writeFile(statePath, `${JSON.stringify({ piVersion: currentVersion, patchedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+    bootLog(`pi-ai patch ${result.changed ? "applied" : "already present"} for pi ${currentVersion}`);
+  } catch (error) {
+    bootLog(`pi-ai patch check failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function ensureRpcAuthCopy(agentDir: string): Promise<void> {
   const source = path.join(homedir(), ".pi/agent/auth.json");
   const destination = path.join(agentDir, "auth.json");
@@ -808,6 +843,10 @@ app.whenReady().then(async () => {
         reject: (error: Error) => void;
       }
     | undefined;
+  if (desktopDriverConfig.driver === "rpc") {
+    // Before the driver exists, so no pi child is ever spawned against an unpatched lib.
+    await ensurePiAiPatched(desktopDriverConfig.rpc.piBin, desktopDriverConfig.userDataDir);
+  }
   if (desktopDriverConfig.driver === "rpc" && !desktopDriverConfig.rpc.allowSharedAgentDir) {
     await ensureRpcAuthCopy(desktopDriverConfig.rpc.agentDir);
   }
