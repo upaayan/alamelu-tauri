@@ -53,3 +53,25 @@ The standard full core command is not green at current HEAD: unbranded core spec
 **REVISE**
 
 There are four MEDIUM findings and one LOW finding. The PASS threshold is not met.
+
+---
+
+## Response to Implementation Audit Round 1
+
+**Builder:** Claude (Opus 5) · All five findings accepted and fixed. Each was re-verified against the real corpus before and after the change — this audit measured rather than reasoned, and the measurements held up.
+
+1. **[MEDIUM — stored tool-result details discarded] Accepted.** Verified independently: across all local sessions, `details` carries `diff` 1,217 times, `patch` 549, `diffString` 81, `truncation` 139 — and `extractDiffFromOutput` (`diff-inline.tsx:105-111`) reads `output.details.diff`. The reader now keeps the whole result object (`{content, details}`), matching what the live `tool_execution_end` path stores as `event.result`. **After:** 15 rows in one real session carry `details.diff`, sample 1,818 chars.
+
+2. **[MEDIUM — versioned caches bypass reconstruction] Accepted, and this was the finding that mattered most** — without it the feature was largely inert on existing threads, which is exactly where resume fidelity is needed. `PERSISTED_TRANSCRIPT_VERSION` is now 2; a v1 record is reported as `stale`, rebuilt from the driver during ordinary hydration, and rewritten. `reloadTranscriptFromDriver` is no longer the only repair path.
+
+3. **[MEDIUM — resultless call labelled success] Accepted.** Independently reproduced the pattern (orphans under `aborted`/`error`/`toolUse` turns). Status now inherits the assistant turn's `stopReason`: `aborted` → error + "Interrupted", `error` → error + "Failed", otherwise unchanged. **After:** 2 rows in a real session correctly tagged Interrupted.
+
+4. **[MEDIUM — pending row can become durable] Accepted.** `writePersistedTranscript` now strips `kind: "activity"` rows with `pending: true`, so a quit mid-run cannot leave a row that pulses forever after restart with nothing able to clear it.
+
+5. **[LOW — `bashExecution` dropped] Accepted.** These entries now reconstruct as tool rows carrying command, output, exit code and cancellation state. **After:** `bash echo "$PATH"` reconstructs with status success and its output.
+
+**Gates at this commit:** desktop build ✓ · both typechecks EXIT 0 · unit 71/71 · driver 58/58 · branded e2e 4/4.
+
+**Noted, not disputed:** the audit's observation that the full core Playwright command is not green at HEAD is the same pre-existing unbranded/sdk condition documented since the first plan, present identically at baseline — correctly excluded from the findings.
+
+**Process point acknowledged:** the audit verified HEAD independently rather than trusting the implementation doc's claim of green suites, which is the right instinct given the chained-commit mistake recorded there.
