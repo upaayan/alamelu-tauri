@@ -489,14 +489,16 @@ test('PiRpcDriver emits runFailed and returns to idle when prompt command fails'
   assert.equal('runningRunId' in lastUpdate.snapshot, false);
 });
 
-test('PiRpcDriver rejects unsupported Phase-2 methods explicitly', async () => {
+test('PiRpcDriver still rejects the methods it does not implement', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   class FakeClient { onEvent() { return () => undefined; } close() {} async sendCommand(command, id) { if (command.type === 'get_state') return { type: 'response', id, command: 'get_state', success: true, data: { sessionId: 'rpc-unsupported', sessionName: 'RPC Unsupported' } }; return { type: 'response', id, command: command.type, success: true }; } }
   const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data', labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => new FakeClient() });
   const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
-  await assert.rejects(() => driver.getSessionTree(snapshot.ref), /not supported/);
-  await assert.rejects(() => driver.navigateSessionTree(snapshot.ref, 'x'), /not supported/);
-  await assert.rejects(() => driver.compactSession(snapshot.ref), /not supported/);
+  // getSessionTree / navigateSessionTree / compactSession are implemented against pi's
+  // own RPC commands (see tree-compact.test.mjs); these three remain unimplemented.
+  await assert.rejects(() => driver.archiveSession(snapshot.ref), /not supported/);
+  await assert.rejects(() => driver.unarchiveSession(snapshot.ref), /not supported/);
+  await assert.rejects(() => driver.replaceQueuedMessages(snapshot.ref, []), /not supported/);
 });
 
 test('PiRpcDriver maps steer and followUp delivery modes while a session is running', async () => {

@@ -16,6 +16,7 @@ import type {
   SessionRef,
   SessionSnapshot,
   SessionTreeSnapshot,
+  SessionTreeNodeSnapshot,
   Unsubscribe,
   WorkspaceRef,
 } from "@pi-gui/session-driver";
@@ -275,8 +276,20 @@ export class PiRpcDriver implements SessionDriver {
     });
   }
 
-  compactSession(_sessionRef: SessionRef, _customInstructions?: string): Promise<void> {
-    return Promise.reject(new Error("compactSession is not supported by the RPC prototype"));
+  async compactSession(sessionRef: SessionRef, customInstructions?: string): Promise<void> {
+    const record = this.requireSession(sessionRef);
+    return this.enqueueIdleOperation(record, async () => {
+      const current = await this.prepareIdleLunaClientForMutation(record);
+      // Pi answers only once compaction finishes, which outlives the 30s default.
+      const response = await current.client.sendCommand(
+        { type: "compact", ...(customInstructions ? { customInstructions } : {}) },
+        `compact-${randomUUID()}`,
+        PROMPT_COMMAND_TIMEOUT_MS,
+      );
+      if (!response.success) throw new Error(response.error ?? "RPC compact failed");
+      current.snapshot = { ...current.snapshot, updatedAt: this.now() };
+      this.emit(sessionRef, { type: "sessionUpdated", sessionRef, timestamp: this.now(), snapshot: current.snapshot });
+    });
   }
 
   async reloadSession(sessionRef: SessionRef): Promise<void> {
@@ -290,12 +303,39 @@ export class PiRpcDriver implements SessionDriver {
     });
   }
 
-  getSessionTree(_sessionRef: SessionRef): Promise<SessionTreeSnapshot> {
-    return Promise.reject(new Error("getSessionTree is not supported by the RPC prototype"));
+  async getSessionTree(sessionRef: SessionRef): Promise<SessionTreeSnapshot> {
+    let record = this.requireSession(sessionRef);
+    record = await this.waitForClientRestart(record);
+    const response = await record.client.sendCommand({ type: "get_tree" }, `tree-${randomUUID()}`);
+    if (!response.success) throw new Error(response.error ?? "RPC get_tree failed");
+    const data = response.data as { tree?: unknown; leafId?: unknown } | undefined;
+    return {
+      roots: mapSessionTreeNodes(data?.tree),
+      leafId: typeof data?.leafId === "string" ? data.leafId : null,
+    };
   }
 
-  navigateSessionTree(_sessionRef: SessionRef, _targetId: string, _options?: NavigateSessionTreeOptions): Promise<NavigateSessionTreeResult> {
-    return Promise.reject(new Error("navigateSessionTree is not supported by the RPC prototype"));
+  async navigateSessionTree(
+    sessionRef: SessionRef,
+    targetId: string,
+    _options?: NavigateSessionTreeOptions,
+  ): Promise<NavigateSessionTreeResult> {
+    const record = this.requireSession(sessionRef);
+    return this.enqueueIdleOperation(record, async () => {
+      const current = await this.prepareIdleLunaClientForMutation(record);
+      const response = await current.client.sendCommand({ type: "fork", entryId: targetId }, `fork-${randomUUID()}`);
+      if (!response.success) throw new Error(response.error ?? "RPC fork failed");
+      const data = response.data as { text?: unknown; cancelled?: unknown } | undefined;
+      const cancelled = data?.cancelled === true;
+      if (!cancelled) {
+        current.snapshot = { ...current.snapshot, updatedAt: this.now() };
+        this.emit(sessionRef, { type: "sessionUpdated", sessionRef, timestamp: this.now(), snapshot: current.snapshot });
+      }
+      return {
+        cancelled,
+        ...(typeof data?.text === "string" ? { editorText: data.text } : {}),
+      };
+    });
   }
 
   async getSessionCommands(sessionRef: SessionRef): Promise<readonly RuntimeCommandRecord[]> {
@@ -718,6 +758,82 @@ function textFromRpcContent(content: unknown): string {
     if (typeof record.content === "string") return record.content;
     return "";
   }).filter(Boolean).join("\n");
+}
+
+const SESSION_TREE_KINDS = new Set<SessionTreeNodeSnapshot["kind"]>([
+  "message",
+  "thinking_level_change",
+  "model_change",
+  "compaction",
+  "branch_summary",
+  "custom",
+  "custom_message",
+  "label",
+  "session_info",
+]);
+
+/**
+ * Maps pi's session tree to the desktop snapshot shape. Pi's entry `type` values are the
+ * same nine literals the UI knows; a node of an unrecognised kind is skipped and its
+ * children are hoisted to its parent, so a future pi entry type cannot hide a branch.
+ */
+function mapSessionTreeNodes(nodes: unknown): readonly SessionTreeNodeSnapshot[] {
+  if (!Array.isArray(nodes)) return [];
+  const mapped: SessionTreeNodeSnapshot[] = [];
+  for (const node of nodes) {
+    if (typeof node !== "object" || node === null) continue;
+    const record = node as { entry?: unknown; children?: unknown; label?: unknown };
+    const children = mapSessionTreeNodes(record.children);
+    const entry = record.entry as Record<string, unknown> | undefined;
+    const kind = typeof entry?.type === "string" ? entry.type : undefined;
+    if (!entry || !kind || !SESSION_TREE_KINDS.has(kind as SessionTreeNodeSnapshot["kind"])) {
+      mapped.push(...children);
+      continue;
+    }
+    const role = typeof (entry.message as { role?: unknown } | undefined)?.role === "string"
+      ? String((entry.message as { role?: unknown }).role)
+      : undefined;
+    const preview = sessionTreePreview(entry);
+    mapped.push({
+      id: String(entry.id ?? ""),
+      parentId: typeof entry.parentId === "string" ? entry.parentId : null,
+      kind: kind as SessionTreeNodeSnapshot["kind"],
+      timestamp: typeof entry.timestamp === "string" ? entry.timestamp : "",
+      title: typeof record.label === "string" && record.label ? record.label : sessionTreeTitle(kind, entry),
+      ...(typeof record.label === "string" && record.label ? { label: record.label } : {}),
+      ...(role ? { role } : {}),
+      ...(typeof entry.customType === "string" ? { customType: entry.customType } : {}),
+      ...(preview ? { preview } : {}),
+      children,
+    });
+  }
+  return mapped;
+}
+
+function sessionTreeTitle(kind: string, entry: Record<string, unknown>): string {
+  switch (kind) {
+    case "model_change":
+      return `Model: ${String(entry.provider ?? "")}/${String(entry.modelId ?? "")}`;
+    case "thinking_level_change":
+      return `Thinking: ${String(entry.thinkingLevel ?? "")}`;
+    case "compaction":
+      return "Compacted";
+    case "branch_summary":
+      return "Branch summary";
+    case "session_info":
+      return typeof entry.name === "string" && entry.name ? entry.name : "Session";
+    case "label":
+      return typeof entry.label === "string" ? entry.label : "Label";
+    default:
+      return kind.replace(/_/g, " ");
+  }
+}
+
+function sessionTreePreview(entry: Record<string, unknown>): string | undefined {
+  const message = entry.message as Record<string, unknown> | undefined;
+  if (!message) return undefined;
+  const text = textFromJsonlContent(message.content).trim();
+  return text ? text.slice(0, 160) : undefined;
 }
 
 function isBenignInactiveStreamFailure(message: string): boolean {

@@ -42,8 +42,8 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
   private readonly paths: ValidatedLabPaths;
   private readonly openSessions = new Map<string, SessionRef>();
   readonly supportsWorktrees = false;
-  readonly supportsTree = false;
-  readonly supportsCompact = false;
+  readonly supportsTree = true;
+  readonly supportsCompact = true;
   readonly supportsQueueEditing = false;
   readonly supportsSkillToggles = false;
   readonly runtimeSupervisor: DesktopRuntimeSupervisor;
@@ -118,24 +118,24 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
     }
   }
 
-  compactSession(_sessionRef: SessionRef, _customInstructions?: string): Promise<void> {
-    return Promise.reject(unsupportedRpcDesktopOperation("compactSession"));
+  compactSession(sessionRef: SessionRef, customInstructions?: string): Promise<void> {
+    return this.rpc.compactSession(sessionRef, customInstructions);
   }
 
   reloadSession(sessionRef: SessionRef): Promise<void> {
     return this.rpc.reloadSession(sessionRef);
   }
 
-  getSessionTree(_sessionRef: SessionRef): Promise<SessionTreeSnapshot> {
-    return Promise.reject(unsupportedRpcDesktopOperation("getSessionTree"));
+  getSessionTree(sessionRef: SessionRef): Promise<SessionTreeSnapshot> {
+    return this.rpc.getSessionTree(sessionRef);
   }
 
   navigateSessionTree(
-    _sessionRef: SessionRef,
-    _targetId: string,
-    _options?: NavigateSessionTreeOptions,
+    sessionRef: SessionRef,
+    targetId: string,
+    options?: NavigateSessionTreeOptions,
   ): Promise<NavigateSessionTreeResult> {
-    return Promise.reject(unsupportedRpcDesktopOperation("navigateSessionTree"));
+    return this.rpc.navigateSessionTree(sessionRef, targetId, options);
   }
 
   async getSessionCommands(sessionRef: SessionRef) {
