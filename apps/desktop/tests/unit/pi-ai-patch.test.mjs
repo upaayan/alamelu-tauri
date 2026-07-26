@@ -1,39 +1,47 @@
 import assert from "node:assert/strict";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import {
   applyPiAiPatch,
   checkPiAiPatch,
+  isCollisionSafe,
   PATCH_MARKER,
   shouldReapplyPatch,
 } from "../../electron/pi-ai-patch.mjs";
 
-// The real installed file is the fixture source, but every test operates on a COPY in
-// a temp dir — the global npm tree is never touched by tests.
-const REAL_PI_AI = path.join(
-  process.env.HOME ?? "",
-  ".nvm/versions/node/v24.16.0/lib/node_modules/@earendil-works/pi-coding-agent",
-  "node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js",
-);
+// Fixtures are synthesised, never taken from the global install: the installed pi is
+// now 0.82.1, which fixed this upstream, so it is no longer a source of "unpatched" text.
+const ORIGINAL_SNIPPET = `    const normalizeToolCallId = (id) => {
+        if (id.includes("|")) {
+            const [callId] = id.split("|");
+            // Sanitize to allowed chars and truncate to 40 chars (OpenAI limit)
+            return callId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+        }
+        if (model.provider === "openai")
+            return id.length > 40 ? id.slice(0, 40) : id;
+        return id;
+    };
+//# sourceMappingURL=openai-completions.js.map`;
+
+const UPSTREAM_FIXED_SNIPPET = `    const normalizeToolCallId = (id) => {
+        if (id.includes("|")) {
+            const separatorIndex = id.indexOf("|");
+            const callId = id.slice(0, separatorIndex).replace(/[^a-zA-Z0-9_-]/g, "_");
+            const itemId = id.slice(separatorIndex + 1).replace(/[^a-zA-Z0-9_-]/g, "_");
+            const combinedId = itemId.length > 0 ? \`\${callId}_\${itemId}\` : callId;
+            if (combinedId.length <= 40) return combinedId;
+        }
+        return id;
+    };`;
 
 const workDir = mkdtempSync(path.join(tmpdir(), "pi-ai-patch-"));
 after(() => rmSync(workDir, { recursive: true, force: true }));
 
-function freshCopy(name) {
-  const dest = path.join(workDir, name);
-  copyFileSync(REAL_PI_AI, dest);
-  return dest;
-}
-
-/** Restores a patched copy back to the shape pi ships, so "unpatched" can be tested. */
 function unpatchedCopy(name) {
-  const dest = freshCopy(name);
-  const src = readFileSync(dest, "utf8");
-  if (!src.includes(PATCH_MARKER)) return dest;
-  const backup = `${REAL_PI_AI}.bak-alpi`;
-  copyFileSync(backup, dest);
+  const dest = path.join(workDir, name);
+  writeFileSync(dest, ORIGINAL_SNIPPET, "utf8");
   return dest;
 }
 
@@ -52,6 +60,24 @@ test("shouldReapplyPatch: an unpatched file is always applied", () => {
 test("shouldReapplyPatch: drifted source is never patched blindly", () => {
   assert.equal(shouldReapplyPatch(undefined, "0.81.0", "drifted"), false);
   assert.equal(shouldReapplyPatch("0.80.10", "0.80.10", "drifted"), false);
+});
+
+test("pi's own upstream fix is recognised and never overwritten", () => {
+  const target = path.join(workDir, "upstream-fixed.js");
+  writeFileSync(target, UPSTREAM_FIXED_SNIPPET, "utf8");
+  assert.equal(checkPiAiPatch(target), "fixed-upstream");
+  assert.equal(isCollisionSafe(target), true, "upstream's fix counts as collision-safe");
+  assert.equal(shouldReapplyPatch("0.80.10", "0.82.1", "fixed-upstream"), false);
+  const before = readFileSync(target, "utf8");
+  assert.equal(applyPiAiPatch(target).changed, false);
+  assert.equal(readFileSync(target, "utf8"), before, "the file must be left byte-identical");
+});
+
+test("our own patch also counts as collision-safe", () => {
+  const target = unpatchedCopy("safe-check.js");
+  assert.equal(isCollisionSafe(target), false);
+  applyPiAiPatch(target);
+  assert.equal(isCollisionSafe(target), true);
 });
 
 test("checkPiAiPatch reports drift when pi's source no longer matches", () => {

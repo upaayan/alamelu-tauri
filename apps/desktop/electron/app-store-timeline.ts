@@ -1,5 +1,5 @@
-import { sessionKey } from "@pi-gui/session-driver";
-import type { SessionDriverEvent, SessionQueuedMessage, SessionRef } from "@pi-gui/session-driver";
+import { sessionKey } from "@alamelu-pi/session-driver";
+import type { SessionDriverEvent, SessionQueuedMessage, SessionRef } from "@alamelu-pi/session-driver";
 import type { TranscriptMessage } from "../src/desktop-state";
 import {
   formatElapsedDuration,

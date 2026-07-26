@@ -64,10 +64,10 @@ When the test hook is active, browser auto-open is suppressed so tests do not la
 Final post-audit verification:
 
 ```bash
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run build
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run typecheck
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run build
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run typecheck
 node --test packages/pi-sdk-driver/test/runtime-supervisor.test.mjs
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/core/provider-settings.spec.ts
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/provider-settings.spec.ts
 ```
 
 Result: all passed. Build completed, desktop typecheck passed, adapter unit tests passed 5/5, and the focused provider-settings Electron spec passed 6/6.
@@ -75,7 +75,7 @@ Result: all passed. Build completed, desktop typecheck passed, adapter unit test
 Package build:
 
 ```bash
-npx --yes pnpm@10.25.0 --filter @pi-gui/session-driver --filter @pi-gui/pi-sdk-driver run build
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/session-driver --filter @alamelu-pi/pi-sdk-driver run build
 ```
 
 Result: passed.
@@ -83,7 +83,7 @@ Result: passed.
 Desktop typecheck:
 
 ```bash
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run typecheck
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run typecheck
 ```
 
 Result: passed after two implementation fixes:
@@ -102,7 +102,7 @@ Result: 5 tests passed.
 Desktop build:
 
 ```bash
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run build
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run build
 ```
 
 Result: passed.
@@ -110,7 +110,7 @@ Result: passed.
 Focused Electron provider-settings smoke:
 
 ```bash
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/core/provider-settings.spec.ts
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/provider-settings.spec.ts
 ```
 
 Result: passed after rebuilding the Electron app. Six tests passed, including:
@@ -144,7 +144,7 @@ Performed on 2026-06-22 after implementation audit, without live provider reauth
 Packaging command shape:
 
 ```bash
-pnpm --filter @pi-gui/desktop run build
+pnpm --filter @alamelu-pi/desktop run build
 electron-builder --mac --dir --publish never -c electron-builder.alpi.yml -c.mac.sign=./scripts/sign-with-identity-hash.cjs
 ```
 

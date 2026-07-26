@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { expect, type Page } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
-import type { SessionDriverEvent, SessionRef } from "@pi-gui/session-driver";
+import type { SessionDriverEvent, SessionRef } from "@alamelu-pi/session-driver";
 import type { PiDesktopApi } from "../../src/ipc";
 import type {
   DesktopAppState,
@@ -19,7 +19,7 @@ import type {
 } from "../../src/desktop-state";
 
 const desktopDir = resolve(__dirname, "..", "..");
-const packagedReleaseDir = join(desktopDir, "release");
+const packagedReleaseDir = join(desktopDir, "release-alpi", "mac-arm64");
 // Written on demand from TINY_PNG_BASE64 so the native clipboard test owns its fixture.
 let nativeClipboardImagePathCache: string | undefined;
 const execFileAsync = promisify(execFile);
@@ -390,15 +390,15 @@ export async function resolvePackagedAppBundle(releaseDir = packagedReleaseDir):
   } catch (error) {
     if (isMissingPathError(error)) {
       throw new Error(
-        `Packaged release directory not found: ${releaseDir}. Run pnpm --filter @pi-gui/desktop run package:dir first.`,
+        `Packaged release directory not found: ${releaseDir}. Run pnpm --filter @alamelu-pi/desktop run package:dir first.`,
       );
     }
     throw error;
   }
 
-  const appBundle = appBundles.find((candidate) => basename(candidate) === "pi-gui.app") ?? appBundles[0];
+  const appBundle = appBundles.find((candidate) => basename(candidate) === "alpi.app") ?? appBundles[0];
   if (!appBundle) {
-    throw new Error(`No .app bundle found under ${releaseDir}. Run pnpm --filter @pi-gui/desktop run package:dir first.`);
+    throw new Error(`No .app bundle found under ${releaseDir}. Run pnpm --filter @alamelu-pi/desktop run package:dir first.`);
   }
 
   return appBundle;
@@ -431,25 +431,18 @@ export async function resolvePackagedReleaseZip(releaseDir = packagedReleaseDir)
     entries.find((entry) => entry.isFile() && entry.name.endsWith(".zip"));
 
   if (!zipEntry) {
-    throw new Error(`No packaged macOS release zip found under ${releaseDir}. Run pnpm --filter @pi-gui/desktop run package first.`);
+    throw new Error(`No packaged macOS release zip found under ${releaseDir}. Run pnpm --filter @alamelu-pi/desktop run package first.`);
   }
 
   return join(releaseDir, zipEntry.name);
 }
 
-export async function extractPackagedReleaseZipAppBundle(
-  releaseDir = packagedReleaseDir,
-  appName = "pi-gui 2.app",
-): Promise<string> {
-  const zipPath = await resolvePackagedReleaseZip(releaseDir);
-  return extractAppBundleFromReleaseZip(zipPath, appName);
-}
 
 export async function extractAppBundleFromReleaseZip(
   zipPath: string,
-  appName = "pi-gui 2.app",
+  appName = "alpi 2.app",
 ): Promise<string> {
-  const extractionDir = await mkdtemp(join(tmpdir(), "pi-gui-release-zip-"));
+  const extractionDir = await mkdtemp(join(tmpdir(), "alamelu-pi-release-zip-"));
   await execFileAsync("ditto", ["-x", "-k", zipPath, extractionDir]);
 
   const extractedAppBundle = await resolvePackagedAppBundle(extractionDir);

@@ -4,7 +4,7 @@ import type {
   SessionTreeNodeKind,
   SessionTreeNodeSnapshot,
   SessionTreeSnapshot,
-} from "@pi-gui/session-driver/types";
+} from "@alamelu-pi/session-driver/types";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 
 interface TreeModalProps {

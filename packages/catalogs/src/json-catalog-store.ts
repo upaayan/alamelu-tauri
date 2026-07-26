@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { sessionKey } from "@pi-gui/session-driver";
+import { sessionKey } from "@alamelu-pi/session-driver";
 import type { CatalogStorage } from "./storage.js";
 import type {
   SessionCatalogEntry,

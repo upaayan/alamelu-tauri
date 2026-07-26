@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { sessionKey } from "@pi-gui/session-driver";
-import type { SessionConfig, SessionQueuedMessage, SessionRef } from "@pi-gui/session-driver";
+import { sessionKey } from "@alamelu-pi/session-driver";
+import type { SessionConfig, SessionQueuedMessage, SessionRef } from "@alamelu-pi/session-driver";
 import type { ComposerAttachment, DesktopAppState, QueuedComposerMessage, WorkspaceSessionTarget } from "../src/desktop-state";
 import { toSessionRef } from "./app-store-utils";
 import {

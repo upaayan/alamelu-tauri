@@ -1,5 +1,5 @@
-import type { SessionCatalogSnapshot, WorkspaceCatalogSnapshot, WorkspaceId } from "@pi-gui/catalogs";
-import type { SyncWorkspaceResult, GenerateThreadTitleOptions, SessionTranscriptMessage } from "@pi-gui/session-driver";
+import type { SessionCatalogSnapshot, WorkspaceCatalogSnapshot, WorkspaceId } from "@alamelu-pi/catalogs";
+import type { SyncWorkspaceResult, GenerateThreadTitleOptions, SessionTranscriptMessage } from "@alamelu-pi/session-driver";
 import type {
   HostUiResponse,
   NavigateSessionTreeOptions,
@@ -8,13 +8,13 @@ import type {
   SessionRef,
   SessionTreeSnapshot,
   WorkspaceRef,
-} from "@pi-gui/session-driver";
+} from "@alamelu-pi/session-driver";
 import type {
   ModelSettingsSnapshot,
   RuntimeLoginCallbacks,
   RuntimeResourceDriver,
   RuntimeSnapshot,
-} from "@pi-gui/session-driver/runtime-types";
+} from "@alamelu-pi/session-driver/runtime-types";
 
 export interface DesktopRuntimeSupervisor extends RuntimeResourceDriver {
   getGlobalModelSettings(workspace: WorkspaceRef): Promise<ModelSettingsSnapshot>;

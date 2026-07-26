@@ -1,4 +1,4 @@
-import type { SessionTranscriptMessage, SessionTranscriptRole } from "@pi-gui/session-driver";
+import type { SessionTranscriptMessage, SessionTranscriptRole } from "@alamelu-pi/session-driver";
 
 export type SessionRole = SessionTranscriptRole;
 export type TimelineTone = "neutral" | "success" | "warning" | "error";

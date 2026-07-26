@@ -37,7 +37,7 @@ No source change may be committed or installed until an Implementation Audit PAS
 
 - Test-first red: both new-session tests failed against the previous build: the driver requested a locally generated UUID and silently fell back to it when `get_state` had no Pi session ID.
 - Focused green: both new-session tests pass after the change.
-- Full driver regression: `pnpm --filter @pi-gui/pi-rpc-driver test` — 41 passed.
-- Desktop integration: `pnpm --filter @pi-gui/desktop run typecheck` and `pnpm --filter @pi-gui/desktop run build` — passed.
+- Full driver regression: `pnpm --filter @alamelu-pi/pi-rpc-driver test` — 41 passed.
+- Desktop integration: `pnpm --filter @alamelu-pi/desktop run typecheck` and `pnpm --filter @alamelu-pi/desktop run build` — passed.
 - Focused external-runtime UI regression: `provider-settings.spec.ts` “thin external runtime saves an API key through installed Pi” — passed.
 - Live external-Pi verification, using temporary user-data/session/workspace state and the app's normal external executable/agent settings: a fresh session selected `openai-codex/gpt-5.6-luna` at `xhigh` and returned the expected `ALPI_LUNA_RPC_OK` response. A separate non-sensitive state check confirmed Pi generated a UUIDv7 identity. No credential or model-configuration file was read or modified.

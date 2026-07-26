@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type Dispatch, type DragEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
-import type { SessionTreeSnapshot } from "@pi-gui/session-driver/types";
-import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { SessionTreeSnapshot } from "@alamelu-pi/session-driver/types";
+import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import {
   getSelectedSession,
   getSelectedWorkspace,
@@ -119,7 +119,9 @@ function canTogglePrimarySidebar(view: AppView | undefined): boolean {
   return view === "threads" || view === "new-thread";
 }
 
-const SIDEBAR_WIDTH_STORAGE_KEY = "pi-gui.sidebarWidth";
+const SIDEBAR_WIDTH_STORAGE_KEY = "alamelu-pi.sidebarWidth";
+// Read the pre-rename key once so an existing sidebar width is not silently reset.
+const LEGACY_SIDEBAR_WIDTH_STORAGE_KEY = "pi-gui.sidebarWidth";
 const DEFAULT_SIDEBAR_WIDTH = 292;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 620;
@@ -137,7 +139,7 @@ function clampSidebarPreference(width: number): number {
 
 function getStoredSidebarWidth(): number {
   try {
-    const stored = Number.parseInt(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ?? "", 10);
+    const stored = Number.parseInt((window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_SIDEBAR_WIDTH_STORAGE_KEY)) ?? "", 10);
     return Number.isFinite(stored) ? clampSidebarPreference(stored) : DEFAULT_SIDEBAR_WIDTH;
   } catch {
     return DEFAULT_SIDEBAR_WIDTH;

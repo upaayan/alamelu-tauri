@@ -1,6 +1,6 @@
-import type { SessionConfig } from "@pi-gui/session-driver";
-import { createEmptyExtensionUiState as createBaseExtensionUiState, type ExtensionUiState } from "@pi-gui/session-driver";
-import type { RuntimeCommandRecord } from "@pi-gui/session-driver/runtime-types";
+import type { SessionConfig } from "@alamelu-pi/session-driver";
+import { createEmptyExtensionUiState as createBaseExtensionUiState, type ExtensionUiState } from "@alamelu-pi/session-driver";
+import type { RuntimeCommandRecord } from "@alamelu-pi/session-driver/runtime-types";
 import type {
   ComposerAttachment,
   QueuedComposerMessage,

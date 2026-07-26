@@ -40,10 +40,10 @@ The lab checkout already had many Alpi/RPC-related dirty files before this imple
 Passed:
 
 ```bash
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop typecheck
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop build
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/core/new-thread-composer.spec.ts apps/desktop/tests/core/sidebar-ordering.spec.ts
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/native/open-folder.spec.ts
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop typecheck
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop build
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/new-thread-composer.spec.ts apps/desktop/tests/core/sidebar-ordering.spec.ts
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/native/open-folder.spec.ts
 PI_APP_PACKAGE_FLAVOR=alpi PI_APP_REQUIRED_PI_CODING_AGENT_VERSION=0.78.0 PI_APP_REQUIRED_ANTHROPIC_OPUS_MODEL_ID=claude-opus-4-8 node apps/desktop/scripts/assert-packaged-runtime-deps.mjs
 codesign --verify --deep --strict --verbose=2 "/Applications/Alamelu Pi.app"
 ```

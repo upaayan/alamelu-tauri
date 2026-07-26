@@ -87,29 +87,29 @@ test('RpcClient emits rpc_transport_closed on stdout end and close still cleans 
 
 test('validateLabPaths expands home and rejects production state paths', () => {
   const home = '/Users/example';
-  assert.equal(expandHomePath('~/tmp/pi-gui-rpc-agent', home), '/Users/example/tmp/pi-gui-rpc-agent');
+  assert.equal(expandHomePath('~/tmp/alamelu-pi-rpc-agent', home), '/Users/example/tmp/alamelu-pi-rpc-agent');
 
   const safe = validateLabPaths(
     {
-      agentDir: '~/tmp/pi-gui-rpc-agent',
-      sessionDir: '~/tmp/pi-gui-rpc-sessions',
-      userDataDir: '~/tmp/pi-gui-rpc-user-data',
-      labWorkspace: '~/tmp/pi-gui-rpc-workspace',
+      agentDir: '~/tmp/alamelu-pi-rpc-agent',
+      sessionDir: '~/tmp/alamelu-pi-rpc-sessions',
+      userDataDir: '~/tmp/alamelu-pi-rpc-user-data',
+      labWorkspace: '~/tmp/alamelu-pi-rpc-workspace',
       productionAgentDir: '~/.pi/agent',
       productionUserDataDir: '~/Library/Application Support/pi-gui',
     },
     { homeDir: home },
   );
-  assert.equal(safe.agentDir, '/Users/example/tmp/pi-gui-rpc-agent');
-  assert.equal(safe.sessionDir, '/Users/example/tmp/pi-gui-rpc-sessions');
+  assert.equal(safe.agentDir, '/Users/example/tmp/alamelu-pi-rpc-agent');
+  assert.equal(safe.sessionDir, '/Users/example/tmp/alamelu-pi-rpc-sessions');
 
   assert.throws(
     () => validateLabPaths(
       {
         agentDir: '~/.pi/agent/lab',
-        sessionDir: '~/tmp/pi-gui-rpc-sessions',
-        userDataDir: '~/tmp/pi-gui-rpc-user-data',
-        labWorkspace: '~/tmp/pi-gui-rpc-workspace',
+        sessionDir: '~/tmp/alamelu-pi-rpc-sessions',
+        userDataDir: '~/tmp/alamelu-pi-rpc-user-data',
+        labWorkspace: '~/tmp/alamelu-pi-rpc-workspace',
         productionAgentDir: '~/.pi/agent',
         productionUserDataDir: '~/Library/Application Support/pi-gui',
       },
@@ -123,13 +123,13 @@ test('validateLabPaths rejects non-lab workspaces unless explicitly allowed', ()
   assert.throws(
     () => validateLabPaths(
       {
-        agentDir: '~/tmp/pi-gui-rpc-agent',
-        sessionDir: '~/tmp/pi-gui-rpc-sessions',
-        userDataDir: '~/tmp/pi-gui-rpc-user-data',
+        agentDir: '~/tmp/alamelu-pi-rpc-agent',
+        sessionDir: '~/tmp/alamelu-pi-rpc-sessions',
+        userDataDir: '~/tmp/alamelu-pi-rpc-user-data',
         labWorkspace: '~/playground/alamelu',
         productionAgentDir: '~/.pi/agent',
         productionUserDataDir: '~/Library/Application Support/pi-gui',
-        expectedLabWorkspaceRoot: '~/tmp/pi-gui-rpc-workspace',
+        expectedLabWorkspaceRoot: '~/tmp/alamelu-pi-rpc-workspace',
       },
       { homeDir: '/Users/example' },
     ),
@@ -141,10 +141,10 @@ test('validateLabPaths uses a production userData default when omitted', () => {
   assert.throws(
     () => validateLabPaths(
       {
-        agentDir: '~/tmp/pi-gui-rpc-agent',
-        sessionDir: '~/tmp/pi-gui-rpc-sessions',
+        agentDir: '~/tmp/alamelu-pi-rpc-agent',
+        sessionDir: '~/tmp/alamelu-pi-rpc-sessions',
         userDataDir: '~/Library/Application Support/pi-gui/lab',
-        labWorkspace: '~/tmp/pi-gui-rpc-workspace',
+        labWorkspace: '~/tmp/alamelu-pi-rpc-workspace',
         productionAgentDir: '~/.pi/agent',
       },
       { homeDir: '/Users/example' },
@@ -227,9 +227,9 @@ test('spawnPiRpcClient rejects PATH-relative pi binaries', () => {
   assert.throws(
     () => spawnPiRpcClient({
       piBin: 'pi',
-      cwd: '/tmp/pi-gui-rpc-workspace',
-      agentDir: '/tmp/pi-gui-rpc-agent',
-      sessionDir: '/tmp/pi-gui-rpc-sessions',
+      cwd: '/tmp/alamelu-pi-rpc-workspace',
+      agentDir: '/tmp/alamelu-pi-rpc-agent',
+      sessionDir: '/tmp/alamelu-pi-rpc-sessions',
     }),
     /resolved absolute pi binary/,
   );
@@ -242,7 +242,7 @@ test('validateLabPaths rejects production userData even when real Pi state is al
         agentDir: '~/.pi/agent',
         sessionDir: '~/.pi/agent/sessions',
         userDataDir: '~/Library/Application Support/pi-gui/lab',
-        labWorkspace: '~/tmp/pi-gui-rpc-workspace',
+        labWorkspace: '~/tmp/alamelu-pi-rpc-workspace',
         productionAgentDir: '~/.pi/agent',
         productionUserDataDir: '~/Library/Application Support/pi-gui',
         allowRealPiState: true,
@@ -320,11 +320,11 @@ test('PiRpcDriver rejects createSession workspace paths outside the lab workspac
   const { createPiRpcDriver } = await import('../dist/index.js');
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => { throw new Error('should not spawn'); },
@@ -468,17 +468,17 @@ test('PiRpcDriver emits runFailed and returns to idle when prompt command fails'
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await assert.rejects(() => driver.sendUserMessage(snapshot.ref, { text: 'fail' }), /nope/);
@@ -492,8 +492,8 @@ test('PiRpcDriver emits runFailed and returns to idle when prompt command fails'
 test('PiRpcDriver still rejects the methods it does not implement', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   class FakeClient { onEvent() { return () => undefined; } close() {} async sendCommand(command, id) { if (command.type === 'get_state') return { type: 'response', id, command: 'get_state', success: true, data: { sessionId: 'rpc-unsupported', sessionName: 'RPC Unsupported' } }; return { type: 'response', id, command: command.type, success: true }; } }
-  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data', labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => new FakeClient() });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data', labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => new FakeClient() });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   // getSessionTree / navigateSessionTree / compactSession are implemented against pi's
   // own RPC commands (see tree-compact.test.mjs); these three remain unimplemented.
   await assert.rejects(() => driver.archiveSession(snapshot.ref), /not supported/);
@@ -505,8 +505,8 @@ test('PiRpcDriver maps steer and followUp delivery modes while a session is runn
   const { createPiRpcDriver } = await import('../dist/index.js');
   const commands = [];
   class FakeClient { onEvent() { return () => undefined; } close() {} async sendCommand(command, id) { commands.push(command); if (command.type === 'get_state') return { type: 'response', id, command: 'get_state', success: true, data: { sessionId: 'rpc-delivery-mode', sessionName: 'RPC Delivery Mode' } }; return { type: 'response', id, command: command.type, success: true }; } }
-  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data', labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => new FakeClient() });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data', labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => new FakeClient() });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   await assert.rejects(() => driver.sendUserMessage(snapshot.ref, { text: 'too early', deliverAs: 'steer' }), /require a running session/);
   await driver.sendUserMessage(snapshot.ref, { text: 'first' });
   await driver.sendUserMessage(snapshot.ref, { text: 'steer', deliverAs: 'steer' });
@@ -517,8 +517,8 @@ test('PiRpcDriver maps steer and followUp delivery modes while a session is runn
 test('PiRpcDriver rejects a second user message while a run is active', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   class FakeClient { onEvent() { return () => undefined; } close() {} async sendCommand(command, id) { if (command.type === 'get_state') return { type: 'response', id, command: 'get_state', success: true, data: { sessionId: 'rpc-reentrant', sessionName: 'RPC Reentrant' } }; if (command.type === 'prompt') return { type: 'response', id, command: 'prompt', success: true }; return { type: 'response', id, command: command.type, success: true }; } }
-  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data', labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => new FakeClient() });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data', labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => new FakeClient() });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   await driver.sendUserMessage(snapshot.ref, { text: 'first' });
   await assert.rejects(() => driver.sendUserMessage(snapshot.ref, { text: 'second' }), /already running/);
 });
@@ -537,17 +537,17 @@ test('PiRpcDriver cancel success returns running session to idle and emits runCa
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'hang' });
@@ -575,17 +575,17 @@ test('PiRpcDriver cancel failure closes client and returns session to idle', asy
   }();
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => fake,
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'hang' });
@@ -613,17 +613,17 @@ test('PiRpcDriver marks transport close during active run as failed and idle', a
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'crash' });
@@ -649,17 +649,17 @@ test('PiRpcDriver suppresses stale deltas after cancellation', async () => {
   const fake = new FakeClient();
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => fake,
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'hang' });
@@ -688,17 +688,17 @@ test('PiRpcDriver suppresses stale deltas after stream failure', async () => {
   const fake = new FakeClient();
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => fake,
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'fail' });
@@ -721,8 +721,8 @@ test('PiRpcDriver suppresses stale agent_start after cancellation', async () => 
     }
   }
   const fake = new FakeClient();
-  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data', labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', now: () => '2026-01-01T00:00:00.000Z', rpcClientFactory: () => fake });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data', labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', now: () => '2026-01-01T00:00:00.000Z', rpcClientFactory: () => fake });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'hang' });
@@ -736,16 +736,16 @@ test('PiRpcDriver suppresses stale agent_start after cancellation', async () => 
 test('PiRpcDriver closes client if createSession setup get_state fails', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   const fake = new class { closed = false; onEvent() { return () => undefined; } close() { this.closed = true; } async sendCommand(command, id) { return { type: 'response', id, command: command.type, success: false, error: 'setup failed' }; } }();
-  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data', labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => fake });
-  await assert.rejects(() => driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' }), /setup failed/);
+  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data', labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => fake });
+  await assert.rejects(() => driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' }), /setup failed/);
   assert.equal(fake.closed, true);
 });
 
 test('PiRpcDriver closes client if createSession initial model setup fails', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   const fake = new class { closed = false; onEvent() { return () => undefined; } close() { this.closed = true; } async sendCommand(command, id) { if (command.type === 'get_state') return { type: 'response', id, command: 'get_state', success: true, data: { sessionId: 'setup-model' } }; return { type: 'response', id, command: command.type, success: false, error: 'model failed' }; } }();
-  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data', labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => fake });
-  await assert.rejects(() => driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' }, { initialModel: { provider: 'xai', modelId: 'bad' } }), /model failed/);
+  const driver = createPiRpcDriver({ piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data', labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace', productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui', rpcClientFactory: () => fake });
+  await assert.rejects(() => driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' }, { initialModel: { provider: 'xai', modelId: 'bad' } }), /model failed/);
   assert.equal(fake.closed, true);
 });
 
@@ -781,17 +781,17 @@ test('PiRpcDriver marks stream errors failed and suppresses later completion', a
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'explode' });
@@ -829,17 +829,17 @@ test('PiRpcDriver keeps the run active across Pi retry after a finalized assista
   const fake = new FakeClient();
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => fake,
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
 
@@ -877,17 +877,17 @@ test('PiRpcDriver reports a finalized assistant error only after Pi declines to 
   const fake = new FakeClient();
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => fake,
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
 
@@ -928,13 +928,13 @@ test('PiRpcDriver internally reopens a successful Luna thread before its next pr
   const contexts = [];
   const clients = [first, second];
   const driver = createPiRpcDriver({
-    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: (context) => { contexts.push(context); return clients.shift(); },
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
   );
 
@@ -982,13 +982,13 @@ test('PiRpcDriver lets Pi finish a Luna retry, then rotates the recovered child 
   const replacement = new FakeClient('FRESH');
   const clients = [retrying, replacement];
   const driver = createPiRpcDriver({
-    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => clients.shift(),
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
   );
   const events = [];
@@ -1030,13 +1030,13 @@ test('PiRpcDriver leaves Sol and Terra children running across successful idle p
   const client = new FakeClient();
   let factoryCalls = 0;
   const driver = createPiRpcDriver({
-    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => { factoryCalls += 1; return client; },
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-terra' }, initialThinkingLevel: 'xhigh' },
   );
   await driver.sendUserMessage(snapshot.ref, { text: 'Terra first' });
@@ -1079,13 +1079,13 @@ test('PiRpcDriver keeps the previous Luna child intact if its internal reopen fa
   const laterReplacement = new FakeClient('later-replacement');
   const clients = [original, failedReplacement, laterReplacement];
   const driver = createPiRpcDriver({
-    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => clients.shift(),
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
   );
   await driver.sendUserMessage(snapshot.ref, { text: 'first turn makes child recyclable' });
@@ -1134,13 +1134,13 @@ test('PiRpcDriver waits for an internal Luna reopen before sending a concurrent 
   const replacement = new FakeClient('replacement');
   const clients = [original, replacement];
   const driver = createPiRpcDriver({
-    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => clients.shift(),
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
   );
   await driver.sendUserMessage(snapshot.ref, { text: 'first turn' });
@@ -1190,13 +1190,13 @@ test('PiRpcDriver rejects a model change queued after the replacement prompt has
   const replacement = new FakeClient('replacement');
   const clients = [original, replacement];
   const driver = createPiRpcDriver({
-    piBin: '/usr/local/bin/pi', agentDir: '/tmp/pi-gui-rpc-agent', sessionDir: '/tmp/pi-gui-rpc-sessions', userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => clients.shift(),
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
   );
   await driver.sendUserMessage(snapshot.ref, { text: 'first turn' });
@@ -1276,18 +1276,18 @@ test('PiRpcDriver replaces only a tainted Luna child before the next prompt and 
   const clients = [initial, replacement];
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: (context) => { factoryContexts.push(context); return clients.shift(); },
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' },
+    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-luna' }, initialThinkingLevel: 'xhigh' },
   );
   const events = [];
@@ -1390,18 +1390,18 @@ test('PiRpcDriver creates a chat session and maps fake RPC stream into driver ev
   const fake = new FakeClient();
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     now: () => '2026-01-01T00:00:00.000Z',
     rpcClientFactory: () => fake,
   });
 
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   assert.equal(snapshot.ref.sessionId, 'rpc-s1');
   assert.equal(snapshot.title, 'RPC Test');
 
@@ -1442,16 +1442,16 @@ test('PiRpcDriver getTranscript loads user and assistant messages from RPC get_m
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const transcript = await driver.getTranscript(snapshot.ref);
   assert.deepEqual(transcript, [
     { role: 'user', text: 'Hello RPC' },
@@ -1473,16 +1473,16 @@ test('PiRpcDriver getTranscript falls back to last assistant text when RPC messa
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   assert.deepEqual(await driver.getTranscript(snapshot.ref), [{ role: 'assistant', text: 'Fallback assistant text' }]);
 });
 
@@ -1549,16 +1549,16 @@ test('PiRpcDriver ignores benign closed-pipe stream failures after a run is alre
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'ok' });
@@ -1588,16 +1588,16 @@ test('PiRpcDriver treats prompt EPIPE after run completion as benign', async () 
   }
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
-    agentDir: '/tmp/pi-gui-rpc-agent',
-    sessionDir: '/tmp/pi-gui-rpc-sessions',
-    userDataDir: '/tmp/pi-gui-rpc-user-data',
-    labWorkspace: '/tmp/pi-gui-rpc-workspace',
-    expectedLabWorkspaceRoot: '/tmp/pi-gui-rpc-workspace',
+    agentDir: '/tmp/alamelu-pi-rpc-agent',
+    sessionDir: '/tmp/alamelu-pi-rpc-sessions',
+    userDataDir: '/tmp/alamelu-pi-rpc-user-data',
+    labWorkspace: '/tmp/alamelu-pi-rpc-workspace',
+    expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
     productionAgentDir: '/Users/example/.pi/agent',
     productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
     rpcClientFactory: () => new FakeClient(),
   });
-  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/pi-gui-rpc-workspace' });
+  const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
   await driver.sendUserMessage(snapshot.ref, { text: 'ok' });

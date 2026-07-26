@@ -67,9 +67,9 @@ packaging unit test.
 - `node --no-warnings --experimental-strip-types --test
   apps/desktop/tests/unit/alpi-luna-websocket-recovery.test.mjs
   apps/desktop/tests/unit/alpi-packaging.test.mjs` — 3 passed.
-- `pnpm --filter @pi-gui/pi-rpc-driver test` — 44 passed.
-- `pnpm --filter @pi-gui/desktop run typecheck` — passed.
-- `pnpm --filter @pi-gui/desktop run build` — passed.
+- `pnpm --filter @alamelu-pi/pi-rpc-driver test` — 44 passed.
+- `pnpm --filter @alamelu-pi/desktop run typecheck` — passed.
+- `pnpm --filter @alamelu-pi/desktop run build` — passed.
 - `git diff --check` — passed.
 - External-Pi child smoke: a fresh temporary `pi --mode rpc` child loaded the
   explicit `.ts` extension and answered `get_state` successfully.  The smoke
@@ -81,18 +81,18 @@ packaging unit test.
 Implementation Audit Round 1 passed before packaging.
 
 - The only signing command used was
-  `pnpm --filter @pi-gui/desktop run package:alpi:dir`.  It completed the
+  `pnpm --filter @alamelu-pi/desktop run package:alpi:dir`.  It completed the
   documented AWS-backed explicit-keychain / identity-hash route without an
   interactive Apple password prompt.
 - The signed candidate passed `codesign --verify --deep --strict`; its bundle
   identity is `com.alamelu.pi`, its name is `Alamelu Pi`, and its executable is
   `alpi`.
-- `PI_APP_PACKAGE_FLAVOR=alpi pnpm --filter @pi-gui/desktop run
+- `PI_APP_PACKAGE_FLAVOR=alpi pnpm --filter @alamelu-pi/desktop run
   verify:packaged-runtime-deps` passed, proving the candidate still uses the
   external Pi runtime and does not package Pi itself.
 - The packaged `.ts` recovery resource loaded successfully inside a fresh
   external Pi RPC child and returned a successful state response.
-- `pnpm --filter @pi-gui/desktop run smoke:alpi:candidate` passed with an
+- `pnpm --filter @alamelu-pi/desktop run smoke:alpi:candidate` passed with an
   isolated copied app state and external Pi runtime.
 - The prior installed app was preserved at
   `/Applications/Alamelu Pi.app.before-luna-ws-recovery-20260711`, then the

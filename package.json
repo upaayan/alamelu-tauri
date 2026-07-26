@@ -9,10 +9,10 @@
     "node": ">=22.19.0"
   },
   "scripts": {
-    "build": "pnpm --filter @pi-gui/desktop run build",
-    "typecheck": "pnpm --filter @pi-gui/desktop run typecheck",
-    "package:alpi:dir": "pnpm --filter @pi-gui/desktop run package:alpi:dir",
-    "verify:external-runtime": "pnpm --filter @pi-gui/desktop run verify:external-runtime",
-    "verify:packaged-runtime-deps": "pnpm --filter @pi-gui/desktop run verify:packaged-runtime-deps"
+    "build": "pnpm --filter @alamelu-pi/desktop run build",
+    "typecheck": "pnpm --filter @alamelu-pi/desktop run typecheck",
+    "package:alpi:dir": "pnpm --filter @alamelu-pi/desktop run package:alpi:dir",
+    "verify:external-runtime": "pnpm --filter @alamelu-pi/desktop run verify:external-runtime",
+    "verify:packaged-runtime-deps": "pnpm --filter @alamelu-pi/desktop run verify:packaged-runtime-deps"
   }
 }

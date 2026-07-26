@@ -43,10 +43,10 @@ import type {
   StartThreadInput,
   WorkspaceSessionTarget,
 } from "../src/desktop-state";
-import type { SessionDriverEvent } from "@pi-gui/session-driver";
-import type { GenerateThreadTitleOptions } from "@pi-gui/session-driver";
-import type { WorkspaceRef } from "@pi-gui/session-driver";
-import type { RuntimeLoginAuthInfo, RuntimeLoginCallbacks } from "@pi-gui/session-driver/runtime-types";
+import type { SessionDriverEvent } from "@alamelu-pi/session-driver";
+import type { GenerateThreadTitleOptions } from "@alamelu-pi/session-driver";
+import type { WorkspaceRef } from "@alamelu-pi/session-driver";
+import type { RuntimeLoginAuthInfo, RuntimeLoginCallbacks } from "@alamelu-pi/session-driver/runtime-types";
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 const windowTestMode = resolveWindowTestMode();

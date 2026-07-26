@@ -1,7 +1,7 @@
 import { access, constants, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { RuntimeLoginCallbacks } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeLoginCallbacks } from "@alamelu-pi/session-driver/runtime-types";
 
 export interface ExternalPiAuthStatus {
   readonly configured: boolean;

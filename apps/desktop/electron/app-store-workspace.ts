@@ -1,4 +1,4 @@
-import { sessionKey } from "@pi-gui/session-driver";
+import { sessionKey } from "@alamelu-pi/session-driver";
 import type { CreateSessionInput, DesktopAppState, WorkspaceSessionTarget } from "../src/desktop-state";
 import { toSessionRef } from "./app-store-utils";
 import type { AppStoreInternals, RefreshStateOptions } from "./app-store-internals";

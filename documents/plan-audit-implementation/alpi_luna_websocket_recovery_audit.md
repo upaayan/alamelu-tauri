@@ -48,7 +48,7 @@ Independent verification in this audit:
 - `node --no-warnings --experimental-strip-types --test
   apps/desktop/tests/unit/alpi-luna-websocket-recovery.test.mjs
   apps/desktop/tests/unit/alpi-packaging.test.mjs` — 3 passed.
-- `pnpm --filter @pi-gui/pi-rpc-driver test` — 44 passed.
+- `pnpm --filter @alamelu-pi/pi-rpc-driver test` — 44 passed.
 - `git diff --check` — passed.
 
 The implementation satisfies the requested repair and is cleared for the

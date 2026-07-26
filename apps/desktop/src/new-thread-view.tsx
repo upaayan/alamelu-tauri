@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
-import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type { ComposerAttachment, NewThreadEnvironment, WorkspaceRecord } from "./desktop-state";
 import { AlameluPiLogoMark, ArrowUpIcon, PlusIcon } from "./icons";
 import {

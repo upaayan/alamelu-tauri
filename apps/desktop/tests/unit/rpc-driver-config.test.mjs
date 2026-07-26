@@ -34,21 +34,21 @@ test('resolveDesktopDriverConfig accepts rpc only with fully isolated lab paths'
     {
       PI_GUI_DRIVER: 'rpc',
       PI_GUI_PI_BIN: '/Users/example/.pi/agent/bin/pi',
-      PI_CODING_AGENT_DIR: '~/tmp/pi-gui-rpc-agent',
-      PI_CODING_AGENT_SESSION_DIR: '~/tmp/pi-gui-rpc-sessions',
-      PI_GUI_USER_DATA_DIR: '~/tmp/pi-gui-rpc-user-data',
-      PI_GUI_LAB_WORKSPACE: '~/tmp/pi-gui-rpc-workspace',
+      PI_CODING_AGENT_DIR: '~/tmp/alamelu-pi-rpc-agent',
+      PI_CODING_AGENT_SESSION_DIR: '~/tmp/alamelu-pi-rpc-sessions',
+      PI_GUI_USER_DATA_DIR: '~/tmp/alamelu-pi-rpc-user-data',
+      PI_GUI_LAB_WORKSPACE: '~/tmp/alamelu-pi-rpc-workspace',
       PI_GUI_RPC_PROVIDER: 'xai',
       PI_GUI_RPC_MODEL: 'grok-code-fast-1',
     },
     { homeDir: '/Users/example', defaultUserDataDir: '/Users/example/Library/Application Support/pi-gui' },
   );
   assert.equal(config.driver, 'rpc');
-  assert.equal(config.userDataDir, '/Users/example/tmp/pi-gui-rpc-user-data');
+  assert.equal(config.userDataDir, '/Users/example/tmp/alamelu-pi-rpc-user-data');
   assert.equal(config.rpc.piBin, '/Users/example/.pi/agent/bin/pi');
-  assert.equal(config.rpc.agentDir, '/Users/example/tmp/pi-gui-rpc-agent');
-  assert.equal(config.rpc.sessionDir, '/Users/example/tmp/pi-gui-rpc-sessions');
-  assert.equal(config.rpc.labWorkspace, '/Users/example/tmp/pi-gui-rpc-workspace');
+  assert.equal(config.rpc.agentDir, '/Users/example/tmp/alamelu-pi-rpc-agent');
+  assert.equal(config.rpc.sessionDir, '/Users/example/tmp/alamelu-pi-rpc-sessions');
+  assert.equal(config.rpc.labWorkspace, '/Users/example/tmp/alamelu-pi-rpc-workspace');
   assert.equal(config.rpc.productionUserDataDir, '/Users/example/Library/Application Support/pi-gui');
   assert.equal(config.rpc.provider, 'xai');
   assert.equal(config.rpc.model, 'grok-code-fast-1');
@@ -60,9 +60,9 @@ test('resolveDesktopDriverConfig rejects rpc without explicit lab userData', () 
       {
         PI_GUI_DRIVER: 'rpc',
         PI_GUI_PI_BIN: '/Users/example/.pi/agent/bin/pi',
-        PI_CODING_AGENT_DIR: '~/tmp/pi-gui-rpc-agent',
-        PI_CODING_AGENT_SESSION_DIR: '~/tmp/pi-gui-rpc-sessions',
-        PI_GUI_LAB_WORKSPACE: '~/tmp/pi-gui-rpc-workspace',
+        PI_CODING_AGENT_DIR: '~/tmp/alamelu-pi-rpc-agent',
+        PI_CODING_AGENT_SESSION_DIR: '~/tmp/alamelu-pi-rpc-sessions',
+        PI_GUI_LAB_WORKSPACE: '~/tmp/alamelu-pi-rpc-workspace',
       },
       { homeDir: '/Users/example', defaultUserDataDir: '/Users/example/Library/Application Support/pi-gui' },
     ),
@@ -77,9 +77,9 @@ test('resolveDesktopDriverConfig rejects rpc paths that resolve into production 
         PI_GUI_DRIVER: 'rpc',
         PI_GUI_PI_BIN: '/Users/example/.pi/agent/bin/pi',
         PI_CODING_AGENT_DIR: '~/.pi/agent',
-        PI_CODING_AGENT_SESSION_DIR: '~/tmp/pi-gui-rpc-sessions',
-        PI_GUI_USER_DATA_DIR: '~/tmp/pi-gui-rpc-user-data',
-        PI_GUI_LAB_WORKSPACE: '~/tmp/pi-gui-rpc-workspace',
+        PI_CODING_AGENT_SESSION_DIR: '~/tmp/alamelu-pi-rpc-sessions',
+        PI_GUI_USER_DATA_DIR: '~/tmp/alamelu-pi-rpc-user-data',
+        PI_GUI_LAB_WORKSPACE: '~/tmp/alamelu-pi-rpc-workspace',
       },
       { homeDir: '/Users/example', defaultUserDataDir: '/Users/example/Library/Application Support/pi-gui' },
     ),
@@ -200,10 +200,10 @@ test('resolveDesktopDriverConfig rejects relative pi binary in rpc mode', () => 
       {
         PI_GUI_DRIVER: 'rpc',
         PI_GUI_PI_BIN: 'pi',
-        PI_CODING_AGENT_DIR: '~/tmp/pi-gui-rpc-agent',
-        PI_CODING_AGENT_SESSION_DIR: '~/tmp/pi-gui-rpc-sessions',
-        PI_GUI_USER_DATA_DIR: '~/tmp/pi-gui-rpc-user-data',
-        PI_GUI_LAB_WORKSPACE: '~/tmp/pi-gui-rpc-workspace',
+        PI_CODING_AGENT_DIR: '~/tmp/alamelu-pi-rpc-agent',
+        PI_CODING_AGENT_SESSION_DIR: '~/tmp/alamelu-pi-rpc-sessions',
+        PI_GUI_USER_DATA_DIR: '~/tmp/alamelu-pi-rpc-user-data',
+        PI_GUI_LAB_WORKSPACE: '~/tmp/alamelu-pi-rpc-workspace',
       },
       { homeDir: '/Users/example', defaultUserDataDir: '/Users/example/Library/Application Support/pi-gui' },
     ),

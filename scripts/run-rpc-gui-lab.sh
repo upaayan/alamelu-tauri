@@ -27,10 +27,10 @@ USAGE
 done
 
 LAB_BASE="${PI_GUI_RPC_LAB_BASE:-$HOME/tmp}"
-AGENT_DIR="${PI_CODING_AGENT_DIR:-$LAB_BASE/pi-gui-rpc-agent}"
-SESSION_DIR="${PI_CODING_AGENT_SESSION_DIR:-$LAB_BASE/pi-gui-rpc-sessions}"
-USER_DATA_DIR="${PI_GUI_USER_DATA_DIR:-$LAB_BASE/pi-gui-rpc-user-data}"
-LAB_WORKSPACE="${PI_GUI_LAB_WORKSPACE:-$LAB_BASE/pi-gui-rpc-workspace}"
+AGENT_DIR="${PI_CODING_AGENT_DIR:-$LAB_BASE/alamelu-pi-rpc-agent}"
+SESSION_DIR="${PI_CODING_AGENT_SESSION_DIR:-$LAB_BASE/alamelu-pi-rpc-sessions}"
+USER_DATA_DIR="${PI_GUI_USER_DATA_DIR:-$LAB_BASE/alamelu-pi-rpc-user-data}"
+LAB_WORKSPACE="${PI_GUI_LAB_WORKSPACE:-$LAB_BASE/alamelu-pi-rpc-workspace}"
 PRODUCTION_AGENT_DIR="$HOME/.pi/agent"
 PRODUCTION_USER_DATA_DIR="$HOME/Library/Application Support/pi"
 PI_BIN="${PI_GUI_PI_BIN:-$HOME/.pi/agent/bin/pi}"
@@ -118,7 +118,7 @@ else
 fi
 
 if [ "$BUILD" = "1" ] || [ ! -f "$ROOT/apps/desktop/out/main/main.js" ]; then
-  npx --yes pnpm@10.25.0 --filter @pi-gui/desktop build
+  npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop build
 fi
 
 export PI_GUI_DRIVER=rpc

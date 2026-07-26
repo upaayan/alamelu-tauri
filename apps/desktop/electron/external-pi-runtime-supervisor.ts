@@ -2,8 +2,8 @@ import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { access, chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { buildPiRpcPathEnv, resolvePiRpcSpawnCommand } from "@pi-gui/pi-rpc-driver";
-import type { WorkspaceRef } from "@pi-gui/session-driver";
+import { buildPiRpcPathEnv, resolvePiRpcSpawnCommand } from "@alamelu-pi/pi-rpc-driver";
+import type { WorkspaceRef } from "@alamelu-pi/session-driver";
 import type {
   ModelSettingsSnapshot,
   RuntimeExtensionRecord,
@@ -13,7 +13,7 @@ import type {
   RuntimeSettingsSnapshot,
   RuntimeSkillRecord,
   RuntimeSnapshot,
-} from "@pi-gui/session-driver/runtime-types";
+} from "@alamelu-pi/session-driver/runtime-types";
 import type { DesktopRuntimeSupervisor } from "./desktop-driver";
 import { unsupportedRpcDesktopOperation } from "./desktop-driver";
 import {

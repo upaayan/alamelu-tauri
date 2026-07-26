@@ -1,5 +1,5 @@
 {
-  "name": "@pi-gui/catalogs",
+  "name": "@alamelu-pi/catalogs",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -20,7 +20,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@pi-gui/session-driver": "workspace:*"
+    "@alamelu-pi/session-driver": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -13,6 +13,11 @@ import path from "node:path";
 
 export const PATCH_MARKER = "alpi-patch:toolcallid-v1";
 
+// pi 0.82.1 fixed this upstream by folding the item id into the normalised id and
+// hashing when it overflows. When that implementation is present the library is
+// already collision-safe and must NOT be patched.
+const UPSTREAM_FIX_SIGNATURE = "const combinedId = itemId.length > 0";
+
 const COMPOSITE_ORIG = `        if (id.includes("|")) {
             const [callId] = id.split("|");
             // Sanitize to allowed chars and truncate to 40 chars (OpenAI limit)
@@ -65,12 +70,22 @@ export function readPiVersion(piBin) {
   return String(JSON.parse(fs.readFileSync(pkgJson, "utf8")).version ?? "");
 }
 
-/** "patched" | "unpatched" | "drifted" — drifted means pi's source no longer matches. */
+/**
+ * "patched" (ours) | "fixed-upstream" (pi fixed it itself) | "unpatched" | "drifted".
+ * Both "patched" and "fixed-upstream" mean sibling tool-call ids stay distinct.
+ */
 export function checkPiAiPatch(target) {
   const src = fs.readFileSync(target, "utf8");
   if (src.includes(PATCH_MARKER)) return "patched";
+  if (src.includes(UPSTREAM_FIX_SIGNATURE)) return "fixed-upstream";
   if (src.includes(COMPOSITE_ORIG) && src.includes(OPENAI_ORIG)) return "unpatched";
   return "drifted";
+}
+
+/** True when tool-call ids cannot collide — by our patch or pi's own fix. */
+export function isCollisionSafe(target) {
+  const state = checkPiAiPatch(target);
+  return state === "patched" || state === "fixed-upstream";
 }
 
 /**
@@ -79,6 +94,7 @@ export function checkPiAiPatch(target) {
  */
 export function shouldReapplyPatch(storedVersion, currentVersion, state) {
   if (state === "drifted") return false;
+  if (state === "fixed-upstream") return false; // pi fixed it; patching would be vandalism
   if (state === "unpatched") return true;
   return storedVersion !== currentVersion;
 }
@@ -87,7 +103,7 @@ export function shouldReapplyPatch(storedVersion, currentVersion, state) {
 export function applyPiAiPatch(target) {
   const src = fs.readFileSync(target, "utf8");
   const state = checkPiAiPatch(target);
-  if (state === "patched") return { changed: false, state };
+  if (state === "patched" || state === "fixed-upstream") return { changed: false, state };
   if (state === "drifted") {
     throw new Error("Installed pi-ai does not match the expected unpatched source; refusing to patch.");
   }

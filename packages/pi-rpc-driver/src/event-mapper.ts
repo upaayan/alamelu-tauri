@@ -1,4 +1,4 @@
-import type { HostUiRequest, SessionDriverEvent, SessionRef, SessionSnapshot } from "@pi-gui/session-driver";
+import type { HostUiRequest, SessionDriverEvent, SessionRef, SessionSnapshot } from "@alamelu-pi/session-driver";
 import type { RpcEvent } from "./rpc-client.js";
 
 export interface EventMappingContext {

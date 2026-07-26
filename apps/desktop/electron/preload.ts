@@ -16,11 +16,11 @@ import type {
   NavigateSessionTreeOptions,
   NavigateSessionTreeResult,
   SessionTreeSnapshot,
-} from "@pi-gui/session-driver/types";
+} from "@alamelu-pi/session-driver/types";
 import type {
   HostUiResponse,
-} from "@pi-gui/session-driver";
-import type { RuntimeSettingsSnapshot } from "@pi-gui/session-driver/runtime-types";
+} from "@alamelu-pi/session-driver";
+import type { RuntimeSettingsSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type {
   AppView,
   ComposerAttachment,

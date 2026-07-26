@@ -43,7 +43,7 @@ The seeded test key is fake, pi really calls OpenAI, and the 401 lands in `lastE
 
 ## D — packaged, signed and installed
 
-Backup taken first: `/Applications/Alamelu Pi.app.backup-20260726` (the Jul 20 build). Packaged via the sanctioned path only — `pnpm --filter @pi-gui/desktop run package:alpi:dir`, AWS-Secrets-Manager-backed keychain unlock and identity-hash signing. No Apple password prompt, no alternate signing path.
+Backup taken first: `/Applications/Alamelu Pi.app.backup-20260726` (the Jul 20 build). Packaged via the sanctioned path only — `pnpm --filter @alamelu-pi/desktop run package:alpi:dir`, AWS-Secrets-Manager-backed keychain unlock and identity-hash signing. No Apple password prompt, no alternate signing path.
 
 ```
 alpi.app: replacing existing signature

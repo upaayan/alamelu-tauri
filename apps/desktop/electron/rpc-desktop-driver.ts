@@ -1,7 +1,7 @@
 import { basename } from "node:path";
-import { JsonCatalogStore } from "@pi-gui/catalogs";
-import { canonicalizePath, pathContains, PiRpcDriver, validateLabPaths, type PiRpcDriverOptions, type ValidatedLabPaths } from "@pi-gui/pi-rpc-driver";
-import type { SessionCatalogEntry, WorkspaceCatalogEntry, WorkspaceId } from "@pi-gui/catalogs";
+import { JsonCatalogStore } from "@alamelu-pi/catalogs";
+import { canonicalizePath, pathContains, PiRpcDriver, validateLabPaths, type PiRpcDriverOptions, type ValidatedLabPaths } from "@alamelu-pi/pi-rpc-driver";
+import type { SessionCatalogEntry, WorkspaceCatalogEntry, WorkspaceId } from "@alamelu-pi/catalogs";
 import {
   sessionKey,
   type CreateSessionOptions,
@@ -20,13 +20,13 @@ import {
   type SyncWorkspaceResult,
   type Unsubscribe,
   type WorkspaceRef,
-} from "@pi-gui/session-driver";
+} from "@alamelu-pi/session-driver";
 import type {
   ModelSettingsSnapshot,
   RuntimeLoginCallbacks,
   RuntimeSettingsSnapshot,
   RuntimeSnapshot,
-} from "@pi-gui/session-driver/runtime-types";
+} from "@alamelu-pi/session-driver/runtime-types";
 import type { DesktopRuntimeSupervisor, DesktopSessionDriver } from "./desktop-driver";
 import { unsupportedRpcDesktopOperation } from "./desktop-driver";
 import { ExternalPiRuntimeSupervisor } from "./external-pi-runtime-supervisor";
@@ -156,7 +156,7 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
   subscribe(sessionRef: SessionRef, listener: SessionEventListener): Unsubscribe {
     return this.rpc.subscribe(sessionRef, (event) => {
       void this.updateCatalogForEvent(event).catch((error) => {
-        console.warn(`[pi-gui] Failed to update RPC catalog: ${error instanceof Error ? error.message : String(error)}`);
+        console.warn(`[alamelu-pi] Failed to update RPC catalog: ${error instanceof Error ? error.message : String(error)}`);
       });
       listener(event);
     });

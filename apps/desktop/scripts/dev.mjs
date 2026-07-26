@@ -9,7 +9,7 @@ const rawArgs = process.argv.slice(2);
 const extraArgs = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
 
 // pnpm uses package filters to identify workspace packages
-const packageFilters = ["@pi-gui/session-driver", "@pi-gui/pi-rpc-driver", "@pi-gui/catalogs"];
+const packageFilters = ["@alamelu-pi/session-driver", "@alamelu-pi/pi-rpc-driver", "@alamelu-pi/catalogs"];
 
 // Bun handles these manually by directory
 const packagePaths = [

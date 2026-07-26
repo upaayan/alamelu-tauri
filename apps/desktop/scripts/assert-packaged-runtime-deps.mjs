@@ -37,7 +37,7 @@ const requiredPackages = [
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopDir = path.resolve(scriptDir, "..");
 const packagePlatform = (process.env.PI_APP_PACKAGE_PLATFORM ?? process.platform).trim().toLowerCase();
-const packageFlavor = (process.env.PI_APP_PACKAGE_FLAVOR ?? "pi-gui").trim().toLowerCase();
+const packageFlavor = (process.env.PI_APP_PACKAGE_FLAVOR ?? "alpi").trim().toLowerCase();
 const packagedAppPaths = resolvePackagedAppPaths(desktopDir, packagePlatform, packageFlavor);
 const asarPath = packagedAppPaths.asarPath;
 const notificationHelperPath = packagedAppPaths.notificationHelperPath;
@@ -61,7 +61,7 @@ if (notificationHelperPath && !existsSync(notificationHelperPath)) {
   throw new Error(`Packaged app is missing notification helper: ${notificationHelperPath}`);
 }
 
-const extractedDir = mkdtempSync(path.join(tmpdir(), "pi-gui-packaged-runtime-"));
+const extractedDir = mkdtempSync(path.join(tmpdir(), "alamelu-pi-packaged-runtime-"));
 try {
   execFileSync(pnpmExecCommand, [...pnpmExecPrefix, "asar", "extract", asarPath, extractedDir], {
     cwd: desktopDir,
@@ -80,17 +80,17 @@ console.log(`Verified packaged runtime dependencies in ${asarPath}`);
 
 function resolvePackagedAppPaths(desktopDir, packagePlatform, packageFlavor) {
   if (packagePlatform === "darwin") {
-    const appName = packageFlavor === "alpi" ? "alpi.app" : "pi-gui.app";
-    const releaseDir = packageFlavor === "alpi" ? "release-alpi" : "release";
+    const appName = "alpi.app";
+    const releaseDir = "release-alpi";
     const appRoot = path.join(desktopDir, releaseDir, "mac-arm64", appName);
     return {
       asarPath: path.join(appRoot, "Contents", "Resources", "app.asar"),
-      notificationHelperPath: path.join(appRoot, "Contents", "MacOS", "pi-gui-notification-status-helper"),
+      notificationHelperPath: path.join(appRoot, "Contents", "MacOS", "alamelu-pi-notification-status-helper"),
     };
   }
 
   if (packagePlatform === "linux") {
-    const releaseDir = path.join(desktopDir, "release");
+    const releaseDir = path.join(desktopDir, "release-alpi");
     const unpackedAsarPath = readdirSync(releaseDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && /^linux(?:-[\w]+)?-unpacked$/.test(entry.name))
       .map((entry) => path.join(releaseDir, entry.name, "resources", "app.asar"))

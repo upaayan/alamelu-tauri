@@ -26,7 +26,7 @@ Audit log for `alpi_ux_repair_phase5_plan.md`. One section per review round.
 - The patch script's tri-state (`patched`/`unpatched`/`drifted`, `patch-global-pi-ai.mjs:57-61`) supports A's decision table, and preflight's marker check reads the same target file with the same layout math (`model-switch-preflight.ts:146-157`), so "drifted → no marker → preflight blocks" is internally consistent (see LOW 3 for the one missing qualifier).
 - C.5's asserted unit behaviors exist to assert: `readThreadStats` returns zeroed stats on missing file and skips malformed lines (`model-switch-preflight.ts:80-101`).
 - D's sanctioned path is real and matches the description: `package:alpi:dir` (`apps/desktop/package.json:23`) → `scripts/package-alpi-dir.mjs`, which pulls `alamelu/pi-codesign` from AWS Secrets Manager (ap-south-1), unlocks the keychain non-interactively, signs, verifies, and **throws** if the secret is missing (`:11-19`, `:48-68`, `:72-89`) — so "stop and report" is the natural failure mode. The referenced signing doc exists at `~/playground/alamelu/documents/alpi-signing-eli5.md`.
-- The gate commands all exist: two-tsconfig typecheck (`package.json:29`), `node --test apps/desktop/tests/unit/*.test.mjs`, `pnpm --filter @pi-gui/pi-rpc-driver test` (`packages/pi-rpc-driver/package.json:20`), `test:e2e:runner` `--grep` forwarding.
+- The gate commands all exist: two-tsconfig typecheck (`package.json:29`), `node --test apps/desktop/tests/unit/*.test.mjs`, `pnpm --filter @alamelu-pi/pi-rpc-driver test` (`packages/pi-rpc-driver/package.json:20`), `test:e2e:runner` `--grep` forwarding.
 - Ordering rationale (A→B→C→D, "B changes what C must assert," bundle replaced once) is sound.
 
 ### Findings

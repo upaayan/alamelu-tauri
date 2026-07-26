@@ -136,9 +136,9 @@ Minimum verification before implementation audit:
 
 ```bash
 node --test apps/desktop/tests/unit/*.test.mjs
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop typecheck
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/core/new-thread-composer.spec.ts apps/desktop/tests/core/sidebar-ordering.spec.ts
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/native/open-folder.spec.ts
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop typecheck
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/new-thread-composer.spec.ts apps/desktop/tests/core/sidebar-ordering.spec.ts
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/native/open-folder.spec.ts
 ```
 
 If the focused Playwright tests are too slow or fail for unrelated environment issues, record the actual output and run the narrower relevant test(s) plus typecheck.

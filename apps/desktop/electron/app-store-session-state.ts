@@ -1,5 +1,5 @@
-import { sessionKey } from "@pi-gui/session-driver";
-import type { SessionDriverEvent, SessionSnapshot } from "@pi-gui/session-driver";
+import { sessionKey } from "@alamelu-pi/session-driver";
+import type { SessionDriverEvent, SessionSnapshot } from "@alamelu-pi/session-driver";
 import type { DesktopAppState, SessionRecord, TranscriptMessage } from "../src/desktop-state";
 import { cloneTranscriptMessage, hasUnseenSessionUpdate, previewFromTranscript } from "./app-store-utils";
 

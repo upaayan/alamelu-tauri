@@ -1,4 +1,4 @@
-import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import { buildModelOptions } from "./composer-commands";
 
 export type ModelOnboardingSettingsSection = "models" | "providers";

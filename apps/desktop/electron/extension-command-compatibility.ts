@@ -1,4 +1,4 @@
-import type { RuntimeCommandRecord, RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeCommandRecord, RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type { ExtensionCommandCompatibilityRecord } from "../src/desktop-state";
 
 export interface PendingRuntimeCommandExecution {

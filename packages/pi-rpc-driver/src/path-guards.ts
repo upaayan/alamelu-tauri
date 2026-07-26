@@ -78,7 +78,7 @@ export function validateLabPaths(input: LabPathInput, options: LabPathValidation
   const labWorkspace = canonicalizePath(input.labWorkspace, homeDir);
   const productionAgentDir = canonicalizePath(input.productionAgentDir ?? "~/.pi/agent", homeDir);
   const productionUserDataDir = canonicalizePath(input.productionUserDataDir ?? defaultProductionUserDataDir(homeDir), homeDir);
-  const expectedLabWorkspaceRoot = canonicalizePath(input.expectedLabWorkspaceRoot ?? "~/tmp/pi-gui-rpc-workspace", homeDir);
+  const expectedLabWorkspaceRoot = canonicalizePath(input.expectedLabWorkspaceRoot ?? "~/tmp/alamelu-pi-rpc-workspace", homeDir);
 
   if (!input.allowRealPiState && pathContains(productionAgentDir, agentDir)) {
     if (!input.allowSharedAgentDir || agentDir !== productionAgentDir) {

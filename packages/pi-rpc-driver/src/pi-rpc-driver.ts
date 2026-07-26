@@ -19,8 +19,8 @@ import type {
   SessionTreeNodeSnapshot,
   Unsubscribe,
   WorkspaceRef,
-} from "@pi-gui/session-driver";
-import type { RuntimeCommandRecord } from "@pi-gui/session-driver/runtime-types";
+} from "@alamelu-pi/session-driver";
+import type { RuntimeCommandRecord } from "@alamelu-pi/session-driver/runtime-types";
 import { mapRpcEventToSessionDriverEvents } from "./event-mapper.js";
 import type { RpcClient, RpcEvent, RpcResponse } from "./rpc-client.js";
 import { spawnPiRpcClient } from "./rpc-client.js";

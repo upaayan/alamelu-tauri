@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import { filterProviders, ProviderRow, SettingsGroup } from "./settings-utils";
 
 interface SettingsProvidersSectionProps {

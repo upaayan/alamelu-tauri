@@ -1,5 +1,5 @@
 {
-  "name": "@pi-gui/pi-rpc-driver",
+  "name": "@alamelu-pi/pi-rpc-driver",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -20,7 +20,7 @@
     "test": "pnpm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@pi-gui/session-driver": "workspace:*"
+    "@alamelu-pi/session-driver": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

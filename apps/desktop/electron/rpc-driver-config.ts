@@ -1,5 +1,5 @@
 import path from "node:path";
-import { canonicalizePath, expandHomePath, validateLabPaths } from "@pi-gui/pi-rpc-driver";
+import { canonicalizePath, expandHomePath, validateLabPaths } from "@alamelu-pi/pi-rpc-driver";
 
 export type DesktopDriverKind = "sdk" | "rpc";
 

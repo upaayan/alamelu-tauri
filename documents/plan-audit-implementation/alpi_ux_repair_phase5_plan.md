@@ -65,13 +65,13 @@ All Playwright specs branded (`PI_GUI_BRAND: "alpi"`) with isolated user-data di
 ## D. Package + install (owner-visible, last)
 
 1. **Back up** `/Applications/Alamelu Pi.app` (currently dated Jul 20) before touching it — non-negotiable.
-2. Package via the sanctioned path only: `pnpm --filter @pi-gui/desktop run package:alpi:dir` with the AWS-Secrets-Manager-backed signing described in `~/playground/alamelu/documents/alpi-signing-eli5.md`. No other signing path, no keychain inspection, no command that could prompt for an Apple password.
+2. Package via the sanctioned path only: `pnpm --filter @alamelu-pi/desktop run package:alpi:dir` with the AWS-Secrets-Manager-backed signing described in `~/playground/alamelu/documents/alpi-signing-eli5.md`. No other signing path, no keychain inspection, no command that could prompt for an Apple password.
 3. Replace the bundle, launch, and verify on the real installed app: window opens, a thread loads, the model dropdown opens upward with friendly labels, and `patch-global-pi-ai --check` reports `patched`.
 4. If signing cannot complete unattended (missing secret/env), **stop and report** — do not fall back to an unsigned or differently-signed build.
 
 ## Build order & verification gates
 
-A → B → C → D, each its own commit, pushed to `upaayan`. Every round: `tsc --noEmit` (both projects), `pnpm --filter @pi-gui/desktop build`, `node --test apps/desktop/tests/unit/*.test.mjs`, `pnpm --filter @pi-gui/pi-rpc-driver test`, and the branded Playwright specs via `--grep`. Real command output pasted into `alpi_ux_repair_phase5_implementation.md`; the unbranded half of `tests/core` remains out of scope and is never claimed green.
+A → B → C → D, each its own commit, pushed to `upaayan`. Every round: `tsc --noEmit` (both projects), `pnpm --filter @alamelu-pi/desktop build`, `node --test apps/desktop/tests/unit/*.test.mjs`, `pnpm --filter @alamelu-pi/pi-rpc-driver test`, and the branded Playwright specs via `--grep`. Real command output pasted into `alpi_ux_repair_phase5_implementation.md`; the unbranded half of `tests/core` remains out of scope and is never claimed green.
 
 ## Out of scope
 

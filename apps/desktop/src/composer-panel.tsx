@@ -1,5 +1,5 @@
 import { type ClipboardEvent, type Dispatch, type DragEvent, type KeyboardEvent, type RefObject, type SetStateAction } from "react";
-import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type { ComposerAttachment, QueuedComposerMessage, SessionRecord } from "./desktop-state";
 import { ArrowUpIcon, PlusIcon, StopSquareIcon } from "./icons";
 import type {

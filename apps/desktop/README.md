@@ -16,13 +16,13 @@ pnpm install
 Build the desktop app:
 
 ```bash
-pnpm --filter @pi-gui/desktop build
+pnpm --filter @alamelu-pi/desktop build
 ```
 
 Run the app in development:
 
 ```bash
-pnpm --filter @pi-gui/desktop dev
+pnpm --filter @alamelu-pi/desktop dev
 ```
 
 `dev` now runs through `electron-vite`, so renderer edits hot-update in place and Electron `main` / `preload` changes trigger the appropriate reload or restart behavior automatically. The desktop dev launcher also rebuilds the shared workspace packages up front and keeps them in watch mode so Node-side package changes can be picked up without manual rebuilds.
@@ -30,13 +30,13 @@ pnpm --filter @pi-gui/desktop dev
 Run the built app locally without packaging:
 
 ```bash
-pnpm --filter @pi-gui/desktop preview
+pnpm --filter @alamelu-pi/desktop preview
 ```
 
 Package a Linux AppImage locally:
 
 ```bash
-pnpm --filter @pi-gui/desktop run package:linux
+pnpm --filter @alamelu-pi/desktop run package:linux
 ```
 
 Live agent tests use your existing `pi` runtime and provider auth. If local `pi` runs do not work, the `live` lane will not be meaningful either.
@@ -49,51 +49,51 @@ Use the smallest lane that matches the changed surface.
   Background-friendly Electron UI coverage. This is the default lane for renderer, sidebar, composer, persistence, settings, skills, and worktree UI behavior.
 
   ```bash
-  pnpm --filter @pi-gui/desktop run test:e2e
-  pnpm --filter @pi-gui/desktop run test:e2e:core
+  pnpm --filter @alamelu-pi/desktop run test:e2e
+  pnpm --filter @alamelu-pi/desktop run test:e2e:core
   ```
 
 - `live`
   Real runtime/provider coverage. Use this when the change depends on an actual run, transcript item, tool call, or background notification.
 
   ```bash
-  pnpm --filter @pi-gui/desktop run test:e2e:live
+  pnpm --filter @alamelu-pi/desktop run test:e2e:live
   ```
 
 - `native`
   macOS OS-surface coverage such as folder pickers, image pickers, and real clipboard paste. This lane is foreground-only and can take focus.
 
   ```bash
-  pnpm --filter @pi-gui/desktop run test:e2e:native
+  pnpm --filter @alamelu-pi/desktop run test:e2e:native
   ```
 
 - `production`
   Opt-in higher-fidelity smokes that stay out of the default fast lanes. Use these for real-auth `live` checks, packaged `.app` launch, and real macOS open-panel coverage.
 
   ```bash
-  pnpm --filter @pi-gui/desktop run test:prod:real-auth-contract
-  pnpm --filter @pi-gui/desktop run test:prod:packaged-smoke
-  pnpm --filter @pi-gui/desktop run test:prod:applications-relaunch
-  pnpm --filter @pi-gui/desktop run test:prod:release-zip-smoke
-  pnpm --filter @pi-gui/desktop run test:prod:open-folder-real
+  pnpm --filter @alamelu-pi/desktop run test:prod:real-auth-contract
+  pnpm --filter @alamelu-pi/desktop run test:prod:packaged-smoke
+  pnpm --filter @alamelu-pi/desktop run test:prod:applications-relaunch
+  pnpm --filter @alamelu-pi/desktop run test:prod:release-zip-smoke
+  pnpm --filter @alamelu-pi/desktop run test:prod:open-folder-real
   ```
 
 Run all desktop lanes:
 
 ```bash
-pnpm --filter @pi-gui/desktop run test:e2e:all
+pnpm --filter @alamelu-pi/desktop run test:e2e:all
 ```
 
 For mac-first CI, use:
 
 ```bash
-pnpm --filter @pi-gui/desktop run test:e2e:ci:mac
+pnpm --filter @alamelu-pi/desktop run test:e2e:ci:mac
 ```
 
 Linux CI currently validates packaging via:
 
 ```bash
-pnpm --filter @pi-gui/desktop run package:linux
+pnpm --filter @alamelu-pi/desktop run package:linux
 pnpm --dir apps/desktop run verify:packaged-runtime-deps:linux
 ```
 
@@ -115,7 +115,7 @@ Prefer the repo lanes first. They are deterministic, scriptable, and the right s
 
 Use manual Computer Use smoke only as a complement, not a replacement.
 
-- If the local Codex skill `$pi-gui-computer-use-smoke` is installed, use it for believable release-readiness sweeps on the installed app and for focus-hostile macOS surfaces that are awkward or disruptive in Playwright.
+- If the local Codex skill `$alamelu-pi-computer-use-smoke` is installed, use it for believable release-readiness sweeps on the installed app and for focus-hostile macOS surfaces that are awkward or disruptive in Playwright.
 - The reason to use Computer Use is product confidence, not determinism. It is useful when you want to see the real installed app behave correctly while minimizing disruption to the laptop.
 - Keep Playwright as the primary regression signal. Computer Use should not replace lane coverage for `core`, `live`, `native`, or `production`, and it should not become a hidden repo dependency.
 - Treat real open-folder and native file-picker checks in Computer Use as best-effort smoke coverage unless the workflow is explicitly being validated there.
@@ -127,33 +127,33 @@ Rerun the matching lane before closing for `core` and `live`.
 For `native`, rerun the targeted native spec by default and expand to `test:e2e:native` only when the change touches shared native helpers, multiple native specs, or lane-wide native behavior.
 
 ```bash
-pnpm --filter @pi-gui/desktop run test:core:worktrees
-pnpm --filter @pi-gui/desktop run test:core:persistence
-pnpm --filter @pi-gui/desktop run test:live:tool-calls
-pnpm --filter @pi-gui/desktop run test:native:paste
-pnpm --filter @pi-gui/desktop run test:native:open-folder
-pnpm --filter @pi-gui/desktop run test:native:attach-image
-pnpm --filter @pi-gui/desktop run test:prod:real-auth-contract
-pnpm --filter @pi-gui/desktop run test:prod:packaged-smoke
-pnpm --filter @pi-gui/desktop run test:prod:applications-relaunch
-pnpm --filter @pi-gui/desktop run test:prod:release-zip-smoke
-pnpm --filter @pi-gui/desktop run test:prod:open-folder-real
+pnpm --filter @alamelu-pi/desktop run test:core:worktrees
+pnpm --filter @alamelu-pi/desktop run test:core:persistence
+pnpm --filter @alamelu-pi/desktop run test:live:tool-calls
+pnpm --filter @alamelu-pi/desktop run test:native:paste
+pnpm --filter @alamelu-pi/desktop run test:native:open-folder
+pnpm --filter @alamelu-pi/desktop run test:native:attach-image
+pnpm --filter @alamelu-pi/desktop run test:prod:real-auth-contract
+pnpm --filter @alamelu-pi/desktop run test:prod:packaged-smoke
+pnpm --filter @alamelu-pi/desktop run test:prod:applications-relaunch
+pnpm --filter @alamelu-pi/desktop run test:prod:release-zip-smoke
+pnpm --filter @alamelu-pi/desktop run test:prod:open-folder-real
 ```
 
 For real-auth `live` specs, opt in explicitly:
 
 ```bash
 PI_APP_REAL_AUTH=1 PI_APP_REAL_AUTH_SOURCE_DIR=/absolute/path/to/agent \
-  pnpm --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/live/submit-run.spec.ts
+  pnpm --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/live/submit-run.spec.ts
 
 PI_APP_REAL_AUTH=1 PI_APP_REAL_AUTH_SOURCE_DIR=/absolute/path/to/agent \
-  pnpm --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/live/tool-calls.spec.ts
+  pnpm --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/live/tool-calls.spec.ts
 ```
 
 For dev-loop verification, use:
 
 ```bash
-pnpm --filter @pi-gui/desktop run test:dev:reload
+pnpm --filter @alamelu-pi/desktop run test:dev:reload
 ```
 
 That spec launches the app in development mode, edits isolated probe modules for renderer/Electron/shared-package wiring, and proves the running window picks up the changes.

@@ -63,7 +63,7 @@ npm --prefix apps/desktop run typecheck
 Result:
 
 ```text
-> @pi-gui/desktop@0.1.0 typecheck
+> @alamelu-pi/desktop@0.1.0 typecheck
 > tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit
 
 exit 0
@@ -117,7 +117,7 @@ npm --prefix apps/desktop run typecheck
 Result:
 
 ```text
-> @pi-gui/desktop@0.1.0 typecheck
+> @alamelu-pi/desktop@0.1.0 typecheck
 > tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit
 
 exit 0
@@ -155,7 +155,7 @@ npm --prefix apps/desktop run typecheck
 Result:
 
 ```text
-> @pi-gui/desktop@0.1.0 typecheck
+> @alamelu-pi/desktop@0.1.0 typecheck
 > tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit
 
 exit 0

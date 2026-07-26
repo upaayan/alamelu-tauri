@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { RuntimeSettingsSnapshot, RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeSettingsSnapshot, RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 
 export type SettingsSection = "appearance" | "general" | "providers" | "models" | "notifications";
 

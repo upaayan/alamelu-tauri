@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { SessionCatalogEntry, WorkspaceCatalogEntry, WorktreeCatalogEntry } from "@pi-gui/catalogs";
-import { sessionKey } from "@pi-gui/session-driver";
-import type { SessionAttachment, SessionConfig, SessionQueuedMessage, SessionRef } from "@pi-gui/session-driver";
+import type { SessionCatalogEntry, WorkspaceCatalogEntry, WorktreeCatalogEntry } from "@alamelu-pi/catalogs";
+import { sessionKey } from "@alamelu-pi/session-driver";
+import type { SessionAttachment, SessionConfig, SessionQueuedMessage, SessionRef } from "@alamelu-pi/session-driver";
 import type {
   ComposerAttachment,
   QueuedComposerMessage,

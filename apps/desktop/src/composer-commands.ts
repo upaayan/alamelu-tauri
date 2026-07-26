@@ -1,10 +1,10 @@
-import type { SessionConfig } from "@pi-gui/session-driver";
+import type { SessionConfig } from "@alamelu-pi/session-driver";
 import type {
   RuntimeCommandRecord,
   RuntimeProviderRecord,
   RuntimeSettingsSnapshot,
   RuntimeSnapshot,
-} from "@pi-gui/session-driver/runtime-types";
+} from "@alamelu-pi/session-driver/runtime-types";
 import type { ExtensionCommandCompatibilityRecord } from "./desktop-state";
 import { titleCase } from "./string-utils";
 

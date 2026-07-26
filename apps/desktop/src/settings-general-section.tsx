@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type { ModelSettingsScopeMode } from "./desktop-state";
 import { SettingsGroup, SettingsInfoRow, SettingsRow } from "./settings-utils";
 

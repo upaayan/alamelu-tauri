@@ -229,8 +229,8 @@ Verification commands should use the repo's package-manager entry point. If plai
 Candidate commands:
 
 ```bash
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop typecheck
-npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run test:e2e:runner -- apps/desktop/tests/core/provider-settings.spec.ts
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop typecheck
+npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/provider-settings.spec.ts
 node --test packages/pi-sdk-driver/test/*.mjs
 ```
 

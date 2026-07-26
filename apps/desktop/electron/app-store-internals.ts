@@ -1,7 +1,7 @@
-import type { JsonCatalogStore } from "@pi-gui/catalogs";
+import type { JsonCatalogStore } from "@alamelu-pi/catalogs";
 import type { DesktopSessionDriver } from "./desktop-driver";
-import type { CreateSessionOptions, SessionConfig, SessionRef, SessionSnapshot, WorkspaceRef } from "@pi-gui/session-driver";
-import type { RuntimeCommandRecord, RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { CreateSessionOptions, SessionConfig, SessionRef, SessionSnapshot, WorkspaceRef } from "@alamelu-pi/session-driver";
+import type { RuntimeCommandRecord, RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type {
   AppView,
   ComposerAttachment,
@@ -71,7 +71,7 @@ export interface AppStoreInternals {
   clearPendingAutoTitle(sessionRef: SessionRef): void;
   updateQueuedComposerMessages(
     sessionRef: SessionRef,
-    queuedMessages: readonly import("@pi-gui/session-driver").SessionQueuedMessage[] | undefined,
+    queuedMessages: readonly import("@alamelu-pi/session-driver").SessionQueuedMessage[] | undefined,
   ): void;
   getQueuedComposerMessages(sessionRef: SessionRef): readonly QueuedComposerMessage[];
   setQueuedComposerEditState(sessionRef: SessionRef, editState: QueuedComposerEditState | undefined): void;

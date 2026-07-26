@@ -143,7 +143,7 @@ The July 24 failing session **proves L705 fires in production**: stored grok ids
 
 ## Phase 4 — Backlog (owner picks; NOT scheduled)
 
-Streaming indicator + `aria-live`; timeline rhythm; themed scrollbars; `prefers-reduced-motion`; Esc-to-stop + safer empty-Enter; thread-cycling shortcuts; cross-thread search; fork-hygiene sweep beyond 2.1 (README/website/localStorage key/`@pi-gui/*` names).
+Streaming indicator + `aria-live`; timeline rhythm; themed scrollbars; `prefers-reduced-motion`; Esc-to-stop + safer empty-Enter; thread-cycling shortcuts; cross-thread search; fork-hygiene sweep beyond 2.1 (README/website/localStorage key/`@alamelu-pi/*` names).
 
 ## Build order & dependencies
 
@@ -152,9 +152,9 @@ Phase 1 → 2 → 3. Inside Phase 1: registry+session-dir plumbing (1.2 prerequi
 ## Testing strategy (global, exact gates)
 
 - **Real gates, every implementation round:**
-  - `pnpm --filter @pi-gui/desktop build`
+  - `pnpm --filter @alamelu-pi/desktop build`
   - `node --test apps/desktop/tests/unit/*.test.mjs`
-  - `pnpm --filter @pi-gui/pi-rpc-driver test` (baseline 52 passing)
+  - `pnpm --filter @alamelu-pi/pi-rpc-driver test` (baseline 52 passing)
   - **Branded-only** Playwright tests via `test:e2e:runner` with `--grep` scoping (precedent: `alpi_logo_replacement_implementation.md:69`). Baseline reality: `composer-controls.spec.ts` and `model-scope-toggle.spec.ts` contain **zero** `PI_GUI_BRAND` overrides (fully unbranded — cannot boot in this fork), and `new-thread-composer` / `provider-settings` are mixed. The gate therefore names *individual branded tests* (the four alpi-branded tests in `new-thread-composer.spec.ts`, the four in `provider-settings.spec.ts`, plus new specs written branded), never whole files. Isolated `PI_APP_USER_DATA_DIR`/`PI_CODING_AGENT_DIR` always.
 - **Baseline reality (recorded once at the top of the implementation doc):** the unbranded half of `tests/core` is broken at baseline in this fork — `smoke.spec.ts:31` expects heading "Let's build" (hero renders "Alamelu Pi" since `b4edbbb`), and unbranded specs resolve to `driver: "sdk"` for which no driver is constructed (`rpc-driver-config.ts:66,130`; `main.ts:818-853`; throw at `app-store.ts:161-163` inside the swallowed catch at `main.ts:1256`). Fixing those specs is OUT of scope; they are not claimed green. Pre-change pass/fail counts of the named gates recorded before any edits.
 - Live-provider checks (1.6 repro) run from the scratch harness outside the repo, tiny prompts, outputs pasted verbatim.

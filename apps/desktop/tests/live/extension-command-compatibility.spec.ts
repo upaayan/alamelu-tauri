@@ -81,7 +81,7 @@ test("fails fast for unsupported handoff-like commands and learns terminal-only 
     await composer.press("Enter");
 
     await expect(composerError).toContainText(
-      "/handoff-gui-test requires terminal-only custom UI and is not supported in pi-gui yet.",
+      "/handoff-gui-test requires terminal-only custom UI and is not supported in Alamelu Pi yet.",
     );
     await expect(window.getByTestId("extension-dialog")).toHaveCount(0);
     await expect(window.locator(".timeline")).not.toContainText("Handoff ready. Submit when ready.");
@@ -98,7 +98,7 @@ test("fails fast for unsupported handoff-like commands and learns terminal-only 
     await composer.fill("/handoff-gui-test local block");
     await composer.press("Enter");
     await expect(composerError).toContainText(
-      "/handoff-gui-test requires terminal-only custom UI and is not supported in pi-gui yet.",
+      "/handoff-gui-test requires terminal-only custom UI and is not supported in Alamelu Pi yet.",
     );
     await expect
       .poll(
@@ -153,7 +153,7 @@ test("persists learned terminal-only command compatibility across relaunch", asy
     await composer.fill("/handoff-gui-test persist this");
     await composer.press("Enter");
     await expect(firstWindow.getByTestId("composer-error-banner")).toContainText(
-      "/handoff-gui-test requires terminal-only custom UI and is not supported in pi-gui yet.",
+      "/handoff-gui-test requires terminal-only custom UI and is not supported in Alamelu Pi yet.",
     );
   } finally {
     await firstHarness.close();

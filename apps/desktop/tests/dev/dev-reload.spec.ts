@@ -175,7 +175,7 @@ function buildProbeSource(probe: ProbeRecord, value: string): string {
 }
 
 async function startDesktopDev(): Promise<DevDesktopHarness> {
-  const userDataDir = await makeUserDataDir("pi-gui-dev-reload-");
+  const userDataDir = await makeUserDataDir("alamelu-pi-dev-reload-");
   const child = spawn("pnpm", ["dev", "--", "--remoteDebuggingPort", String(cdpPort)], {
     cwd: desktopDir,
     env: {

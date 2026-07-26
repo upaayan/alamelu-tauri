@@ -15,7 +15,7 @@ plan at `/Users/sudhirjha/playground/alamelu/documents/plan-audit-implementation
 
 - The approved logo is the single visual source for the renderer and macOS icon
   derivatives.
-- `@pi-gui/desktop` typecheck/build checks pass.
+- `@alamelu-pi/desktop` typecheck/build checks pass.
 - The Alamelu Pi package is built unsigned, then signed with the AWS-managed
   identity hash and explicit keychain.
 - `codesign --verify --deep --strict` passes on the candidate and installed app.
@@ -58,11 +58,11 @@ result.
 
 ## Pre-deployment verification results
 
-- `pnpm --filter @pi-gui/desktop typecheck` passed.
+- `pnpm --filter @alamelu-pi/desktop typecheck` passed.
 - `node --test apps/desktop/tests/unit/*.test.mjs` passed: 33 tests, 0
   failures. Node emitted one existing module-type performance warning for the
   Luna recovery resource; it did not affect the result.
-- `pnpm --filter @pi-gui/desktop build` passed. The renderer emitted
+- `pnpm --filter @alamelu-pi/desktop build` passed. The renderer emitted
   `out/renderer/assets/alpi-icon-i7MqoRpn.png`, confirming the new PNG is in the
   production bundle.
 - `pnpm --dir apps/desktop exec playwright test -c playwright.config.ts
@@ -75,13 +75,13 @@ result.
 
 ## Candidate packaging results
 
-- `pnpm --filter @pi-gui/desktop run package:alpi:dir` passed. The fresh
+- `pnpm --filter @alamelu-pi/desktop run package:alpi:dir` passed. The fresh
   candidate was built at
   `apps/desktop/release-alpi/mac-arm64/alpi.app` using the AWS-backed wrapper.
 - `codesign --verify --deep --strict --verbose=2` passed on the candidate.
 - Candidate metadata matched `com.alamelu.pi`, `Alamelu Pi`, executable `alpi`,
   version `0.1.0`.
-- `pnpm --filter @pi-gui/desktop run smoke:alpi:candidate` passed against an
+- `pnpm --filter @alamelu-pi/desktop run smoke:alpi:candidate` passed against an
   isolated copy of the laptop Alamelu Pi state. It launched the signed
   candidate, preserved the isolated user-data boundary, loaded 585 models,
   found `zai/glm-5.2`, and saw 190 sessions copied from the laptop state.

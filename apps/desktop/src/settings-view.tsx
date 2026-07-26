@@ -1,4 +1,4 @@
-import type { RuntimeSettingsSnapshot, RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { RuntimeSettingsSnapshot, RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type { ModelSettingsScopeMode, NotificationPreferences, WorkspaceRecord } from "./desktop-state";
 import type { DesktopNotificationPermissionStatus } from "./ipc";
 import { SettingsAppearanceSection } from "./settings-appearance-section";

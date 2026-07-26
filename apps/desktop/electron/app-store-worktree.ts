@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
-import { sessionKey } from "@pi-gui/session-driver";
-import type { WorktreeCatalogEntry } from "@pi-gui/catalogs";
-import type { WorkspaceRef } from "@pi-gui/session-driver";
+import { sessionKey } from "@alamelu-pi/session-driver";
+import type { WorktreeCatalogEntry } from "@alamelu-pi/catalogs";
+import type { WorkspaceRef } from "@alamelu-pi/session-driver";
 import type { CreateWorktreeInput, DesktopAppState, RemoveWorktreeInput, StartThreadInput } from "../src/desktop-state";
 import { sendMessageToSession } from "./app-store-composer";
 import type { CreateWorktreeOptions } from "./worktree-manager";

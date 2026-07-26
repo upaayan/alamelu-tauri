@@ -1,4 +1,4 @@
-const KEY_PREFIX = "pi-gui:reviewed-files:v1";
+const KEY_PREFIX = "alamelu-pi:reviewed-files:v1";
 
 export function reviewedFilesKey(workspaceId: string, sessionId: string): string {
   return `${KEY_PREFIX}:${workspaceId}:${sessionId}`;

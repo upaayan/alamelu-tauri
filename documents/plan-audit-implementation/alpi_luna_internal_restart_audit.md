@@ -33,7 +33,7 @@ repair. No HIGH or MEDIUM issue remains.
 
 Verification reviewed:
 
-- `pnpm --filter @pi-gui/pi-rpc-driver test` — 52/52 passed.
+- `pnpm --filter @alamelu-pi/pi-rpc-driver test` — 52/52 passed.
 - Focused recovery/packaging/config unit tests passed.
 - Desktop typecheck, production build, and `git diff --check` passed after the
   final concurrency repair.

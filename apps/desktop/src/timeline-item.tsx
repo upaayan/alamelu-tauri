@@ -1,4 +1,4 @@
-import type { SessionTranscriptMessage } from "@pi-gui/session-driver";
+import type { SessionTranscriptMessage } from "@alamelu-pi/session-driver";
 import type { TimelineActivity, TimelineToolCall, TimelineSummary, TranscriptMessage } from "./timeline-types";
 import { MessageMarkdown } from "./message-markdown";
 import { InlineDiff, extractDiffFromOutput } from "./diff-inline";

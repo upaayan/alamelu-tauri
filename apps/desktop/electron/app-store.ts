@@ -6,14 +6,14 @@ import {
   type GenerateThreadTitleOptions,
   isExtensionUiDialogRequest,
   sessionKey,
-} from "@pi-gui/session-driver";
+} from "@alamelu-pi/session-driver";
 import type { DesktopSessionDriver } from "./desktop-driver";
-import { JsonCatalogStore, type SessionCatalogEntry } from "@pi-gui/catalogs";
+import { JsonCatalogStore, type SessionCatalogEntry } from "@alamelu-pi/catalogs";
 import type {
   NavigateSessionTreeOptions,
   NavigateSessionTreeResult,
   SessionTreeSnapshot,
-} from "@pi-gui/session-driver/types";
+} from "@alamelu-pi/session-driver/types";
 import type {
   CreateSessionOptions,
   HostUiResponse,
@@ -23,14 +23,14 @@ import type {
   SessionRef,
   SessionSnapshot,
   WorkspaceRef,
-} from "@pi-gui/session-driver";
+} from "@alamelu-pi/session-driver";
 import type {
   ModelSettingsSnapshot,
   RuntimeCommandRecord,
   RuntimeLoginCallbacks,
   RuntimeSettingsSnapshot,
   RuntimeSnapshot,
-} from "@pi-gui/session-driver/runtime-types";
+} from "@alamelu-pi/session-driver/runtime-types";
 import {
   type AppView,
   type ComposerAttachment,
@@ -957,7 +957,7 @@ export class DesktopAppStore implements AppStoreInternals {
         }
         const failedWorkspace = secondaryWorkspacesToLoad[index];
         console.warn(
-          `[pi-gui] Failed to preload runtime for ${failedWorkspace?.path ?? "unknown workspace"}: ${
+          `[alamelu-pi] Failed to preload runtime for ${failedWorkspace?.path ?? "unknown workspace"}: ${
             result.reason instanceof Error ? result.reason.message : String(result.reason)
           }`,
         );
@@ -1035,7 +1035,7 @@ export class DesktopAppStore implements AppStoreInternals {
       await this.driver.syncWorkspace(this.noRepositoryWorkspacePath, NO_REPOSITORY_WORKSPACE_NAME);
     } catch (error) {
       console.warn(
-        `[pi-gui] Failed to prepare No Repository workspace: ${
+        `[alamelu-pi] Failed to prepare No Repository workspace: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -1244,7 +1244,7 @@ export class DesktopAppStore implements AppStoreInternals {
         commandName: pending.command.name,
         extensionPath: pending.command.sourceInfo.path,
         status: "supported",
-        message: "Observed working in pi-gui.",
+        message: "Observed working in Alamelu Pi.",
         capability: "gui-safe",
         updatedAt: timestamp,
       });
@@ -1287,7 +1287,7 @@ export class DesktopAppStore implements AppStoreInternals {
     const key = sessionKey(sessionRef);
     const pending = this.pendingRuntimeCommandsBySession.get(key);
     if (pending) {
-      const message = `/${pending.command.name} requires terminal-only ${formatCapabilityLabel(issue.capability)} and is not supported in pi-gui yet. Use pi in the terminal for this command.`;
+      const message = `/${pending.command.name} requires terminal-only ${formatCapabilityLabel(issue.capability)} and is not supported in Alamelu Pi yet. Use pi in the terminal for this command.`;
       pending.blockedMessage = message;
       recordLearnedCommandCompatibility(this.extensionCommandCompatibilityByWorkspace, sessionRef.workspaceId, {
         commandName: pending.command.name,

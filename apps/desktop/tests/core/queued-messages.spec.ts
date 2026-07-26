@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { SessionDriverEvent, SessionQueuedMessage, SessionRef, WorkspaceRef } from "@pi-gui/session-driver";
+import type { SessionDriverEvent, SessionQueuedMessage, SessionRef, WorkspaceRef } from "@alamelu-pi/session-driver";
 import {
   TINY_PNG_BASE64,
   createNamedThread,

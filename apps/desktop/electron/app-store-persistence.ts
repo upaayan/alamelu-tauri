@@ -4,7 +4,7 @@ import type {
   ModelSettingsScopeMode,
   NotificationPreferences,
 } from "../src/desktop-state";
-import type { ModelSettingsSnapshot } from "@pi-gui/session-driver/runtime-types";
+import type { ModelSettingsSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";

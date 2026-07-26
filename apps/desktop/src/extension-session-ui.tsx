@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { HostUiResponse } from "@pi-gui/session-driver";
+import type { HostUiResponse } from "@alamelu-pi/session-driver";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 import type { SessionExtensionDialogRecord, SessionExtensionUiStateRecord } from "./desktop-state";
 

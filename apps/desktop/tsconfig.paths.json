@@ -2,12 +2,12 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@pi-gui/pi-rpc-driver": ["../../packages/pi-rpc-driver/src/index.ts"],
-      "@pi-gui/catalogs": ["../../packages/catalogs/src/index.ts"],
-      "@pi-gui/catalogs/dev-reload-probe": ["../../packages/catalogs/src/dev-reload-probe.ts"],
-      "@pi-gui/session-driver": ["../../packages/session-driver/src/index.ts"],
-      "@pi-gui/session-driver/runtime-types": ["../../packages/session-driver/src/runtime-types.ts"],
-      "@pi-gui/session-driver/dev-reload-probe": ["../../packages/session-driver/src/dev-reload-probe.ts"]
+      "@alamelu-pi/pi-rpc-driver": ["../../packages/pi-rpc-driver/src/index.ts"],
+      "@alamelu-pi/catalogs": ["../../packages/catalogs/src/index.ts"],
+      "@alamelu-pi/catalogs/dev-reload-probe": ["../../packages/catalogs/src/dev-reload-probe.ts"],
+      "@alamelu-pi/session-driver": ["../../packages/session-driver/src/index.ts"],
+      "@alamelu-pi/session-driver/runtime-types": ["../../packages/session-driver/src/runtime-types.ts"],
+      "@alamelu-pi/session-driver/dev-reload-probe": ["../../packages/session-driver/src/dev-reload-probe.ts"]
     }
   }
 }

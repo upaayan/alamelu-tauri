@@ -10,13 +10,13 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@pi-gui/catalogs':
+      '@alamelu-pi/catalogs':
         specifier: workspace:*
         version: link:../../packages/catalogs
-      '@pi-gui/pi-rpc-driver':
+      '@alamelu-pi/pi-rpc-driver':
         specifier: workspace:*
         version: link:../../packages/pi-rpc-driver
-      '@pi-gui/session-driver':
+      '@alamelu-pi/session-driver':
         specifier: workspace:*
         version: link:../../packages/session-driver
       '@xterm/addon-clipboard':
@@ -158,7 +158,7 @@ importers:
 
   packages/catalogs:
     dependencies:
-      '@pi-gui/session-driver':
+      '@alamelu-pi/session-driver':
         specifier: workspace:*
         version: link:../session-driver
     devDependencies:
@@ -171,7 +171,7 @@ importers:
 
   packages/pi-rpc-driver:
     dependencies:
-      '@pi-gui/session-driver':
+      '@alamelu-pi/session-driver':
         specifier: workspace:*
         version: link:../session-driver
     devDependencies:

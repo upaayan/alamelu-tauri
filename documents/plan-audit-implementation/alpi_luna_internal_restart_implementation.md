@@ -61,8 +61,8 @@ or guarantee the next GUI turn used a clean Pi process.
   apps/desktop/tests/unit/alpi-luna-websocket-recovery.test.mjs
   apps/desktop/tests/unit/alpi-packaging.test.mjs
   apps/desktop/tests/unit/rpc-driver-config.test.mjs` — 12 passed.
-- `pnpm --filter @pi-gui/pi-rpc-driver test` — 52 passed.
-- `pnpm --filter @pi-gui/desktop run typecheck` and build — passed after the
+- `pnpm --filter @alamelu-pi/pi-rpc-driver test` — 52 passed.
+- `pnpm --filter @alamelu-pi/desktop run typecheck` and build — passed after the
   final concurrency additions.
 - Isolated live external-Pi smoke: a temporary session used Luna at `xhigh`
   for two turns and observed a child lifecycle of new session → same session
@@ -73,7 +73,7 @@ or guarantee the next GUI turn used a clean Pi process.
 The only permitted package command is:
 
 ```bash
-pnpm --filter @pi-gui/desktop run package:alpi:dir
+pnpm --filter @alamelu-pi/desktop run package:alpi:dir
 ```
 
 It is the documented AWS-backed explicit-keychain/identity-hash wrapper. No

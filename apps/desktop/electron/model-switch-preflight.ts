@@ -141,8 +141,10 @@ export function readThreadStats(sessionDir: string, sessionId: string): ThreadSt
 }
 
 const PATCH_MARKER = "alpi-patch:toolcallid-v1";
+// pi >= 0.82.1 keeps sibling tool-call ids distinct on its own.
+const UPSTREAM_FIX_SIGNATURE = "const combinedId = itemId.length > 0";
 
-/** True when the local pi-ai carries our collision-proof truncation patch. */
+/** True when tool-call ids cannot collide — either pi fixed it upstream, or our patch is applied. */
 export function isPiPatchApplied(piBinRealPath: string | undefined): boolean {
   if (!piBinRealPath) return false;
   try {
@@ -150,7 +152,8 @@ export function isPiPatchApplied(piBinRealPath: string | undefined): boolean {
       path.resolve(path.dirname(piBinRealPath), ".."),
       "node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js",
     );
-    return fs.readFileSync(target, "utf8").includes(PATCH_MARKER);
+    const src = fs.readFileSync(target, "utf8");
+    return src.includes(PATCH_MARKER) || src.includes(UPSTREAM_FIX_SIGNATURE);
   } catch {
     return false;
   }

@@ -7,7 +7,7 @@ Owner rulings honored: **icon/iconset byte-identical**; **no Anthropic auth work
 ## Baseline reality (recorded before edits, per plan §Testing strategy)
 
 - Unit tests: 34 passing (`node --test apps/desktop/tests/unit/*.test.mjs`)
-- Driver suite: 52 passing (`pnpm --filter @pi-gui/pi-rpc-driver test`)
+- Driver suite: 52 passing (`pnpm --filter @alamelu-pi/pi-rpc-driver test`)
 - Unbranded half of `tests/core` is broken at baseline in this fork (documented in the plan, out of scope, not claimed green).
 
 ## What was built
@@ -42,7 +42,7 @@ npx tsc --noEmit -p tsconfig.json            → EXIT 0
 
 **Build**
 ```
-pnpm --filter @pi-gui/desktop build
+pnpm --filter @alamelu-pi/desktop build
 ✓ 349 modules transformed. ✓ built in 985ms   BUILD EXIT 0
 ```
 
@@ -151,7 +151,7 @@ build                                    ✓ built in 898ms            BUILD 0
 tsc --noEmit -p tsconfig.json            EXIT 0
 tsc --noEmit -p tsconfig.electron.json   EXIT 0
 node --test apps/desktop/tests/unit/*    ℹ tests 55  pass 55  fail 0
-pnpm --filter @pi-gui/pi-rpc-driver test ℹ tests 52  pass 52  fail 0
+pnpm --filter @alamelu-pi/pi-rpc-driver test ℹ tests 52  pass 52  fail 0
 ```
 
 **Branded Playwright gate (the check M4 said was missing) — now executed:**

@@ -27,18 +27,18 @@ The thin external-Pi migration deliberately left provider login, logout, and API
 Passed:
 
 - `node --test apps/desktop/tests/unit/external-pi-auth-bridge.test.mjs` — 3 tests passed.
-- `npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run typecheck` — passed.
-- `npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run build` — passed.
-- `npx --yes pnpm@10.25.0 --filter @pi-gui/desktop run verify:external-runtime` — passed against installed Pi 0.79.1.
+- `npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run typecheck` — passed.
+- `npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run build` — passed.
+- `npx --yes pnpm@10.25.0 --filter @alamelu-pi/desktop run verify:external-runtime` — passed against installed Pi 0.79.1.
 - Focused packaged-desktop Playwright coverage passed for external API-key setup, dual subscription/API-key actions, environment-managed auth, and `models.json` provider overrides. The full provider-settings spec completed without failure artifacts.
 
 The focused Electron provider settings run uses a temporary Pi agent directory and does not access or alter real provider credentials. A broad unit-test glob has one pre-existing unrelated failure: the packaging test imports `js-yaml`, which is not declared as a direct test dependency.
 
 ## Release Verification
 
-- `pnpm --filter @pi-gui/desktop run package:alpi:dir` — passed through the documented AWS-backed, explicit-keychain signing wrapper. It produced and verified a hardened `alpi.app` without an interactive Apple password prompt.
-- `PI_APP_PACKAGE_FLAVOR=alpi pnpm --filter @pi-gui/desktop run verify:packaged-runtime-deps` — passed. The ASAR has required runtime dependencies and no bundled Pi runtime.
-- `pnpm --filter @pi-gui/desktop run smoke:alpi:candidate` — passed with isolated copied application state and `zai/glm-5.2` available.
+- `pnpm --filter @alamelu-pi/desktop run package:alpi:dir` — passed through the documented AWS-backed, explicit-keychain signing wrapper. It produced and verified a hardened `alpi.app` without an interactive Apple password prompt.
+- `PI_APP_PACKAGE_FLAVOR=alpi pnpm --filter @alamelu-pi/desktop run verify:packaged-runtime-deps` — passed. The ASAR has required runtime dependencies and no bundled Pi runtime.
+- `pnpm --filter @alamelu-pi/desktop run smoke:alpi:candidate` — passed with isolated copied application state and `zai/glm-5.2` available.
 - The candidate replaced `/Applications/Alamelu Pi.app` only after the checks above. The former app is preserved at `/Applications/Alamelu Pi.app.before-provider-auth-20260711-102028`.
 - `codesign --verify --deep --strict --verbose=1 /Applications/Alamelu\\ Pi.app` — passed.
 - An isolated smoke run against the installed app passed and found `zai/glm-5.2`.
