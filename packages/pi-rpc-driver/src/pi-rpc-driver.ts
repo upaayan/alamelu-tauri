@@ -684,6 +684,10 @@ function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): 
 
     const items: SessionTranscriptItem[] = [];
     const toolIndexByCallId = new Map<string, number>();
+    // Calls whose result was never recorded: their turn's stopReason decides whether
+    // they finished or were interrupted. Defaulting them to success would present
+    // aborted and failed calls as if they had worked.
+    const unresolvedByCallId = new Map<string, string | undefined>();
 
     for (const line of fs.readFileSync(resolved, "utf8").split(/\n/)) {
       if (!line.trim()) continue;
@@ -706,14 +710,39 @@ function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): 
         if (!callId) continue;
         const index = toolIndexByCallId.get(callId);
         if (index === undefined) continue;
+        unresolvedByCallId.delete(callId);
         const existing = items[index] as SessionTranscriptToolCall;
-        const output = textFromJsonlContent(message.content).trim();
+        // Keep the whole result object, exactly as the live tool_execution_end path
+        // does: edit diffs live in `details.diff`, not in the text content, and the
+        // renderer reads them from there.
+        const output: Record<string, unknown> = {};
+        if (message.content !== undefined) output.content = message.content;
+        if (message.details !== undefined) output.details = message.details;
         const failed = message.isError === true;
         items[index] = {
           ...existing,
           status: failed ? "error" : "success",
-          ...(output ? { output } : {}),
+          ...(Object.keys(output).length > 0 ? { output } : {}),
         };
+        continue;
+      }
+
+      if (message.role === "bashExecution") {
+        const command = typeof message.command === "string" ? message.command : "";
+        const cancelled = message.cancelled === true;
+        const exitCode = typeof message.exitCode === "number" ? message.exitCode : undefined;
+        items.push({
+          kind: "tool",
+          id: entryId,
+          callId: entryId,
+          toolName: "bash",
+          status: cancelled || (exitCode !== undefined && exitCode !== 0) ? "error" : "success",
+          label: command ? `bash ${command}`.slice(0, 120) : "bash",
+          createdAt: timestamp,
+          ...(cancelled ? { detail: "Cancelled" } : exitCode ? { detail: `exit ${exitCode}` } : {}),
+          ...(command ? { input: { command } } : {}),
+          ...(message.output !== undefined ? { output: message.output } : {}),
+        });
         continue;
       }
 
@@ -733,6 +762,7 @@ function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): 
           const callId = typeof partRecord.id === "string" ? partRecord.id : randomUUID();
           const toolName = typeof partRecord.name === "string" ? partRecord.name : "tool";
           toolIndexByCallId.set(callId, items.length);
+          unresolvedByCallId.set(callId, typeof message.stopReason === "string" ? message.stopReason : undefined);
           items.push({
             kind: "tool",
             id: callId,
@@ -748,6 +778,19 @@ function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): 
         }
       }
     }
+
+    for (const [callId, stopReason] of unresolvedByCallId) {
+      const index = toolIndexByCallId.get(callId);
+      if (index === undefined) continue;
+      const existing = items[index] as SessionTranscriptToolCall;
+      const interrupted = stopReason === "aborted" || stopReason === "error";
+      items[index] = {
+        ...existing,
+        status: interrupted ? "error" : existing.status,
+        ...(interrupted ? { detail: stopReason === "aborted" ? "Interrupted" : "Failed" } : {}),
+      };
+    }
+
     return items;
   } catch {
     return [];

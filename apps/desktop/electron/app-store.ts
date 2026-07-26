@@ -102,8 +102,12 @@ type TranscriptMessageRow = Extract<TranscriptMessage, { kind: "message" }>;
 const LEGACY_TRANSCRIPT_HISTORY_LIMIT = 180;
 const NO_REPOSITORY_WORKSPACE_NAME = "No Repository";
 
+// v2 = transcripts that can contain reconstructed tool rows. A v1 cache predates
+// that and is rebuilt from the driver on next hydration rather than trusted.
+const PERSISTED_TRANSCRIPT_VERSION = 2;
+
 interface PersistedTranscriptRecord {
-  readonly version: 1;
+  readonly version: number;
   readonly transcript: readonly TranscriptMessage[];
 }
 
@@ -1119,7 +1123,7 @@ export class DesktopAppStore implements AppStoreInternals {
       ? await this.resolveLoadedTranscript(sessionRef, cachedTranscript)
       : [...(await this.driver.getTranscript(sessionRef))];
 
-    if (!cachedTranscript || cachedTranscript.format === "legacy") {
+    if (!cachedTranscript || cachedTranscript.format === "legacy" || cachedTranscript.format === "stale") {
       await this.writePersistedTranscript(key, transcript);
     }
 
@@ -1828,7 +1832,7 @@ export class DesktopAppStore implements AppStoreInternals {
     key: string,
   ): Promise<
     | {
-        readonly format: "versioned" | "legacy";
+        readonly format: "versioned" | "stale" | "legacy";
         readonly transcript: TranscriptMessage[];
       }
     | null
@@ -1840,7 +1844,7 @@ export class DesktopAppStore implements AppStoreInternals {
 
     if (isPersistedTranscriptRecord(persisted)) {
       return {
-        format: "versioned",
+        format: persisted.version >= PERSISTED_TRANSCRIPT_VERSION ? "versioned" : "stale",
         transcript: persisted.transcript.map((item) => cloneTranscriptMessage(item as TranscriptMessage)),
       };
     }
@@ -1858,10 +1862,16 @@ export class DesktopAppStore implements AppStoreInternals {
   private async resolveLoadedTranscript(
     sessionRef: SessionRef,
     persisted: {
-      readonly format: "versioned" | "legacy";
+      readonly format: "versioned" | "stale" | "legacy";
       readonly transcript: TranscriptMessage[];
     },
   ): Promise<TranscriptMessage[]> {
+    // A cache written before tool reconstruction existed is missing rows the stored
+    // session still has, so rebuild it rather than trusting it.
+    if (persisted.format === "stale") {
+      const rebuilt = [...(await this.driver.getTranscript(sessionRef))];
+      return rebuilt.length > 0 ? rebuilt : persisted.transcript;
+    }
     if (persisted.format !== "legacy" || !this.isPossiblyTrimmedLegacyTranscript(persisted.transcript)) {
       return persisted.transcript;
     }
@@ -1879,8 +1889,10 @@ export class DesktopAppStore implements AppStoreInternals {
 
   private async writePersistedTranscript(key: string, transcript: readonly TranscriptMessage[]): Promise<void> {
     await this.transcriptStore.write(key, {
-      version: 1,
-      transcript: transcript.map(cloneTranscriptMessage),
+      version: PERSISTED_TRANSCRIPT_VERSION,
+      // A pending "Working…" row must never outlive its run: on restart the run-state
+      // map is empty, so nothing would ever clear it and it would pulse forever.
+      transcript: transcript.filter((item) => !(item.kind === "activity" && item.pending)).map(cloneTranscriptMessage),
     });
   }
 
