@@ -480,7 +480,7 @@ function normalizeComposerAttachment(value: Record<string, unknown>): ComposerAt
 
 export function makeActivityItem(
   label: string,
-  options: Pick<Extract<TranscriptMessage, { kind: "activity" }>, "detail" | "metadata" | "tone"> = {},
+  options: Pick<Extract<TranscriptMessage, { kind: "activity" }>, "detail" | "metadata" | "tone" | "pending"> = {},
 ): TranscriptMessage {
   return {
     kind: "activity",

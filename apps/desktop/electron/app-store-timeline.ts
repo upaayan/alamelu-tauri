@@ -134,7 +134,7 @@ export function applyTimelineEvent(
           searchCount: 0,
           fileCount: 0,
         });        
-        const activity = makeActivityItem("Working…");
+        const activity = makeActivityItem("Working…", { pending: true });
         state.activeWorkingActivityBySession.set(key, activity.id);
         transcript.push(activity);
       }

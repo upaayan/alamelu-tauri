@@ -93,7 +93,11 @@ function TimelineMessage({ item }: { readonly item: SessionTranscriptMessage }) 
 
 function TimelineActivityItem({ item }: { readonly item: TimelineActivity }) {
   return (
-    <div className={`timeline-activity timeline-activity--${item.tone ?? "neutral"}`}>
+    <div
+      className={`timeline-activity timeline-activity--${item.tone ?? "neutral"}${item.pending ? " timeline-activity--pending" : ""}`}
+      {...(item.pending ? { role: "status", "aria-live": "polite" as const } : {})}
+    >
+      {item.pending ? <span aria-hidden="true" className="timeline-activity__pulse" /> : null}
       <span className="timeline-activity__label">{item.label}</span>
       {item.detail ? <span className="timeline-activity__detail">{item.detail}</span> : null}
       {item.metadata ? <span className="timeline-activity__meta">{item.metadata}</span> : null}

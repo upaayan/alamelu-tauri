@@ -7,6 +7,8 @@ export type TimelineSummaryPresentation = "inline" | "divider";
 
 export interface TimelineActivity {
   readonly kind: "activity";
+  /** True while the agent is still working; renders an animated indicator. */
+  readonly pending?: boolean;
   readonly id: string;
   readonly createdAt: string;
   readonly label: string;
