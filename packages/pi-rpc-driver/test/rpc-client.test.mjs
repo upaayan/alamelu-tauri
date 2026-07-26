@@ -1453,10 +1453,15 @@ test('PiRpcDriver getTranscript loads user and assistant messages from RPC get_m
   });
   const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const transcript = await driver.getTranscript(snapshot.ref);
-  assert.deepEqual(transcript, [
-    { role: 'user', text: 'Hello RPC' },
-    { role: 'assistant', text: 'Hello human' },
-  ]);
+  // Transcript items now carry kind/id/createdAt; ids are generated, so compare meaning.
+  assert.deepEqual(
+    transcript.map(({ kind, role, text }) => ({ kind, role, text })),
+    [
+      { kind: 'message', role: 'user', text: 'Hello RPC' },
+      { kind: 'message', role: 'assistant', text: 'Hello human' },
+    ],
+  );
+  assert.ok(transcript.every((item) => item.id && item.createdAt));
 });
 
 test('PiRpcDriver getTranscript falls back to last assistant text when RPC messages are unavailable', async () => {
@@ -1483,7 +1488,10 @@ test('PiRpcDriver getTranscript falls back to last assistant text when RPC messa
     rpcClientFactory: () => new FakeClient(),
   });
   const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
-  assert.deepEqual(await driver.getTranscript(snapshot.ref), [{ role: 'assistant', text: 'Fallback assistant text' }]);
+  assert.deepEqual(
+    (await driver.getTranscript(snapshot.ref)).map(({ kind, role, text }) => ({ kind, role, text })),
+    [{ kind: 'message', role: 'assistant', text: 'Fallback assistant text' }],
+  );
 });
 
 test('PiRpcDriver cold-opened sessions load transcript from RPC get_messages', async (t) => {
@@ -1521,10 +1529,13 @@ test('PiRpcDriver cold-opened sessions load transcript from RPC get_messages', a
   });
   const snapshot = await driver.openSession({ workspaceId: 'ws', sessionId: 'existing' });
   assert.equal(snapshot.title, 'Existing Session');
-  assert.deepEqual(await driver.getTranscript(snapshot.ref), [
-    { role: 'user', text: 'Reopened hello' },
-    { role: 'assistant', text: 'Reopened hi' },
-  ]);
+  assert.deepEqual(
+    (await driver.getTranscript(snapshot.ref)).map(({ kind, role, text }) => ({ kind, role, text })),
+    [
+      { kind: 'message', role: 'user', text: 'Reopened hello' },
+      { kind: 'message', role: 'assistant', text: 'Reopened hi' },
+    ],
+  );
 });
 
 test('PiRpcDriver ignores benign closed-pipe stream failures after a run is already idle', async () => {
