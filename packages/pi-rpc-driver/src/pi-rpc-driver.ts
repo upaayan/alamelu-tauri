@@ -731,17 +731,35 @@ function transcriptFromLocalSessionFile(sessionDir: string, sessionId: string): 
         const command = typeof message.command === "string" ? message.command : "";
         const cancelled = message.cancelled === true;
         const exitCode = typeof message.exitCode === "number" ? message.exitCode : undefined;
+        // Namespaced so a pi entry id can never collide with a model-provided
+        // tool-call id and produce two rows sharing a key.
+        const bashCallId = `bash-exec:${entryId}`;
+        const truncated = message.truncated === true;
         items.push({
           kind: "tool",
-          id: entryId,
-          callId: entryId,
+          id: bashCallId,
+          callId: bashCallId,
           toolName: "bash",
           status: cancelled || (exitCode !== undefined && exitCode !== 0) ? "error" : "success",
           label: command ? `bash ${command}`.slice(0, 120) : "bash",
           createdAt: timestamp,
-          ...(cancelled ? { detail: "Cancelled" } : exitCode ? { detail: `exit ${exitCode}` } : {}),
+          ...(cancelled
+            ? { detail: truncated ? "Cancelled · output truncated" : "Cancelled" }
+            : exitCode
+              ? { detail: truncated ? `exit ${exitCode} · output truncated` : `exit ${exitCode}` }
+              : truncated
+                ? { detail: "Output truncated" }
+                : {}),
           ...(command ? { input: { command } } : {}),
-          ...(message.output !== undefined ? { output: message.output } : {}),
+          ...(message.output !== undefined
+            ? {
+                output: {
+                  content: message.output,
+                  ...(truncated ? { truncated: true } : {}),
+                  ...(typeof message.fullOutputPath === "string" ? { fullOutputPath: message.fullOutputPath } : {}),
+                },
+              }
+            : {}),
         });
         continue;
       }

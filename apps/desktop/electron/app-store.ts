@@ -84,6 +84,7 @@ import {
   toSessionQueuedMessages,
   toSessionRef,
 } from "./app-store-utils";
+import { mergeReconstructedTranscript } from "./transcript-merge";
 import { isSystemWorkspacePathOrName, resolveRepoWorkspaceId } from "../src/workspace-roots";
 import { SessionStateMap, type QueuedComposerEditState } from "./session-state-map";
 import { createEmptyExtensionUiState, serializeExtensionUiState } from "./session-state-map";
@@ -118,7 +119,7 @@ function isPersistedTranscriptRecord(value: PersistedTranscriptStoreValue): valu
     return false;
   }
   const candidate = value as { version?: unknown; transcript?: unknown };
-  return candidate.version === 1 && Array.isArray(candidate.transcript);
+  return typeof candidate.version === "number" && Array.isArray(candidate.transcript);
 }
 
 export interface DesktopAppStoreOptions {
@@ -1870,7 +1871,10 @@ export class DesktopAppStore implements AppStoreInternals {
     // session still has, so rebuild it rather than trusting it.
     if (persisted.format === "stale") {
       const rebuilt = [...(await this.driver.getTranscript(sessionRef))];
-      return rebuilt.length > 0 ? rebuilt : persisted.transcript;
+      // Merge rather than replace: reconstruction cannot recreate live-only activity
+      // and summary rows, and a trimmed session file can hold fewer messages than the
+      // cache. Nothing the cache holds is thrown away.
+      return mergeReconstructedTranscript(persisted.transcript, rebuilt);
     }
     if (persisted.format !== "legacy" || !this.isPossiblyTrimmedLegacyTranscript(persisted.transcript)) {
       return persisted.transcript;
