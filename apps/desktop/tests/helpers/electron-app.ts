@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, writeFile, access } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, delimiter, dirname, extname, isAbsolute, join, resolve } from "node:path";
@@ -19,7 +20,8 @@ import type {
 
 const desktopDir = resolve(__dirname, "..", "..");
 const packagedReleaseDir = join(desktopDir, "release");
-const nativeClipboardImagePath = resolve(__dirname, "..", "..", "..", "website", "public", "og.png");
+// Written on demand from TINY_PNG_BASE64 so the native clipboard test owns its fixture.
+let nativeClipboardImagePathCache: string | undefined;
 const execFileAsync = promisify(execFile);
 const require = createRequire(__filename);
 const electronExecutablePath = require("electron") as string;
@@ -766,6 +768,7 @@ export async function pasteTinyPngViaClipboard(
   const composer = window.getByTestId(composerTestId);
   await composer.click();
   await expect(composer).toBeFocused();
+  const nativeClipboardImagePath = ensureNativeClipboardImage();
   await harness.electronApp.evaluate(({ clipboard, nativeImage }, imagePath) => {
     clipboard.writeImage(nativeImage.createFromPath(imagePath));
   }, nativeClipboardImagePath);
@@ -1595,4 +1598,16 @@ export async function createSessionViaIpc(window: Page, workspaceIdOrPath: strin
       return workspace?.sessions.some((session) => session.title === title) ?? false;
     }, { timeout: 15_000 })
     .toBe(true);
+}
+
+/** Materialises the tiny PNG fixture used by the native clipboard paste test. */
+function ensureNativeClipboardImage(): string {
+  if (nativeClipboardImagePathCache) {
+    return nativeClipboardImagePathCache;
+  }
+  const dir = mkdtempSync(join(tmpdir(), "pi-native-clipboard-"));
+  const filePath = join(dir, "clipboard-fixture.png");
+  writeFileSync(filePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+  nativeClipboardImagePathCache = filePath;
+  return filePath;
 }
