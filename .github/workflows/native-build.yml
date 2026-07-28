@@ -40,6 +40,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Test WSL launch adapter
         run: |
+          pnpm --filter @alamelu-pi/session-driver run build
           pnpm --filter @alamelu-pi/pi-rpc-driver run build
           node --test --test-name-pattern="WSL" packages/pi-rpc-driver/test/rpc-client.test.mjs
       - name: Build Apple Silicon app
@@ -80,6 +81,7 @@ jobs:
       - name: Test WSL launch adapter
         shell: pwsh
         run: |
+          pnpm --filter @alamelu-pi/session-driver run build
           pnpm --filter @alamelu-pi/pi-rpc-driver run build
           node --test --test-name-pattern="WSL" packages/pi-rpc-driver/test/rpc-client.test.mjs
       - name: Build Windows installer
