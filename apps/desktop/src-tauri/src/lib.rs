@@ -593,6 +593,28 @@ fn native_record_smoke(app: tauri::AppHandle, report: Value) -> Result<(), Strin
     Ok(())
 }
 
+struct BackendLaunchSpec {
+    args: Vec<std::ffi::OsString>,
+    backend_entry: Option<std::ffi::OsString>,
+}
+
+fn backend_launch_spec(backend_path: &Path, windows: bool) -> BackendLaunchSpec {
+    if windows {
+        BackendLaunchSpec {
+            args: vec![
+                "-e".into(),
+                "require(process.env.ALAMELU_TAURI_BACKEND_ENTRY);".into(),
+            ],
+            backend_entry: Some(backend_path.as_os_str().to_os_string()),
+        }
+    } else {
+        BackendLaunchSpec {
+            args: vec![backend_path.as_os_str().to_os_string()],
+            backend_entry: None,
+        }
+    }
+}
+
 fn start_backend(app: &tauri::AppHandle) -> Result<Backend, String> {
     let resource_dir = app
         .path()
@@ -627,9 +649,10 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Backend, String> {
     }
     let child_path = env::join_paths(path_entries).map_err(|error| error.to_string())?;
 
+    let launch = backend_launch_spec(&backend_path, cfg!(windows));
     let mut command = Command::new(&node);
     command
-        .arg(&backend_path)
+        .args(&launch.args)
         .current_dir(backend_path.parent().unwrap_or(&resource_dir))
         .env("PATH", child_path)
         .env("PI_GUI_BRAND", "alpi")
@@ -643,6 +666,9 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Backend, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if let Some(backend_entry) = launch.backend_entry {
+        command.env("ALAMELU_TAURI_BACKEND_ENTRY", backend_entry);
+    }
     #[cfg(windows)]
     if is_wsl_executable(&pi) {
         command.env("PI_GUI_WSL", "1");
@@ -1105,8 +1131,27 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn windows_backend_launch_keeps_spaced_entry_path_out_of_arguments() {
+        let backend_path =
+            Path::new(r"C:\Users\Asus\AppData\Local\Alamelu Pi Tauri\resources\backend\main.cjs");
+        let launch = backend_launch_spec(backend_path, true);
+        assert_eq!(
+            launch.args,
+            vec![
+                OsString::from("-e"),
+                OsString::from("require(process.env.ALAMELU_TAURI_BACKEND_ENTRY);")
+            ]
+        );
+        assert_eq!(
+            launch.backend_entry,
+            Some(backend_path.as_os_str().to_os_string())
+        );
+    }
 
     #[cfg(unix)]
     #[test]
