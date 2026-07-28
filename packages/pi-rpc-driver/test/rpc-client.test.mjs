@@ -200,11 +200,14 @@ test('WSL launch wraps Pi RPC and translates session and extension paths', () =>
   );
 
   assert.equal(spec.command, 'C:\\Windows\\System32\\wsl.exe');
-  assert.deepEqual(spec.args.slice(0, 8), [
+  assert.deepEqual(spec.args.slice(0, 11), [
     '--cd',
     '\\\\wsl.localhost\\Ubuntu\\home\\ubuntu\\playground\\alamelu',
     '--exec',
-    'pi',
+    'bash',
+    '-lic',
+    'exec pi "$@"',
+    'alamelu-pi',
     '--mode',
     'rpc',
     '--session-dir',
@@ -220,7 +223,7 @@ test('WSL command detection is Windows-path aware and preserves existing WSLENV 
   assert.equal(isWslPiExecutable('/usr/local/bin/pi'), false);
   assert.deepEqual(resolvePiRpcSpawnCommand('C:\\Windows\\System32\\wsl.exe', 'C:\\Windows\\System32\\wsl.exe'), {
     command: 'C:\\Windows\\System32\\wsl.exe',
-    args: ['--exec', 'pi'],
+    args: ['--exec', 'bash', '-lic', 'exec pi "$@"', 'alamelu-pi'],
   });
   assert.equal(
     buildWslPathEnvironment(

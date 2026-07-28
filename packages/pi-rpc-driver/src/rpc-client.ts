@@ -224,7 +224,10 @@ export function buildWslPiRpcSpawnSpec(
     "--cd",
     options.cwd,
     "--exec",
-    "pi",
+    "bash",
+    "-lic",
+    'exec pi "$@"',
+    "alamelu-pi",
     "--mode",
     "rpc",
     "--session-dir",
@@ -287,7 +290,10 @@ export interface PiRpcSpawnCommand {
 
 export function resolvePiRpcSpawnCommand(requestedPiBin: string, resolvedPiBin: string): PiRpcSpawnCommand {
   if (isWslPiExecutable(resolvedPiBin)) {
-    return { command: resolvedPiBin, args: ["--exec", "pi"] };
+    return {
+      command: resolvedPiBin,
+      args: ["--exec", "bash", "-lic", 'exec pi "$@"', "alamelu-pi"],
+    };
   }
   const nodeBin = inferNodeBinForGlobalNpmScript(resolvedPiBin);
   if (nodeBin && fs.existsSync(nodeBin)) {
