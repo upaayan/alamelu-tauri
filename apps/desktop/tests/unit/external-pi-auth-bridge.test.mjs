@@ -40,6 +40,91 @@ test("derives the installed Pi public auth module from its CLI entrypoint", () =
   );
 });
 
+test("loads authentication metadata from Pi inside WSL", async () => {
+  let localModuleResolutionCalled = false;
+  const bridge = await loadExternalPiAuthBridge({
+    piBin: String.raw`C:\Windows\System32\wsl.exe`,
+    agentDir: String.raw`\\wsl.localhost\Ubuntu\home\ubuntu\.pi\agent`,
+    resolvePiBin: async () => {
+      localModuleResolutionCalled = true;
+      return String.raw`C:\Windows\System32\wsl.exe`;
+    },
+    importModule: async () => {
+      localModuleResolutionCalled = true;
+      return {};
+    },
+    loadWslAuthSnapshot: async () => ({
+      providers: [
+        {
+          id: "openai-codex",
+          name: "OpenAI (ChatGPT Plus/Pro)",
+          authStatus: { configured: true, source: "stored" },
+          oauthSupported: true,
+          apiKeySetupSupported: false,
+        },
+        {
+          id: "nvidia",
+          name: "NVIDIA",
+          authStatus: { configured: true, source: "stored" },
+          oauthSupported: false,
+          apiKeySetupSupported: true,
+        },
+      ],
+      credentials: [
+        { providerId: "openai-codex", type: "oauth" },
+        { providerId: "nvidia", type: "api_key" },
+      ],
+      models: [
+        {
+          providerId: "openai-codex",
+          modelId: "gpt-5.6-sol",
+          api: "openai-responses",
+          contextWindow: 272000,
+        },
+        {
+          providerId: "nvidia",
+          modelId: "moonshotai/kimi-k2.5",
+          api: "openai-completions",
+          contextWindow: 262144,
+        },
+      ],
+    }),
+  });
+
+  assert.equal(localModuleResolutionCalled, false);
+  assert.deepEqual(bridge.getOAuthProviders(), [
+    { id: "openai-codex", name: "OpenAI (ChatGPT Plus/Pro)" },
+  ]);
+  assert.deepEqual(bridge.listCredentialProviderIds(), ["nvidia", "openai-codex"]);
+  assert.deepEqual(bridge.listModelProviderIds(), ["nvidia", "openai-codex"]);
+  assert.deepEqual(bridge.getAuthStatus("openai-codex"), {
+    configured: true,
+    source: "stored",
+  });
+  assert.equal(bridge.getStoredAuthType("openai-codex"), "oauth");
+  assert.equal(bridge.getStoredAuthType("nvidia"), "api_key");
+  assert.equal(bridge.getProviderDisplayName("nvidia"), "NVIDIA");
+  assert.equal(bridge.supportsApiKey("nvidia"), true);
+  assert.deepEqual(bridge.listModelMetadata(), [
+    {
+      providerId: "openai-codex",
+      modelId: "gpt-5.6-sol",
+      api: "openai-responses",
+      contextWindow: 272000,
+    },
+    {
+      providerId: "nvidia",
+      modelId: "moonshotai/kimi-k2.5",
+      api: "openai-completions",
+      contextWindow: 262144,
+    },
+  ]);
+  await assert.rejects(
+    bridge.logout("openai-codex"),
+    /Manage authentication from Pi inside WSL/,
+  );
+});
+
 test("supports Pi's ModelRuntime auth API", async () => {
   const calls = [];
   const runtime = {

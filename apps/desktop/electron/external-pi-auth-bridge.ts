@@ -1,7 +1,12 @@
+import { execFile } from "node:child_process";
 import { access, constants, realpath } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, win32 } from "node:path";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import type { RuntimeLoginCallbacks } from "@alamelu-pi/session-driver/runtime-types";
+
+const execFileAsync = promisify(execFile);
+const WSL_AUTH_PROBE_TIMEOUT_MS = 30_000;
 
 export interface ExternalPiAuthStatus {
   readonly configured: boolean;
@@ -85,6 +90,26 @@ export interface LoadExternalPiAuthBridgeOptions {
   readonly agentDir: string;
   readonly resolvePiBin?: (piBin: string) => Promise<string>;
   readonly importModule?: (moduleUrl: string) => Promise<unknown>;
+  readonly loadWslAuthSnapshot?: () => Promise<unknown>;
+}
+
+interface WslPiProviderSnapshot {
+  readonly id: string;
+  readonly name: string;
+  readonly authStatus: ExternalPiAuthStatus;
+  readonly oauthSupported: boolean;
+  readonly apiKeySetupSupported: boolean;
+}
+
+interface WslPiCredentialSnapshot {
+  readonly providerId: string;
+  readonly type: "oauth" | "api_key";
+}
+
+interface WslPiAuthSnapshot {
+  readonly providers: readonly WslPiProviderSnapshot[];
+  readonly credentials: readonly WslPiCredentialSnapshot[];
+  readonly models: readonly ExternalPiModelMetadata[];
 }
 
 export class ExternalPiAuthBridge {
@@ -180,6 +205,11 @@ export function externalPiAuthModulePaths(resolvedPiBin: string): ExternalPiAuth
 }
 
 export async function loadExternalPiAuthBridge(options: LoadExternalPiAuthBridgeOptions): Promise<ExternalPiAuthBridge> {
+  if (isWslPiExecutable(options.piBin)) {
+    const loadSnapshot = options.loadWslAuthSnapshot ?? (() => loadWslPiAuthSnapshot(options));
+    return createWslAuthBridge(normalizeWslAuthSnapshot(await loadSnapshot()));
+  }
+
   const resolvePiBin = options.resolvePiBin ?? resolveInstalledPiBin;
   const importModule = options.importModule ?? importInstalledPiModule;
   const modulePaths = externalPiAuthModulePaths(await resolvePiBin(options.piBin));
@@ -205,6 +235,116 @@ export async function loadExternalPiAuthBridge(options: LoadExternalPiAuthBridge
   }
 
   throw new Error("The installed Pi runtime exposes neither its public ModelRuntime API nor the legacy auth API.");
+}
+
+async function loadWslPiAuthSnapshot(options: LoadExternalPiAuthBridgeOptions): Promise<unknown> {
+  const env = withWslPathEnvironment(
+    {
+      ...process.env,
+      PI_CODING_AGENT_DIR: options.agentDir,
+    },
+    ["PI_CODING_AGENT_DIR"],
+  );
+  const command = [
+    'pi_path="$(readlink -f "$(command -v pi)")"',
+    'exec node --input-type=module -e "$1" "$pi_path"',
+  ].join("; ");
+  const { stdout } = await execFileAsync(
+    options.piBin,
+    ["--exec", "bash", "-lic", command, "alamelu-pi-auth-probe", WSL_AUTH_PROBE_SOURCE],
+    {
+      encoding: "utf8",
+      env,
+      timeout: WSL_AUTH_PROBE_TIMEOUT_MS,
+      maxBuffer: 8 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
+  return JSON.parse(stdout);
+}
+
+function isWslPiExecutable(value: string): boolean {
+  return win32.basename(value).toLowerCase() === "wsl.exe";
+}
+
+function withWslPathEnvironment(
+  env: NodeJS.ProcessEnv,
+  pathVariables: readonly string[],
+): NodeJS.ProcessEnv {
+  const entries = (env.WSLENV ?? "").split(":").filter(Boolean);
+  const existingNames = new Set(entries.map((entry) => entry.split("/")[0]?.toUpperCase()));
+  for (const variable of pathVariables) {
+    if (!existingNames.has(variable.toUpperCase())) {
+      entries.push(`${variable}/p`);
+    }
+  }
+  return { ...env, WSLENV: entries.join(":") };
+}
+
+function createWslAuthBridge(snapshot: WslPiAuthSnapshot): ExternalPiAuthBridge {
+  const providers = new Map(snapshot.providers.map((provider) => [provider.id, provider]));
+  const storedAuthTypes = new Map(snapshot.credentials.map((credential) => [credential.providerId, credential.type]));
+  const unsupportedMutation = async (): Promise<never> => {
+    throw new Error("Manage authentication from Pi inside WSL.");
+  };
+
+  return new ExternalPiAuthBridge({
+    getOAuthProviders: () =>
+      snapshot.providers
+        .filter((provider) => provider.oauthSupported)
+        .map((provider) => ({ id: provider.id, name: provider.name })),
+    listCredentialProviderIds: () => [...storedAuthTypes.keys()].sort(),
+    listModelProviderIds: () => [...new Set(snapshot.models.map((model) => model.providerId))].sort(),
+    listModelMetadata: () => snapshot.models,
+    getAuthStatus: (providerId) => providers.get(providerId)?.authStatus ?? { configured: false },
+    getStoredAuthType: (providerId) => storedAuthTypes.get(providerId),
+    getProviderDisplayName: (providerId) => providers.get(providerId)?.name ?? providerId,
+    supportsApiKey: (providerId) => providers.get(providerId)?.apiKeySetupSupported ?? false,
+    login: unsupportedMutation,
+    setApiKey: unsupportedMutation,
+    logout: unsupportedMutation,
+  });
+}
+
+function normalizeWslAuthSnapshot(value: unknown): WslPiAuthSnapshot {
+  const record = asRecord(value);
+  const providers = Array.isArray(record.providers)
+    ? record.providers.flatMap((entry): WslPiProviderSnapshot[] => {
+        const provider = asRecord(entry);
+        if (typeof provider.id !== "string") return [];
+        return [{
+          id: provider.id,
+          name: firstString(provider.name, provider.id),
+          authStatus: normalizeAuthStatus(provider.authStatus),
+          oauthSupported: provider.oauthSupported === true,
+          apiKeySetupSupported: provider.apiKeySetupSupported === true,
+        }];
+      })
+    : [];
+  const credentials = Array.isArray(record.credentials)
+    ? record.credentials.flatMap((entry): WslPiCredentialSnapshot[] => {
+        const credential = asRecord(entry);
+        return typeof credential.providerId === "string" &&
+          (credential.type === "oauth" || credential.type === "api_key")
+          ? [{ providerId: credential.providerId, type: credential.type }]
+          : [];
+      })
+    : [];
+  const models = Array.isArray(record.models)
+    ? record.models.flatMap((entry): ExternalPiModelMetadata[] => {
+        const model = asRecord(entry);
+        if (typeof model.providerId !== "string" || typeof model.modelId !== "string") return [];
+        return [{
+          providerId: model.providerId,
+          modelId: model.modelId,
+          ...(typeof model.api === "string" ? { api: model.api } : {}),
+          ...(typeof model.contextWindow === "number" && Number.isFinite(model.contextWindow)
+            ? { contextWindow: model.contextWindow }
+            : {}),
+        }];
+      })
+    : [];
+  return { providers, credentials, models };
 }
 
 async function resolveInstalledPiBin(piBin: string): Promise<string> {
@@ -512,3 +652,59 @@ function modelMetadataFrom(models: readonly unknown[]): readonly ExternalPiModel
   }
   return out;
 }
+
+const WSL_AUTH_PROBE_SOURCE = String.raw`
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { pathToFileURL } from "node:url";
+
+const cliPath = process.argv[1];
+const agentDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
+const distDir = dirname(cliPath);
+const piModule = await import(pathToFileURL(join(distDir, "index.js")).href);
+if (typeof piModule.ModelRuntime?.create !== "function") {
+  throw new Error("Installed WSL Pi does not expose ModelRuntime.create().");
+}
+const runtime = await piModule.ModelRuntime.create({
+  authPath: join(agentDir, "auth.json"),
+  modelsPath: join(agentDir, "models.json"),
+  allowModelNetwork: false,
+});
+const credentials = (await runtime.listCredentials()).flatMap((credential) =>
+  typeof credential?.providerId === "string" &&
+  (credential.type === "oauth" || credential.type === "api_key")
+    ? [{ providerId: credential.providerId, type: credential.type }]
+    : []
+);
+const providers = runtime.getProviders().flatMap((provider) => {
+  if (typeof provider?.id !== "string") return [];
+  const oauth = provider.auth?.oauth;
+  const apiKey = provider.auth?.apiKey;
+  const status = runtime.getProviderAuthStatus(provider.id);
+  return [{
+    id: provider.id,
+    name: [oauth?.name, oauth?.loginLabel, provider.name, provider.id]
+      .find((value) => typeof value === "string" && value.trim())?.trim() || provider.id,
+    authStatus: {
+      configured: status?.configured === true,
+      ...(typeof status?.source === "string" ? { source: status.source } : {}),
+      ...(typeof status?.label === "string" ? { label: status.label } : {}),
+    },
+    oauthSupported: Boolean(oauth && Object.keys(oauth).length > 0),
+    apiKeySetupSupported: typeof apiKey?.login === "function",
+  }];
+});
+const models = runtime.getModels().flatMap((model) =>
+  typeof model?.provider === "string" && typeof model?.id === "string"
+    ? [{
+        providerId: model.provider,
+        modelId: model.id,
+        ...(typeof model.api === "string" ? { api: model.api } : {}),
+        ...(typeof model.contextWindow === "number" && Number.isFinite(model.contextWindow)
+          ? { contextWindow: model.contextWindow }
+          : {}),
+      }]
+    : []
+);
+process.stdout.write(JSON.stringify({ providers, credentials, models }));
+`;
