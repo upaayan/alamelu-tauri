@@ -16,6 +16,7 @@ import {
   buildWslPathEnvironment,
   buildWslPiRpcSpawnSpec,
   isWslPiExecutable,
+  resolveRpcSpawnMode,
   resolvePiRpcSpawnCommand,
   buildPiRpcSpawnSpec,
 } from '../dist/index.js';
@@ -232,6 +233,17 @@ test('WSL command detection is Windows-path aware and preserves existing WSLENV 
     ).WSLENV,
     'PI_CODING_AGENT_DIR/p:PI_CODING_AGENT_SESSION_DIR/p',
   );
+});
+
+test('Windows RPC children stay headless without a detached console', () => {
+  assert.deepEqual(resolveRpcSpawnMode('win32'), {
+    detached: false,
+    windowsHide: true,
+  });
+  assert.deepEqual(resolveRpcSpawnMode('darwin'), {
+    detached: true,
+    windowsHide: false,
+  });
 });
 
 test('buildPiRpcSpawnSpec omits suppression and forced model flags in parity mode', () => {

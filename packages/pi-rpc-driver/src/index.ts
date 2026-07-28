@@ -6,6 +6,7 @@ export {
   buildWslPathEnvironment,
   buildWslPiRpcSpawnSpec,
   isWslPiExecutable,
+  resolveRpcSpawnMode,
   resolvePiRpcSpawnCommand,
   spawnPiRpcClient,
 } from "./rpc-client.js";

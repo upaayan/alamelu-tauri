@@ -262,12 +262,14 @@ export function buildWslPiRpcSpawnSpec(
 
 export function spawnPiRpcClient(options: SpawnPiRpcOptions): RpcClient {
   const spec = buildPiRpcSpawnSpec(options);
+  const spawnMode = resolveRpcSpawnMode();
 
   const child: ChildProcessWithoutNullStreams = spawn(spec.command, spec.args, {
     cwd: options.cwd,
     env: spec.env,
     shell: false,
-    detached: true,
+    detached: spawnMode.detached,
+    windowsHide: spawnMode.windowsHide,
     stdio: ["pipe", "pipe", "pipe"],
   });
 
@@ -281,6 +283,17 @@ export function spawnPiRpcClient(options: SpawnPiRpcOptions): RpcClient {
   return new RpcClient(transport, {
     ...(options.onStderr ? { onStderr: options.onStderr } : {}),
   });
+}
+
+export function resolveRpcSpawnMode(platform: NodeJS.Platform = process.platform): {
+  readonly detached: boolean;
+  readonly windowsHide: boolean;
+} {
+  const windows = platform === "win32";
+  return {
+    detached: !windows,
+    windowsHide: windows,
+  };
 }
 
 export interface PiRpcSpawnCommand {
