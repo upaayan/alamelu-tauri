@@ -12,6 +12,9 @@
     "build": "pnpm --filter @alamelu-pi/desktop run build",
     "typecheck": "pnpm --filter @alamelu-pi/desktop run typecheck",
     "package:alpi:dir": "pnpm --filter @alamelu-pi/desktop run package:alpi:dir",
+    "build:tauri": "pnpm --filter @alamelu-pi/desktop run build:tauri",
+    "check:tauri": "pnpm --filter @alamelu-pi/desktop run check:tauri",
+    "package:tauri": "pnpm --filter @alamelu-pi/desktop run package:tauri",
     "verify:external-runtime": "pnpm --filter @alamelu-pi/desktop run verify:external-runtime",
     "verify:packaged-runtime-deps": "pnpm --filter @alamelu-pi/desktop run verify:packaged-runtime-deps"
   }

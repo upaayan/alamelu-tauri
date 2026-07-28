@@ -248,7 +248,10 @@ export class NotificationManager {
   private async showNotification(sessionRef: SessionRef, title: string, body: string): Promise<void> {
     this.dismissForSession(sessionRef);
     await this.logNotification(sessionRef, title, body);
-    if (process.env.PI_APP_TEST_MODE) {
+    if (
+      process.env.PI_APP_TEST_MODE &&
+      process.env.ALAMELU_TAURI_TEST_NATIVE_NOTIFICATIONS !== "1"
+    ) {
       return;
     }
     const notification = new Notification({

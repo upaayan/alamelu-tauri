@@ -1,55 +1,66 @@
-# Alamelu Pi
+# Alamelu Pi Tauri
 
-A desktop app for `pi` sessions. macOS, local, single-user.
+A Tauri desktop app for `pi` sessions. The window is branded **Alamelu Pi**;
+the bundle is separately named **Alamelu Pi Tauri** so it can coexist with the
+existing Electron app.
 
 ## What this is
 
-Alamelu Pi is a **thin wrapper over the `pi` CLI you already have installed**. It does not bundle a Pi runtime and does not keep its own copy of your sessions, models, auth or configuration — the installed `pi` remains the single source of truth for all of it, and the app drives it over `pi --mode rpc`.
+Alamelu Pi is a **thin wrapper over the `pi` CLI you already have installed**.
+It does not bundle a Pi runtime or credentials. The installed `pi` remains the
+source of truth for providers, models, auth, skills and extensions, and the app
+drives it over `pi --mode rpc`.
 
-That is the main difference from the upstream project this is derived from, which bundled its own Pi runtime. Here, whatever you do in the terminal and whatever you do in the app are the same sessions, the same providers, the same settings.
+The existing React interface and Pi session engine are reused. Tauri owns the
+native window and a small Rust-to-Node transport; Electron is not present in the
+bundle.
 
 ## Scope
 
-This is a personal build, not a product:
+The completed first phase is a local Apple Silicon build:
 
-- **macOS only** (Apple Silicon). Windows would need a rewrite off Electron; not planned.
-- **No releases, no Homebrew tap, no auto-update.** The app never phones home and has no update mechanism at all.
-- **Built and installed locally** from this repo by its owner.
+- macOS Apple Silicon candidate only
+- no public repository or CI in this phase
+- no auto-update or notarization
+- separate identifier (`com.alamelu.pi.tauri`) and separate state from
+  `/Applications/Alamelu Pi.app`
 
 ## Requirements
 
 - A working `pi` installation on your `PATH`, already authenticated with whichever providers you use (`pi --list-models` should print a catalogue).
 - Node 24 and `pnpm` (via `corepack enable`).
+- Rust stable and the macOS command-line developer tools.
 
 ## Build and install
 
 ```bash
 pnpm install
-pnpm --filter @alamelu-pi/desktop run package:alpi:dir
+pnpm run check:tauri
+pnpm run package:tauri
+pnpm --filter @alamelu-pi/desktop run sign:tauri
+pnpm --filter @alamelu-pi/desktop run smoke:tauri:packaged
 ```
 
-That produces a signed `alpi.app` under `apps/desktop/release-alpi/mac-arm64/`. Back up the current app before replacing it:
-
-```bash
-cp -R "/Applications/Alamelu Pi.app" "/Applications/Alamelu Pi.app.backup-$(date +%Y%m%d)"
-rm -rf "/Applications/Alamelu Pi.app"
-cp -R apps/desktop/release-alpi/mac-arm64/alpi.app "/Applications/Alamelu Pi.app"
-```
+The signed candidate is produced at
+`apps/desktop/src-tauri/target/release/bundle/macos/Alamelu Pi Tauri.app`.
+These commands do not replace or modify `/Applications/Alamelu Pi.app`.
 
 Signing uses an AWS Secrets Manager–backed identity; the packaging script fails loudly if the secret is unavailable rather than falling back to an unsigned build. The app is signed but **not notarized**, which is fine on the machine that built it and would matter only if it were given to someone else.
 
 ## Development
 
 ```bash
-pnpm --filter @alamelu-pi/desktop dev        # run the app from source
-pnpm --filter @alamelu-pi/desktop build      # compile main, preload and renderer
-pnpm --filter @alamelu-pi/desktop typecheck  # both TypeScript projects
+pnpm --filter @alamelu-pi/desktop run build:tauri:assets
+pnpm --filter @alamelu-pi/desktop run typecheck
+cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
 
 Tests:
 
 ```bash
 node --test apps/desktop/tests/unit/*.test.mjs      # unit
+pnpm --filter @alamelu-pi/desktop run test:tauri:unit
+pnpm --filter @alamelu-pi/desktop run test:tauri:functional
 pnpm --filter @alamelu-pi/pi-rpc-driver test        # RPC driver suite
 ```
 
@@ -72,7 +83,11 @@ The patcher refuses to touch the file if pi's source no longer matches what it e
 
 ## Repository layout
 
-- `apps/desktop` — the Electron app: `electron/` (main process), `src/` (renderer)
+- `apps/desktop/src-tauri` — Tauri host, native commands and process transport
+- `apps/desktop/src/tauri-bridge.ts` — Tauri implementation of `window.piApp`
+- `apps/desktop/electron` — reused desktop backend plus the small Tauri
+  compatibility sidecar
+- `apps/desktop/src` — shared React renderer
 - `packages/pi-rpc-driver` — adapter to the installed `pi --mode rpc` process
 - `packages/session-driver` — shared session/driver types
 - `packages/catalogs` — workspace and session catalog state

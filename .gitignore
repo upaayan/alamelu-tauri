@@ -4,6 +4,7 @@ plans/
 dist/
 build/
 out/
+target/
 release/
 release-*/
 playwright-report/
