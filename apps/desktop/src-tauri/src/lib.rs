@@ -598,6 +598,17 @@ struct BackendLaunchSpec {
     backend_entry: Option<std::ffi::OsString>,
 }
 
+fn node_compatible_windows_path(path: &Path) -> std::ffi::OsString {
+    let value = path.as_os_str().to_string_lossy();
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{rest}").into();
+    }
+    if let Some(rest) = value.strip_prefix(r"\\?\") {
+        return rest.into();
+    }
+    path.as_os_str().to_os_string()
+}
+
 fn backend_launch_spec(backend_path: &Path, windows: bool) -> BackendLaunchSpec {
     if windows {
         BackendLaunchSpec {
@@ -605,7 +616,7 @@ fn backend_launch_spec(backend_path: &Path, windows: bool) -> BackendLaunchSpec 
                 "-e".into(),
                 "require(process.env.ALAMELU_TAURI_BACKEND_ENTRY);".into(),
             ],
-            backend_entry: Some(backend_path.as_os_str().to_os_string()),
+            backend_entry: Some(node_compatible_windows_path(backend_path)),
         }
     } else {
         BackendLaunchSpec {
@@ -1137,8 +1148,9 @@ mod tests {
 
     #[test]
     fn windows_backend_launch_keeps_spaced_entry_path_out_of_arguments() {
-        let backend_path =
-            Path::new(r"C:\Users\Asus\AppData\Local\Alamelu Pi Tauri\resources\backend\main.cjs");
+        let backend_path = Path::new(
+            r"\\?\C:\Users\Asus\AppData\Local\Alamelu Pi Tauri\resources\backend\main.cjs",
+        );
         let launch = backend_launch_spec(backend_path, true);
         assert_eq!(
             launch.args,
@@ -1149,7 +1161,9 @@ mod tests {
         );
         assert_eq!(
             launch.backend_entry,
-            Some(backend_path.as_os_str().to_os_string())
+            Some(OsString::from(
+                r"C:\Users\Asus\AppData\Local\Alamelu Pi Tauri\resources\backend\main.cjs"
+            ))
         );
     }
 
