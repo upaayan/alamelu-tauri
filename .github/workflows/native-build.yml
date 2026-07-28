@@ -1,0 +1,92 @@
+name: Native builds
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.5.2"
+
+jobs:
+  macos-apple-silicon:
+    name: macOS Apple Silicon
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: pnpm install --frozen-lockfile
+      - name: Test WSL launch adapter
+        run: |
+          pnpm --filter @alamelu-pi/pi-rpc-driver run build
+          node --test --test-name-pattern="WSL" packages/pi-rpc-driver/test/rpc-client.test.mjs
+      - name: Build Apple Silicon app
+        working-directory: apps/desktop
+        run: pnpm exec tauri build --config src-tauri/tauri.conf.json --target aarch64-apple-darwin --bundles app
+      - name: Ad-hoc sign and archive
+        working-directory: apps/desktop
+        run: |
+          codesign --force --deep --sign - "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Alamelu Pi Tauri.app"
+          codesign --verify --deep --strict "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Alamelu Pi Tauri.app"
+          ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Alamelu Pi Tauri.app" "Alamelu-Pi-Tauri-macos-arm64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Alamelu-Pi-Tauri-macos-arm64
+          path: apps/desktop/Alamelu-Pi-Tauri-macos-arm64.zip
+          if-no-files-found: error
+
+  windows-amd64:
+    name: Windows AMD64
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: pnpm install --frozen-lockfile
+      - name: Test WSL launch adapter
+        shell: pwsh
+        run: |
+          pnpm --filter @alamelu-pi/pi-rpc-driver run build
+          node --test --test-name-pattern="WSL" packages/pi-rpc-driver/test/rpc-client.test.mjs
+      - name: Build Windows installer
+        working-directory: apps/desktop
+        run: pnpm exec tauri build --config src-tauri/tauri.conf.json --target x86_64-pc-windows-msvc --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Alamelu-Pi-Tauri-windows-amd64
+          path: apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          if-no-files-found: error

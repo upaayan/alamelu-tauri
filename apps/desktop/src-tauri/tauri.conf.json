@@ -36,7 +36,8 @@
     "targets": ["app"],
     "icon": [
       "../resources/icon.png",
-      "../resources/alpi-icon.icns"
+      "../resources/alpi-icon.icns",
+      "../resources/alpi-icon.ico"
     ],
     "resources": {
       "../out/tauri-backend/main.cjs": "backend/main.cjs",

@@ -2,7 +2,12 @@ import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { access, chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { buildPiRpcPathEnv, resolvePiRpcSpawnCommand } from "@alamelu-pi/pi-rpc-driver";
+import {
+  buildPiRpcPathEnv,
+  buildWslPathEnvironment,
+  isWslPiExecutable,
+  resolvePiRpcSpawnCommand,
+} from "@alamelu-pi/pi-rpc-driver";
 import type { WorkspaceRef } from "@alamelu-pi/session-driver";
 import type {
   ModelSettingsSnapshot,
@@ -209,12 +214,15 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
   private async runPi(args: readonly string[]): Promise<string> {
     const resolvedPiBin = await realPiPath(this.options.piBin);
     const command = resolvePiRpcSpawnCommand(this.options.piBin, resolvedPiBin);
-    const env = {
+    const baseEnv = {
       ...process.env,
       ...this.options.env,
       PATH: buildPiRpcPathEnv(this.options.piBin, resolvedPiBin, this.options.env?.PATH ?? process.env.PATH),
       PI_CODING_AGENT_DIR: this.options.agentDir,
     };
+    const env = isWslPiExecutable(resolvedPiBin)
+      ? buildWslPathEnvironment(baseEnv, ["PI_CODING_AGENT_DIR"])
+      : baseEnv;
     return new Promise((resolve, reject) => {
       execFile(command.command, [...command.args, ...args], {
         env,

@@ -13,6 +13,9 @@ import {
   validateLabPaths,
   mapRpcEventToSessionDriverEvents,
   buildPiRpcPathEnv,
+  buildWslPathEnvironment,
+  buildWslPiRpcSpawnSpec,
+  isWslPiExecutable,
   resolvePiRpcSpawnCommand,
   buildPiRpcSpawnSpec,
 } from '../dist/index.js';
@@ -173,6 +176,59 @@ test('buildPiRpcPathEnv includes Node bin for globally installed Pi CLI scripts'
   );
   assert.equal(envPath.split(path.delimiter).includes('/Users/example/.nvm/versions/node/v24.16.0/bin'), true);
   assert.equal(envPath.split(path.delimiter).includes('/usr/bin'), true);
+});
+
+test('WSL launch wraps Pi RPC and translates session and extension paths', () => {
+  const translated = new Map([
+    ['C:\\Users\\Asus\\AppData\\Local\\Alamelu\\sessions', '/mnt/c/Users/Asus/AppData/Local/Alamelu/sessions'],
+    ['C:\\Program Files\\Alamelu\\recovery.ts', '/mnt/c/Program Files/Alamelu/recovery.ts'],
+  ]);
+  const spec = buildWslPiRpcSpawnSpec(
+    {
+      piBin: 'C:\\Windows\\System32\\wsl.exe',
+      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\ubuntu\\playground\\alamelu',
+      agentDir: '\\\\wsl.localhost\\Ubuntu\\home\\ubuntu\\.pi\\agent',
+      sessionDir: 'C:\\Users\\Asus\\AppData\\Local\\Alamelu\\sessions',
+      extensionPaths: ['C:\\Program Files\\Alamelu\\recovery.ts'],
+      noTools: false,
+      noExtensions: false,
+      noSkills: false,
+      env: { WSLENV: 'EXISTING/u' },
+    },
+    'C:\\Windows\\System32\\wsl.exe',
+    (value) => translated.get(value) ?? value,
+  );
+
+  assert.equal(spec.command, 'C:\\Windows\\System32\\wsl.exe');
+  assert.deepEqual(spec.args.slice(0, 8), [
+    '--cd',
+    '\\\\wsl.localhost\\Ubuntu\\home\\ubuntu\\playground\\alamelu',
+    '--exec',
+    'pi',
+    '--mode',
+    'rpc',
+    '--session-dir',
+    '/mnt/c/Users/Asus/AppData/Local/Alamelu/sessions',
+  ]);
+  assert.deepEqual(spec.args.slice(-2), ['--extension', '/mnt/c/Program Files/Alamelu/recovery.ts']);
+  assert.equal(spec.env.PI_CODING_AGENT_DIR, '\\\\wsl.localhost\\Ubuntu\\home\\ubuntu\\.pi\\agent');
+  assert.equal(spec.env.WSLENV, 'EXISTING/u:PI_CODING_AGENT_DIR/p:PI_CODING_AGENT_SESSION_DIR/p');
+});
+
+test('WSL command detection is Windows-path aware and preserves existing WSLENV entries', () => {
+  assert.equal(isWslPiExecutable('C:\\Windows\\System32\\wsl.exe'), true);
+  assert.equal(isWslPiExecutable('/usr/local/bin/pi'), false);
+  assert.deepEqual(resolvePiRpcSpawnCommand('C:\\Windows\\System32\\wsl.exe', 'C:\\Windows\\System32\\wsl.exe'), {
+    command: 'C:\\Windows\\System32\\wsl.exe',
+    args: ['--exec', 'pi'],
+  });
+  assert.equal(
+    buildWslPathEnvironment(
+      { WSLENV: 'PI_CODING_AGENT_DIR/p' },
+      ['PI_CODING_AGENT_DIR', 'PI_CODING_AGENT_SESSION_DIR'],
+    ).WSLENV,
+    'PI_CODING_AGENT_DIR/p:PI_CODING_AGENT_SESSION_DIR/p',
+  );
 });
 
 test('buildPiRpcSpawnSpec omits suppression and forced model flags in parity mode', () => {

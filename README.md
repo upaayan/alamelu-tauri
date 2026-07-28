@@ -15,21 +15,27 @@ The existing React interface and Pi session engine are reused. Tauri owns the
 native window and a small Rust-to-Node transport; Electron is not present in the
 bundle.
 
-## Scope
+## Builds
 
-The completed first phase is a local Apple Silicon build:
+GitHub Actions produces:
 
-- macOS Apple Silicon candidate only
-- no public repository or CI in this phase
-- no auto-update or notarization
-- separate identifier (`com.alamelu.pi.tauri`) and separate state from
-  `/Applications/Alamelu Pi.app`
+- a macOS Apple Silicon `.app`
+- a Windows AMD64 installer
+
+The macOS CI artifact is ad-hoc signed, not notarized. The Windows app uses
+native Tauri and Node on Windows, then runs the installed `pi` through WSL.
+It reads Pi credentials from the default WSL distribution; credentials are
+never bundled in either artifact or stored in this repository.
+
+The Windows/WSL path is compiled and unit-tested in CI, but its final runtime
+test must be performed on a real Windows machine with WSL. There is no
+auto-update system.
 
 ## Requirements
 
-- A working `pi` installation on your `PATH`, already authenticated with whichever providers you use (`pi --list-models` should print a catalogue).
-- Node 24 and `pnpm` (via `corepack enable`).
-- Rust stable and the macOS command-line developer tools.
+- macOS: a working `pi` on your `PATH`, already authenticated.
+- Windows: WSL with a working, authenticated `pi`; and Node 24 on Windows.
+- Building locally also requires `pnpm`, Rust stable and platform build tools.
 
 ## Build and install
 
@@ -45,7 +51,9 @@ The signed candidate is produced at
 `apps/desktop/src-tauri/target/release/bundle/macos/Alamelu Pi Tauri.app`.
 These commands do not replace or modify `/Applications/Alamelu Pi.app`.
 
-Signing uses an AWS Secrets Manager–backed identity; the packaging script fails loudly if the secret is unavailable rather than falling back to an unsigned build. The app is signed but **not notarized**, which is fine on the machine that built it and would matter only if it were given to someone else.
+Local macOS signing uses an AWS Secrets Manager–backed identity; the packaging
+script fails loudly if that secret is unavailable. Public GitHub builds do not
+receive that secret and use an ad-hoc signature instead.
 
 ## Development
 

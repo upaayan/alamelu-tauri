@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { Readable, Writable } from "node:stream";
@@ -185,6 +185,9 @@ export function buildPiRpcSpawnSpec(options: SpawnPiRpcOptions): PiRpcSpawnSpec 
     throw new Error(`RPC driver requires a resolved absolute pi binary path, got: ${options.piBin}`);
   }
   const piBin = fs.realpathSync.native(options.piBin);
+  if (isWslPiExecutable(piBin)) {
+    return buildWslPiRpcSpawnSpec(options, piBin, (value) => translateWindowsPathForWsl(piBin, value));
+  }
   const piCommand = resolvePiRpcSpawnCommand(options.piBin, piBin);
   const args = [...piCommand.args, "--mode", "rpc", "--session-dir", options.sessionDir];
   const pathEnv = buildPiRpcPathEnv(options.piBin, piBin, options.env?.PATH ?? process.env.PATH);
@@ -209,6 +212,48 @@ export function buildPiRpcSpawnSpec(options: SpawnPiRpcOptions): PiRpcSpawnSpec 
       PI_CODING_AGENT_DIR: options.agentDir,
       PI_CODING_AGENT_SESSION_DIR: options.sessionDir,
     },
+  };
+}
+
+export function buildWslPiRpcSpawnSpec(
+  options: SpawnPiRpcOptions,
+  wslExecutable: string,
+  translatePath: (value: string) => string,
+): PiRpcSpawnSpec {
+  const args = [
+    "--cd",
+    options.cwd,
+    "--exec",
+    "pi",
+    "--mode",
+    "rpc",
+    "--session-dir",
+    translatePath(options.sessionDir),
+  ];
+  if (options.provider) args.push("--provider", options.provider);
+  if (options.model) args.push("--model", options.model);
+  if (options.noTools ?? true) args.push("--no-tools");
+  if (options.noContextFiles ?? true) args.push("--no-context-files");
+  if (options.noExtensions ?? true) args.push("--no-extensions");
+  if (options.noSkills ?? true) args.push("--no-skills");
+  if (options.noPromptTemplates ?? true) args.push("--no-prompt-templates");
+  if (options.noThemes ?? true) args.push("--no-themes");
+  for (const extensionPath of options.extensionPaths ?? []) {
+    args.push("--extension", translatePath(extensionPath));
+  }
+  if (options.sessionId) args.push("--session-id", options.sessionId);
+
+  const baseEnv = {
+    ...process.env,
+    ...options.env,
+    PATH: buildPiRpcPathEnv(options.piBin, wslExecutable, options.env?.PATH ?? process.env.PATH),
+    PI_CODING_AGENT_DIR: options.agentDir,
+    PI_CODING_AGENT_SESSION_DIR: options.sessionDir,
+  };
+  return {
+    command: wslExecutable,
+    args,
+    env: buildWslPathEnvironment(baseEnv, ["PI_CODING_AGENT_DIR", "PI_CODING_AGENT_SESSION_DIR"]),
   };
 }
 
@@ -241,11 +286,45 @@ export interface PiRpcSpawnCommand {
 }
 
 export function resolvePiRpcSpawnCommand(requestedPiBin: string, resolvedPiBin: string): PiRpcSpawnCommand {
+  if (isWslPiExecutable(resolvedPiBin)) {
+    return { command: resolvedPiBin, args: ["--exec", "pi"] };
+  }
   const nodeBin = inferNodeBinForGlobalNpmScript(resolvedPiBin);
   if (nodeBin && fs.existsSync(nodeBin)) {
     return { command: nodeBin, args: [resolvedPiBin] };
   }
   return { command: resolvedPiBin, args: [] };
+}
+
+export function isWslPiExecutable(value: string): boolean {
+  return path.win32.basename(value).toLowerCase() === "wsl.exe";
+}
+
+export function buildWslPathEnvironment(
+  env: NodeJS.ProcessEnv,
+  pathVariables: readonly string[],
+): NodeJS.ProcessEnv {
+  const entries = (env.WSLENV ?? "").split(":").filter(Boolean);
+  const existingNames = new Set(entries.map((entry) => entry.split("/")[0]?.toUpperCase()));
+  for (const variable of pathVariables) {
+    if (!existingNames.has(variable.toUpperCase())) {
+      entries.push(`${variable}/p`);
+    }
+  }
+  return { ...env, WSLENV: entries.join(":") };
+}
+
+function translateWindowsPathForWsl(wslExecutable: string, value: string): string {
+  try {
+    return execFileSync(wslExecutable, ["--exec", "wslpath", "-a", "-u", value], {
+      encoding: "utf8",
+      windowsHide: true,
+    }).trim();
+  } catch (error) {
+    throw new Error(
+      `Could not translate Windows path for WSL: ${value}. ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 function inferNodeBinForGlobalNpmScript(resolvedPiBin: string): string | undefined {

@@ -608,7 +608,7 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Backend, String> {
     let home =
         dirs::home_dir().ok_or_else(|| "Could not resolve the home directory".to_string())?;
     let node = resolve_executable("node", "ALAMELU_TAURI_NODE", &home)?;
-    let pi = resolve_executable("pi", "PI_GUI_PI_BIN", &home)?;
+    let pi = resolve_pi_executable(&home)?;
     let app_data = env::var_os("PI_APP_USER_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or(
@@ -643,6 +643,13 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Backend, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    #[cfg(windows)]
+    if is_wsl_executable(&pi) {
+        command.env("PI_GUI_WSL", "1");
+        if env::var_os("PI_CODING_AGENT_DIR").is_none() {
+            command.env("PI_CODING_AGENT_DIR", resolve_wsl_agent_dir(&pi)?);
+        }
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -936,7 +943,11 @@ fn resolve_executable(name: &str, override_var: &str, home: &Path) -> Result<Pat
         candidates.push(PathBuf::from(value));
     }
     if let Some(path) = env::var_os("PATH") {
-        candidates.extend(env::split_paths(&path).map(|entry| entry.join(name)));
+        for entry in env::split_paths(&path) {
+            candidates.push(entry.join(name));
+            #[cfg(windows)]
+            candidates.push(entry.join(format!("{name}.exe")));
+        }
     }
     let nvm_root = home.join(".nvm").join("versions").join("node");
     if let Ok(entries) = fs::read_dir(&nvm_root) {
@@ -954,15 +965,18 @@ fn resolve_executable(name: &str, override_var: &str, home: &Path) -> Result<Pat
         PathBuf::from("/usr/local/bin").join(name),
         PathBuf::from("/usr/bin").join(name),
     ]);
-    let shell = env::var_os("SHELL").unwrap_or_else(|| "/bin/zsh".into());
-    if let Ok(output) = Command::new(shell)
-        .args(["-lc", &format!("command -v {name}")])
-        .output()
+    #[cfg(unix)]
     {
-        if output.status.success() {
-            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !value.is_empty() {
-                candidates.push(PathBuf::from(value));
+        let shell = env::var_os("SHELL").unwrap_or_else(|| "/bin/zsh".into());
+        if let Ok(output) = Command::new(shell)
+            .args(["-lc", &format!("command -v {name}")])
+            .output()
+        {
+            if output.status.success() {
+                let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !value.is_empty() {
+                    candidates.push(PathBuf::from(value));
+                }
             }
         }
     }
@@ -974,6 +988,45 @@ fn resolve_executable(name: &str, override_var: &str, home: &Path) -> Result<Pat
     Err(format!(
         "Could not find {name}. Set {override_var} to its absolute executable path."
     ))
+}
+
+#[cfg(not(windows))]
+fn resolve_pi_executable(home: &Path) -> Result<PathBuf, String> {
+    resolve_executable("pi", "PI_GUI_PI_BIN", home)
+}
+
+#[cfg(windows)]
+fn resolve_pi_executable(home: &Path) -> Result<PathBuf, String> {
+    resolve_executable("wsl", "PI_GUI_PI_BIN", home).map_err(|_| {
+        "Could not find WSL. Install WSL with Pi, or set PI_GUI_PI_BIN to wsl.exe.".to_string()
+    })
+}
+
+#[cfg(windows)]
+fn is_wsl_executable(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.eq_ignore_ascii_case("wsl.exe"))
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn resolve_wsl_agent_dir(wsl: &Path) -> Result<PathBuf, String> {
+    let output = Command::new(wsl)
+        .args(["--exec", "sh", "-lc", "wslpath -w \"$HOME\""])
+        .output()
+        .map_err(|error| format!("Could not query the WSL home directory: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "Could not query the WSL home directory: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let home = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if home.is_empty() {
+        return Err("WSL returned an empty home directory".to_string());
+    }
+    Ok(PathBuf::from(home).join(".pi").join("agent"))
 }
 
 pub fn run() {
@@ -1052,8 +1105,10 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
+    #[cfg(unix)]
     #[test]
     fn finder_like_resolution_finds_nvm_executables() {
         let root = env::temp_dir().join(format!("alamelu-tauri-resolver-{}", Uuid::new_v4()));

@@ -1,5 +1,14 @@
 export { JsonlDecoder } from "./jsonl-decoder.js";
-export { RpcClient, buildPiRpcPathEnv, buildPiRpcSpawnSpec, resolvePiRpcSpawnCommand, spawnPiRpcClient } from "./rpc-client.js";
+export {
+  RpcClient,
+  buildPiRpcPathEnv,
+  buildPiRpcSpawnSpec,
+  buildWslPathEnvironment,
+  buildWslPiRpcSpawnSpec,
+  isWslPiExecutable,
+  resolvePiRpcSpawnCommand,
+  spawnPiRpcClient,
+} from "./rpc-client.js";
 export type { PiRpcSpawnCommand, PiRpcSpawnSpec } from "./rpc-client.js";
 export type { RpcClientOptions, RpcEvent, RpcEventListener, RpcJsonObject, RpcResponse, RpcTransport, SpawnPiRpcOptions } from "./rpc-client.js";
 export { expandHomePath, canonicalizePath, pathContains, validateLabPaths } from "./path-guards.js";
