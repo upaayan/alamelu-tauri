@@ -626,6 +626,13 @@ fn backend_launch_spec(backend_path: &Path, windows: bool) -> BackendLaunchSpec 
     }
 }
 
+#[cfg(target_os = "macos")]
+fn default_shared_thread_data_dir(home: &Path) -> PathBuf {
+    home.join("Library")
+        .join("Application Support")
+        .join("Alamelu Pi")
+}
+
 fn start_backend(app: &tauri::AppHandle) -> Result<Backend, String> {
     let resource_dir = app
         .path()
@@ -679,6 +686,13 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Backend, String> {
         .stderr(Stdio::piped());
     if let Some(backend_entry) = launch.backend_entry {
         command.env("ALAMELU_TAURI_BACKEND_ENTRY", backend_entry);
+    }
+    #[cfg(target_os = "macos")]
+    if env::var_os("PI_GUI_SHARED_THREAD_DATA_DIR").is_none() {
+        command.env(
+            "PI_GUI_SHARED_THREAD_DATA_DIR",
+            default_shared_thread_data_dir(&home),
+        );
     }
     #[cfg(windows)]
     if is_wsl_executable(&pi) {
@@ -1164,6 +1178,15 @@ mod tests {
             Some(OsString::from(
                 r"C:\Users\Asus\AppData\Local\Alamelu Pi Tauri\resources\backend\main.cjs"
             ))
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_shared_thread_store_targets_the_electron_app() {
+        assert_eq!(
+            default_shared_thread_data_dir(Path::new("/Users/example")),
+            PathBuf::from("/Users/example/Library/Application Support/Alamelu Pi")
         );
     }
 

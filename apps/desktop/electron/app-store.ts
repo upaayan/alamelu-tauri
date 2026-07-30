@@ -132,6 +132,7 @@ export interface DesktopAppStoreOptions {
     options: GenerateThreadTitleOptions,
   ) => Promise<string | null | undefined>;
   readonly driver?: DesktopSessionDriver;
+  readonly noRepositoryWorkspacePath?: string;
   /** Where pi writes session JSONL. Used to size a thread before a model switch. */
   readonly sessionDir?: string;
   /** Resolved pi binary, used to detect whether the local pi-ai patch is applied. */
@@ -182,7 +183,9 @@ export class DesktopAppStore implements AppStoreInternals {
     this.initialWorkspacePaths = options.initialWorkspacePaths;
     this.enableNoRepositoryWorkspace = options.enableNoRepositoryWorkspace ?? false;
     this.getWindow = options.getWindow ?? (() => null);
-    this.noRepositoryWorkspacePath = join(options.userDataDir, NO_REPOSITORY_WORKSPACE_NAME);
+    this.noRepositoryWorkspacePath =
+      options.noRepositoryWorkspacePath ??
+      join(options.userDataDir, NO_REPOSITORY_WORKSPACE_NAME);
     this.sessionDir = options.sessionDir;
     this.piBin = options.piBin;
   }

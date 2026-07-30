@@ -26,7 +26,12 @@ import {
 import { ThemeManager } from "./theme-manager";
 import { TerminalService } from "./terminal-service";
 import { createRpcDesktopDriver } from "./rpc-desktop-driver";
-import { resolveDesktopDriverConfig, type DesktopDefaultRpcConfig, type DesktopDriverKind } from "./rpc-driver-config";
+import {
+  resolveDesktopDriverConfig,
+  resolveThreadStoragePaths,
+  type DesktopDefaultRpcConfig,
+  type DesktopDriverKind,
+} from "./rpc-driver-config";
 import { applyPiAiPatch, checkPiAiPatch, readPiVersion, resolvePiAiTarget, shouldReapplyPatch } from "./pi-ai-patch.mjs";
 import { normalizeProcessPathForPackagedApp, resolveInstalledPiBin } from "./process-path";
 import type { DesktopAppState, ThemeMode } from "../src/desktop-state";
@@ -643,20 +648,27 @@ function resolveAppBrand(): AppBrandConfig {
   return {
     appName: process.env.PI_GUI_APP_NAME?.trim() || "Alamelu Pi",
     defaultDriver: "rpc",
-    defaultRpc: (defaultUserDataDir) => ({
-      piBin: resolveInstalledPiBin({ homeDir: homedir() }),
-      agentDir: "~/.pi/agent",
-      sessionDir: path.join(defaultUserDataDir, "sessions"),
-      userDataDir: defaultUserDataDir,
-      labWorkspace: path.join(defaultUserDataDir, "workspace"),
-      allowSharedAgentDir: true,
-      noTools: false,
-      noExtensions: false,
-      noSkills: false,
-      noPromptTemplates: false,
-      noThemes: false,
-      allowRealWorkspace: true,
-    }),
+    defaultRpc: (defaultUserDataDir) => {
+      const threadStorage = resolveThreadStoragePaths(
+        process.env,
+        defaultUserDataDir,
+        homedir(),
+      );
+      return {
+        piBin: resolveInstalledPiBin({ homeDir: homedir() }),
+        agentDir: "~/.pi/agent",
+        sessionDir: threadStorage.sessionDir,
+        userDataDir: defaultUserDataDir,
+        labWorkspace: path.join(defaultUserDataDir, "workspace"),
+        allowSharedAgentDir: true,
+        noTools: false,
+        noExtensions: false,
+        noSkills: false,
+        noPromptTemplates: false,
+        noThemes: false,
+        allowRealWorkspace: true,
+      };
+    },
   };
 }
 
@@ -758,6 +770,11 @@ const desktopDriverConfig = resolveDesktopDriverConfig(process.env, {
   ...(appBrand.defaultRpc ? { defaultRpc: appBrand.defaultRpc(defaultUserDataDir) } : {}),
 });
 const configuredUserDataDir = desktopDriverConfig.userDataDir;
+const threadStorage = resolveThreadStoragePaths(
+  process.env,
+  configuredUserDataDir,
+  homedir(),
+);
 bootLog(`driver=${desktopDriverConfig.driver} userData=${configuredUserDataDir}`);
 app.setPath("userData", configuredUserDataDir);
 if (desktopDriverConfig.driver === "rpc") {
@@ -828,7 +845,7 @@ app.whenReady().then(async () => {
           labWorkspace: desktopDriverConfig.rpc.labWorkspace,
           expectedLabWorkspaceRoot: desktopDriverConfig.rpc.labWorkspace,
           productionUserDataDir: desktopDriverConfig.rpc.productionUserDataDir,
-          catalogFilePath: path.join(configuredUserDataDir, "catalogs.json"),
+          catalogFilePath: threadStorage.catalogFilePath,
           ...(desktopDriverConfig.rpc.provider ? { provider: desktopDriverConfig.rpc.provider } : {}),
           ...(desktopDriverConfig.rpc.model ? { model: desktopDriverConfig.rpc.model } : {}),
           ...(desktopDriverConfig.rpc.allowSharedAgentDir ? { allowSharedAgentDir: desktopDriverConfig.rpc.allowSharedAgentDir } : {}),
@@ -850,6 +867,7 @@ app.whenReady().then(async () => {
         ? [desktopDriverConfig.rpc.labWorkspace]
         : resolveInitialWorkspacePaths(),
     enableNoRepositoryWorkspace: alpiBrand,
+    noRepositoryWorkspacePath: threadStorage.noRepositoryWorkspacePath,
     getWindow: () => mainWindow,
     generateThreadTitleOverride: async (workspace, options) => generateThreadTitleOverride?.(workspace, options),
     ...(rpcDriver ? { driver: rpcDriver } : {}),

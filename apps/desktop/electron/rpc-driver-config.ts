@@ -59,6 +59,28 @@ export interface DesktopRpcDriverConfig {
 
 export type DesktopDriverConfig = DesktopSdkDriverConfig | DesktopRpcDriverConfig;
 
+export interface ThreadStoragePaths {
+  readonly sessionDir: string;
+  readonly catalogFilePath: string;
+  readonly noRepositoryWorkspacePath: string;
+}
+
+export function resolveThreadStoragePaths(
+  env: NodeJS.ProcessEnv,
+  defaultUserDataDir: string,
+  homeDir?: string,
+): ThreadStoragePaths {
+  const root = canonicalizePath(
+    env.PI_GUI_SHARED_THREAD_DATA_DIR?.trim() || defaultUserDataDir,
+    homeDir,
+  );
+  return {
+    sessionDir: path.join(root, "sessions"),
+    catalogFilePath: path.join(root, "catalogs.json"),
+    noRepositoryWorkspacePath: path.join(root, "No Repository"),
+  };
+}
+
 export function resolveDesktopDriverConfig(
   env: NodeJS.ProcessEnv,
   options: DesktopDriverConfigOptions,

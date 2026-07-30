@@ -21,7 +21,46 @@ writeFileSync(tempModulePath, transpiled, 'utf8');
 after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
-const { resolveDesktopDriverConfig } = await import(path.toNamespacedPath(tempModulePath));
+const { resolveDesktopDriverConfig, resolveThreadStoragePaths } = await import(
+  path.toNamespacedPath(tempModulePath)
+);
+
+test('resolveThreadStoragePaths keeps thread data in the app data directory by default', () => {
+  assert.deepEqual(
+    resolveThreadStoragePaths(
+      {},
+      '/Users/example/Library/Application Support/com.alamelu.pi.tauri',
+      '/Users/example',
+    ),
+    {
+      sessionDir: '/Users/example/Library/Application Support/com.alamelu.pi.tauri/sessions',
+      catalogFilePath:
+        '/Users/example/Library/Application Support/com.alamelu.pi.tauri/catalogs.json',
+      noRepositoryWorkspacePath:
+        '/Users/example/Library/Application Support/com.alamelu.pi.tauri/No Repository',
+    },
+  );
+});
+
+test('resolveThreadStoragePaths shares only sessions and the catalogue when requested', () => {
+  assert.deepEqual(
+    resolveThreadStoragePaths(
+      {
+        PI_GUI_SHARED_THREAD_DATA_DIR:
+          '/Users/example/Library/Application Support/Alamelu Pi',
+      },
+      '/Users/example/Library/Application Support/com.alamelu.pi.tauri',
+      '/Users/example',
+    ),
+    {
+      sessionDir: '/Users/example/Library/Application Support/Alamelu Pi/sessions',
+      catalogFilePath:
+        '/Users/example/Library/Application Support/Alamelu Pi/catalogs.json',
+      noRepositoryWorkspacePath:
+        '/Users/example/Library/Application Support/Alamelu Pi/No Repository',
+    },
+  );
+});
 
 test('resolveDesktopDriverConfig defaults to sdk driver and existing userData path', () => {
   const config = resolveDesktopDriverConfig({}, { homeDir: '/Users/example', defaultUserDataDir: '/Users/example/Library/Application Support/pi-gui' });
