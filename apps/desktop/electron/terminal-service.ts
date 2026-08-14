@@ -375,7 +375,11 @@ export class TerminalService {
 
   private resolveShell(): string {
     const configuredShell = this.options.getIntegratedTerminalShell()?.trim();
-    const shellPath = configuredShell || process.env.SHELL || defaultShellForPlatform();
+    const fallbackShell =
+      process.platform === "win32"
+        ? defaultShellForPlatform()
+        : process.env.SHELL || defaultShellForPlatform();
+    const shellPath = configuredShell || fallbackShell;
     if (process.platform !== "win32" && !path.isAbsolute(shellPath)) {
       throw new Error(`Integrated terminal shell must be an absolute path: ${shellPath}`);
     }
@@ -422,6 +426,11 @@ function ensureExecutable(shellPath: string): void {
 
 function defaultShellForPlatform(): string {
   if (process.platform === "win32") {
+    const systemRoot = process.env.SystemRoot || "C:\\Windows";
+    const wslPath = path.join(systemRoot, "System32", "wsl.exe");
+    if (existsSync(wslPath)) {
+      return wslPath;
+    }
     return process.env.ComSpec || "cmd.exe";
   }
   if (process.platform === "darwin") {

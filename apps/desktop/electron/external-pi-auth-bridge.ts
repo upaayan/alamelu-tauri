@@ -260,7 +260,15 @@ async function loadWslPiAuthSnapshot(options: LoadExternalPiAuthBridgeOptions): 
       windowsHide: true,
     },
   );
-  return JSON.parse(stdout);
+  const startMarker = "__ALPI_AUTH_SNAPSHOT_START__";
+  const endMarker = "__ALPI_AUTH_SNAPSHOT_END__";
+  const startIndex = stdout.indexOf(startMarker);
+  const endIndex = stdout.indexOf(endMarker);
+  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+    const jsonText = stdout.slice(startIndex + startMarker.length, endIndex).trim();
+    return JSON.parse(jsonText);
+  }
+  return JSON.parse(stdout.trim());
 }
 
 function isWslPiExecutable(value: string): boolean {
@@ -706,5 +714,5 @@ const models = runtime.getModels().flatMap((model) =>
       }]
     : []
 );
-process.stdout.write(JSON.stringify({ providers, credentials, models }));
+process.stdout.write("__ALPI_AUTH_SNAPSHOT_START__" + JSON.stringify({ providers, credentials, models }) + "__ALPI_AUTH_SNAPSHOT_END__");
 `;

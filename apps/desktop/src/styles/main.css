@@ -175,7 +175,7 @@
 }
 
 .shortcut-tooltip-wrap:hover .shortcut-tooltip,
-.shortcut-tooltip-wrap:focus-within .shortcut-tooltip {
+.shortcut-tooltip-wrap:has(:focus-visible) .shortcut-tooltip {
   opacity: 1;
   transform: translateX(-50%);
 }
