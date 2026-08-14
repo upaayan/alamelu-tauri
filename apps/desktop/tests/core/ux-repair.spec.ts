@@ -120,3 +120,84 @@ test("/tree is offered now that the driver implements it", async () => {
     await harness.close();
   }
 });
+
+test("sidebar toggle button collapses and re-expands the sidebar via mouse clicks", async () => {
+  test.setTimeout(60_000);
+  const { harness } = await launchAlpi("ux-repair-sidebar-toggle");
+
+  try {
+    const window = await harness.firstWindow();
+    const toggleButton = window.getByTestId("sidebar-toggle");
+    await expect(toggleButton).toBeVisible();
+    await expect(window.locator(".sidebar")).toBeVisible();
+
+    // 1. Click toggle button to collapse sidebar
+    await toggleButton.click();
+    await expect(window.locator(".sidebar")).toHaveCount(0);
+    await expect(toggleButton).toBeVisible();
+
+    // Verify app-regions when collapsed: toggle button must be no-drag and inside topbar
+    const collapsedRegions = await window.evaluate(() => {
+      const topbar = document.querySelector<HTMLElement>("[data-testid='topbar']");
+      const toggle = document.querySelector<HTMLElement>("[data-testid='sidebar-toggle']");
+      return {
+        topbarRegion: topbar ? getComputedStyle(topbar).getPropertyValue("-webkit-app-region") : "",
+        toggleRegion: toggle ? getComputedStyle(toggle).getPropertyValue("-webkit-app-region") : "",
+        isToggleInsideTopbar: topbar ? Boolean(topbar.querySelector("[data-testid='sidebar-toggle']")) : false,
+      };
+    });
+    expect(collapsedRegions.topbarRegion).toBe("drag");
+    expect(collapsedRegions.toggleRegion).toBe("no-drag");
+    expect(collapsedRegions.isToggleInsideTopbar).toBe(true);
+
+    // 2. Click toggle button while collapsed to re-expand sidebar
+    await toggleButton.click();
+    await expect(window.locator(".sidebar")).toBeVisible();
+  } finally {
+    await harness.close();
+  }
+});
+
+test("topbar open/add folder icon displays shortcut tooltip on mouseover", async () => {
+  test.setTimeout(60_000);
+  const { harness } = await launchAlpi("ux-repair-topbar-folder-tooltip");
+
+  try {
+    const window = await harness.firstWindow();
+    const folderActionWrap = window.locator(".topbar__actions .shortcut-tooltip-wrap").last();
+    const folderButton = folderActionWrap.locator("button");
+    const folderTooltip = folderActionWrap.locator(".shortcut-tooltip");
+
+    await expect(folderButton).toBeVisible();
+    await expect(folderTooltip).toBeAttached();
+    await expect(folderTooltip).toContainText("Open folder");
+    const shortcutExpected = process.platform === "darwin" ? "⌘O" : "Ctrl+O";
+    await expect(folderTooltip.locator("kbd")).toHaveText(shortcutExpected);
+
+    // Tooltip starts transparent (opacity: 0)
+    await expect(folderTooltip).toHaveCSS("opacity", "0");
+
+    // Hovering reveals tooltip (opacity: 1)
+    await folderActionWrap.hover();
+    await expect(folderTooltip).toHaveCSS("opacity", "1");
+  } finally {
+    await harness.close();
+  }
+});
+
+test("typing the letter o in composer does not trigger open folder", async () => {
+  test.setTimeout(60_000);
+  const { harness } = await launchAlpi("ux-repair-typing-o");
+
+  try {
+    const window = await harness.firstWindow();
+    await window.getByRole("button", { name: "New thread" }).first().click();
+
+    const composer = window.getByTestId("new-thread-composer");
+    await composer.click();
+    await composer.pressSequentially("hello world");
+    await expect(composer).toHaveValue("hello world");
+  } finally {
+    await harness.close();
+  }
+});

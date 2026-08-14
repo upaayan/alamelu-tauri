@@ -1,10 +1,11 @@
-import type { MouseEvent as ReactMouseEvent, Dispatch, SetStateAction } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode, Dispatch, SetStateAction } from "react";
 import type { AppView, DesktopAppState, SessionRecord, WorkspaceRecord, WorktreeRecord } from "./desktop-state";
 import { DiffIcon, FolderIcon, TerminalIcon } from "./icons";
 import { getDesktopShortcutLabel, type PiDesktopApi } from "./ipc";
 import type { WorkspaceMenuState } from "./hooks/use-workspace-menu";
 
 interface TopbarProps {
+  readonly primarySidebarToggle?: ReactNode;
   readonly activeView: AppView;
   readonly rootWorkspace: WorkspaceRecord | undefined;
   readonly selectedWorkspace: WorkspaceRecord | undefined;
@@ -30,6 +31,7 @@ interface TopbarProps {
 
 export function Topbar(props: TopbarProps) {
   const {
+    primarySidebarToggle,
     activeView,
     rootWorkspace,
     selectedWorkspace,
@@ -50,6 +52,7 @@ export function Topbar(props: TopbarProps) {
   } = props;
   const terminalShortcut = getDesktopShortcutLabel(api.platform, "J");
   const diffShortcut = getDesktopShortcutLabel(api.platform, "D");
+  const openFolderShortcut = getDesktopShortcutLabel(api.platform, "O");
 
   const handleDoubleClick = (event: ReactMouseEvent<HTMLElement>) => {
     const target = event.target;
@@ -66,6 +69,7 @@ export function Topbar(props: TopbarProps) {
 
   return (
     <header className="topbar" data-testid="topbar" onDoubleClick={handleDoubleClick}>
+      {primarySidebarToggle}
       <div className="topbar__title">
         <span className="topbar__workspace">
           {rootWorkspace ? rootWorkspace.name : "Open a folder to begin"}
@@ -162,16 +166,22 @@ export function Topbar(props: TopbarProps) {
             <kbd>{diffShortcut}</kbd>
           </span>
         </div>
-        <button
-          aria-label="Add folder"
-          className="icon-button topbar__icon"
-          type="button"
-          onClick={() => {
-            void updateSnapshot(api, setSnapshot, () => api.pickWorkspace());
-          }}
-        >
-          <FolderIcon />
-        </button>
+        <div className="shortcut-tooltip-wrap topbar__tooltip-wrap">
+          <button
+            aria-label="Add folder"
+            className="icon-button topbar__icon"
+            type="button"
+            onClick={() => {
+              void updateSnapshot(api, setSnapshot, () => api.pickWorkspace());
+            }}
+          >
+            <FolderIcon />
+          </button>
+          <span className="shortcut-tooltip topbar__tooltip" role="tooltip">
+            <span>Open folder</span>
+            <kbd>{openFolderShortcut}</kbd>
+          </span>
+        </div>
       </div>
     </header>
   );

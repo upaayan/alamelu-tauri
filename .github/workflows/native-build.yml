@@ -1,6 +1,9 @@
 name: Native builds
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       platform:
@@ -26,7 +29,7 @@ env:
 
 jobs:
   macos-apple-silicon:
-    if: ${{ inputs.platform == 'all' || inputs.platform == 'macos' }}
+    if: ${{ github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'macos' }}
     name: macOS Apple Silicon
     runs-on: macos-14
     timeout-minutes: 60
@@ -67,7 +70,7 @@ jobs:
           if-no-files-found: error
 
   windows-amd64:
-    if: ${{ inputs.platform == 'all' || inputs.platform == 'windows' }}
+    if: ${{ github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'windows' }}
     name: Windows AMD64
     runs-on: windows-2022
     timeout-minutes: 60

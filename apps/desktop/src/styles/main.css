@@ -44,6 +44,7 @@
 }
 
 .topbar {
+  position: relative;
   -webkit-app-region: drag;
   padding: 12px 18px 10px;
   display: flex;
@@ -179,8 +180,12 @@
   transform: translateX(-50%);
 }
 
-.sidebar-toggle {
+.sidebar-toggle,
+.sidebar-toggle * {
   -webkit-app-region: no-drag;
+}
+
+.sidebar-toggle {
   position: absolute;
   top: 11px;
   left: var(--titlebar-toggle-left);

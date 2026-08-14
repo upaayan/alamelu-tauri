@@ -122,6 +122,7 @@ export const desktopCommands = {
   openNewThread: "open-new-thread",
   toggleTerminal: "toggle-terminal",
   toggleSidebar: "toggle-sidebar",
+  openFolder: "open-folder",
 } as const;
 
 export function getDesktopShortcutLabel(platform: NodeJS.Platform, key: string): string {
@@ -241,6 +242,7 @@ export function getDesktopCommandFromShortcut(input: DesktopShortcutInput): PiDe
   const isComma = input.key === "," || input.code === "Comma";
   const isB = lowerKey === "b" || input.code === "KeyB";
   const isJ = lowerKey === "j" || input.code === "KeyJ";
+  const isO = !input.shift && (lowerKey === "o" || input.code === "KeyO");
   const isShiftO = input.shift && (lowerKey === "o" || input.code === "KeyO");
 
   if (!input.shift && isComma) {
@@ -253,6 +255,10 @@ export function getDesktopCommandFromShortcut(input: DesktopShortcutInput): PiDe
 
   if (!input.shift && isB) {
     return desktopCommands.toggleSidebar;
+  }
+
+  if (isO) {
+    return desktopCommands.openFolder;
   }
 
   if (isShiftO) {

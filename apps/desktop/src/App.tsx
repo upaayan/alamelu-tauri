@@ -1193,6 +1193,11 @@ export default function App() {
         return true;
       } else if (command === desktopCommands.toggleSidebar) {
         return handleTogglePrimarySidebar();
+      } else if (command === desktopCommands.openFolder) {
+        if (api) {
+          void updateSnapshot(api, setSnapshot, () => api.pickWorkspace());
+          return true;
+        }
       }
       return false;
     };
@@ -1211,7 +1216,7 @@ export default function App() {
           key: event.key,
           code: event.code,
         });
-        if (command === desktopCommands.toggleTerminal) {
+        if (command === desktopCommands.toggleTerminal || command === desktopCommands.openFolder) {
           event.preventDefault();
           handleCommand(command);
         }
@@ -2268,9 +2273,9 @@ export default function App() {
 
   return (
     <div className={shellClassName} style={shellStyle}>
-      {primarySidebarToggleVisible ? (
+      {primarySidebarToggleVisible && !snapshot.sidebarCollapsed ? (
         <SidebarToggleButton
-          collapsed={snapshot.sidebarCollapsed}
+          collapsed={false}
           shortcutLabel={sidebarToggleShortcutLabel}
           onToggle={handleTogglePrimarySidebar}
         />
@@ -2313,6 +2318,15 @@ export default function App() {
 
       <main className={mainClassName}>
         <Topbar
+          primarySidebarToggle={
+            primarySidebarToggleVisible && snapshot.sidebarCollapsed ? (
+              <SidebarToggleButton
+                collapsed={true}
+                shortcutLabel={sidebarToggleShortcutLabel}
+                onToggle={handleTogglePrimarySidebar}
+              />
+            ) : undefined
+          }
           activeView={snapshot.activeView}
           rootWorkspace={rootWorkspace}
           selectedWorkspace={selectedWorkspace}
