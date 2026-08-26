@@ -161,6 +161,7 @@ export class DesktopAppStore implements AppStoreInternals {
   private noRepositoryWorkspacePath: string;
   private persistUiStateTimer: NodeJS.Timeout | undefined;
   private readonly transcriptPersistTimers = new Map<string, NodeJS.Timeout>();
+  private streamingPublishTimer: NodeJS.Timeout | undefined;
   private readonly restoredSelectedSessionKeysAwaitingSelection = new Set<string>();
   readonly sessionDir: string | undefined;
   readonly piBin: string | undefined;
@@ -1542,6 +1543,12 @@ export class DesktopAppStore implements AppStoreInternals {
     } else if (event.type !== "hostUiRequest") {
       this.schedulePersistUiState();
     }
+    if (event.type === "assistantDelta") {
+      this.scheduleStreamingPublish(event.sessionRef);
+      await this.emitSessionEvent(event, this.state);
+      return;
+    }
+    this.flushStreamingPublish();
     const snapshot = this.emit();
     this.publishSelectedTranscriptFor(event.sessionRef);
     await this.emitSessionEvent(event, snapshot);
@@ -1814,6 +1821,25 @@ export class DesktopAppStore implements AppStoreInternals {
   ): Promise<void> {
     await this.attachmentStore.write(key, cloneComposerAttachments(attachments));
     await this.persistUiState();
+  }
+
+  scheduleStreamingPublish(_sessionRef: SessionRef): void {
+    if (this.streamingPublishTimer) {
+      return;
+    }
+    this.streamingPublishTimer = setTimeout(() => {
+      this.streamingPublishTimer = undefined;
+      this.emit();
+      this.publishSelectedTranscript();
+    }, 32);
+  }
+
+  flushStreamingPublish(): void {
+    if (!this.streamingPublishTimer) {
+      return;
+    }
+    clearTimeout(this.streamingPublishTimer);
+    this.streamingPublishTimer = undefined;
   }
 
   persistTranscriptCacheForSession(sessionRef: SessionRef): void {

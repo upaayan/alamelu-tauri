@@ -1038,6 +1038,10 @@
   line-height: 1.65;
 }
 
+.message__stream-tail {
+  white-space: pre-wrap;
+}
+
 .message__content > :first-child {
   margin-top: 0;
 }

@@ -549,6 +549,13 @@ export default function App() {
     selectedTranscript.sessionId === selectedSession.id
       ? selectedTranscript.transcript
       : [];
+  const lastTranscriptItem = activeTranscript.at(-1);
+  const streamingMessageId =
+    selectedSession?.status === "running" &&
+    lastTranscriptItem?.kind === "message" &&
+    lastTranscriptItem.role === "assistant"
+      ? lastTranscriptItem.id
+      : undefined;
   const isTranscriptLoading = Boolean(selectedSession) && activeTranscript.length === 0 && (
     !selectedTranscript ||
     selectedTranscript.workspaceId !== selectedWorkspace?.id ||
@@ -2442,6 +2449,7 @@ export default function App() {
                   onJumpToLatest={jumpToLatest}
                   onContentHeightChange={handleTimelineContentHeightChange}
                   onViewFileInDiff={handleViewFileInDiff}
+                  streamingMessageId={streamingMessageId}
                 />
               </div>
             </section>

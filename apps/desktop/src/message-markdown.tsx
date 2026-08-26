@@ -1,7 +1,9 @@
+import { memo } from "react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CopyIcon } from "./icons";
+import { splitStreamingMarkdown } from "./message-markdown-split";
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -56,12 +58,34 @@ const MARKDOWN_COMPONENTS = {
   ),
 } as const;
 
-export function MessageMarkdown({ text }: { readonly text: string }) {
+const MarkdownBody = memo(function MarkdownBody({ text }: { readonly text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+});
+
+export const MessageMarkdown = memo(function MessageMarkdown({
+  text,
+  streaming = false,
+}: {
+  readonly text: string;
+  readonly streaming?: boolean;
+}) {
+  if (!streaming) {
+    return (
+      <div className="message__content">
+        <MarkdownBody text={text} />
+      </div>
+    );
+  }
+
+  const { stable, tail } = splitStreamingMarkdown(text);
   return (
     <div className="message__content">
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>
-        {text}
-      </ReactMarkdown>
+      {stable ? <MarkdownBody text={stable} /> : null}
+      {tail ? <span className="message__stream-tail">{tail}</span> : null}
     </div>
   );
-}
+});

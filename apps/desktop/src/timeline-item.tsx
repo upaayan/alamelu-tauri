@@ -7,18 +7,20 @@ import { extensionToLanguage } from "./syntax-highlight";
 
 export function TimelineItem({
   item,
+  streaming = false,
   expandedToolCallIds,
   onToggleToolCall,
   onViewFileInDiff,
 }: {
   readonly item: TranscriptMessage;
+  readonly streaming?: boolean;
   readonly expandedToolCallIds?: ReadonlySet<string>;
   readonly onToggleToolCall?: (callId: string) => void;
   readonly onViewFileInDiff?: (path: string) => void;
 }) {
   switch (item.kind) {
     case "message":
-      return <TimelineMessage item={item} />;
+      return <TimelineMessage item={item} streaming={streaming} />;
     case "activity":
       return <TimelineActivityItem item={item} />;
     case "tool":
@@ -37,7 +39,13 @@ export function TimelineItem({
   }
 }
 
-function TimelineMessage({ item }: { readonly item: SessionTranscriptMessage }) {
+function TimelineMessage({
+  item,
+  streaming = false,
+}: {
+  readonly item: SessionTranscriptMessage;
+  readonly streaming?: boolean;
+}) {
   if (item.role === "user") {
     return (
       <article className="timeline-item timeline-item--user">
@@ -86,7 +94,7 @@ function TimelineMessage({ item }: { readonly item: SessionTranscriptMessage }) 
 
   return (
     <article className="timeline-item timeline-item--assistant">
-      <MessageMarkdown text={item.text} />
+      <MessageMarkdown text={item.text} streaming={streaming} />
     </article>
   );
 }
