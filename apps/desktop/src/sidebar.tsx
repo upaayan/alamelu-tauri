@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -14,7 +14,7 @@ import {
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { AppView, SessionRecord, WorkspaceRecord, WorktreeRecord } from "./desktop-state";
-import { ArchiveIcon, ChevronDownIcon, EditIcon, ExtensionIcon, FolderIcon, PlusIcon, RestoreIcon, SettingsIcon, SkillIcon, WorktreeIcon } from "./icons";
+import { ArchiveIcon, BellIcon, ChevronDownIcon, EditIcon, ExtensionIcon, FolderIcon, PlusIcon, RestoreIcon, SearchIcon, SettingsIcon, SkillIcon, WorktreeIcon } from "./icons";
 import type { PiDesktopApi } from "./ipc";
 import { formatRelativeTime } from "./string-utils";
 import type { WorkspaceMenuState } from "./hooks/use-workspace-menu";
@@ -22,6 +22,9 @@ import type { ThreadGroup, ThreadListEntry } from "./thread-groups";
 import type { Dispatch, SetStateAction } from "react";
 import type { DesktopAppState } from "./desktop-state";
 import { isNoRepositoryWorkspace } from "./workspace-roots";
+
+const COLLAPSED_THREAD_COUNT = 4;
+const PRIORITY_WINDOW_MS = 30 * 60 * 1000;
 
 interface SidebarProps {
   readonly activeView: AppView;
@@ -73,6 +76,8 @@ export function Sidebar(props: SidebarProps) {
   } = props;
 
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [timelineView, setTimelineView] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   // Collision detection based on workspace row headers only (~30px top of each group),
@@ -119,6 +124,20 @@ export function Sidebar(props: SidebarProps) {
   }
 
   const activeGroup = activeId ? rootGroups.find((g) => g.rootWorkspace.id === activeId) : undefined;
+  const searchableThreads = useMemo(
+    () =>
+      threadGroups.flatMap((group) =>
+        group.threads.map((thread) => ({
+          thread,
+          workspaceName:
+            thread.environment.kind === "worktree"
+              ? thread.environment.label
+              : group.rootWorkspace.name,
+        })),
+      ),
+    [threadGroups],
+  );
+  const hasUnseen = searchableThreads.some((item) => item.thread.session.hasUnseenUpdate);
 
   return (
     <aside className="sidebar">
@@ -171,8 +190,27 @@ export function Sidebar(props: SidebarProps) {
 
       <div className="sidebar__section">
         <div className="section__head">
-          <span>Threads</span>
+          <span>{timelineView ? "Recent activity" : "Threads"}</span>
           <div className="section__tools">
+            <button
+              aria-label="Search chats"
+              className="icon-button"
+              title="Search chats"
+              type="button"
+              onClick={() => setSearchOpen(true)}
+            >
+              <SearchIcon />
+            </button>
+            <button
+              aria-label={timelineView ? "Show projects" : "Show recent activity"}
+              className={`icon-button sidebar-bell${timelineView ? " icon-button--active" : ""}`}
+              title={timelineView ? "Back to projects" : "Recent activity"}
+              type="button"
+              onClick={() => setTimelineView((current) => !current)}
+            >
+              <BellIcon />
+              {hasUnseen ? <span className="sidebar-unseen-dot" /> : null}
+            </button>
             <button
               aria-label="Open folder"
               className="icon-button"
@@ -200,6 +238,15 @@ export function Sidebar(props: SidebarProps) {
               Open first folder
             </button>
           </div>
+        ) : timelineView ? (
+          <TimelineView
+            items={searchableThreads}
+            selectedWorkspace={selectedWorkspace}
+            selectedSession={selectedSession}
+            onArchiveSession={onArchiveSession}
+            onRenameSession={onRenameSession}
+            onSelectSession={onSelectSession}
+          />
         ) : (
           <DndContext sensors={sensors} collisionDetection={headerCollision} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <SortableContext items={rootGroupIds} strategy={verticalListSortingStrategy}>
@@ -259,6 +306,16 @@ export function Sidebar(props: SidebarProps) {
             </DragOverlay>
           </DndContext>
         )}
+        {searchOpen ? (
+          <SearchPopup
+            items={searchableThreads}
+            onSelectSession={(target) => {
+              setSearchOpen(false);
+              onSelectSession(target);
+            }}
+            onClose={() => setSearchOpen(false)}
+          />
+        ) : null}
       </div>
     </aside>
   );
@@ -339,6 +396,8 @@ function WorkspaceGroupContent(
   const archivedSectionOpen = wsMenu.expandedArchivedByWorkspace[rootWorkspace.id] ?? false;
   const isCollapsed = wsMenu.isWorkspaceCollapsed(rootWorkspace.id);
   const isNoRepository = isNoRepositoryWorkspace(rootWorkspace);
+  const [showAllThreads, setShowAllThreads] = useState(false);
+  const visibleThreads = showAllThreads ? threads : threads.slice(0, COLLAPSED_THREAD_COUNT);
 
   return (
     <>
@@ -464,7 +523,7 @@ function WorkspaceGroupContent(
       {!isCollapsed ? (
         <>
           <div className="session-list">
-            {threads.map((thread) => {
+            {visibleThreads.map((thread) => {
               const active = thread.workspaceId === selectedWorkspace?.id && thread.session.id === selectedSession?.id;
               return (
                 <ThreadSessionRow
@@ -491,6 +550,15 @@ function WorkspaceGroupContent(
               );
             })}
           </div>
+          {threads.length > COLLAPSED_THREAD_COUNT ? (
+            <button
+              className="sidebar-show-more"
+              type="button"
+              onClick={() => setShowAllThreads((current) => !current)}
+            >
+              {showAllThreads ? "Show less" : "Show more"}
+            </button>
+          ) : null}
           {archivedThreads.length > 0 ? (
             <div className="archived-thread-group">
               <button
@@ -563,6 +631,7 @@ function sessionIndicatorVariant(thread: ThreadListEntry): "running" | "unseen" 
 function ThreadSessionRow({
   active,
   archived = false,
+  location,
   thread,
   onAction,
   onRename,
@@ -570,6 +639,7 @@ function ThreadSessionRow({
 }: {
   readonly active: boolean;
   readonly archived?: boolean;
+  readonly location?: string;
   readonly thread: ThreadListEntry;
   readonly onAction: () => void;
   readonly onRename: (title: string) => void | Promise<unknown>;
@@ -675,6 +745,7 @@ function ThreadSessionRow({
             <span className="session-row__title-line">
               <span className="session-row__title">{thread.session.title}</span>
             </span>
+            {location ? <span className="session-row__location">{location}</span> : null}
             {thread.session.preview ? <span className="session-row__preview">{thread.session.preview}</span> : null}
           </span>
         </button>
@@ -711,4 +782,195 @@ function ThreadSessionRow({
       </span>
     </div>
   );
+}
+
+type SearchableThread = {
+  readonly thread: ThreadListEntry;
+  readonly workspaceName: string;
+};
+
+function TimelineView({
+  items,
+  selectedWorkspace,
+  selectedSession,
+  onArchiveSession,
+  onRenameSession,
+  onSelectSession,
+}: {
+  readonly items: readonly SearchableThread[];
+  readonly selectedWorkspace: WorkspaceRecord | undefined;
+  readonly selectedSession: SessionRecord | undefined;
+  readonly onArchiveSession: (target: { workspaceId: string; sessionId: string }) => void;
+  readonly onRenameSession: (target: { workspaceId: string; sessionId: string }, title: string) => void | Promise<unknown>;
+  readonly onSelectSession: (target: { workspaceId: string; sessionId: string }) => void;
+}) {
+  const sections = bucketSidebarThreads(items, Date.now());
+  return (
+    <div className="sidebar-timeline">
+      {sections.map(({ title: heading, items: sectionItems }) =>
+        sectionItems.length > 0 ? (
+          <section className="sidebar-timeline-section" key={heading}>
+            <div className="sidebar-timeline-heading">{heading}</div>
+            <div className="session-list">
+              {sectionItems.map(({ thread, workspaceName }) => {
+                const active =
+                  thread.workspaceId === selectedWorkspace?.id && thread.session.id === selectedSession?.id;
+                return (
+                  <ThreadSessionRow
+                    key={`${thread.workspaceId}:${thread.session.id}`}
+                    active={active}
+                    location={workspaceName}
+                    thread={thread}
+                    onAction={() =>
+                      onArchiveSession({
+                        workspaceId: thread.workspaceId,
+                        sessionId: thread.session.id,
+                      })
+                    }
+                    onRename={(nextTitle) =>
+                      onRenameSession(
+                        {
+                          workspaceId: thread.workspaceId,
+                          sessionId: thread.session.id,
+                        },
+                        nextTitle,
+                      )
+                    }
+                    onSelect={() => onSelectSession({ workspaceId: thread.workspaceId, sessionId: thread.session.id })}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        ) : null,
+      )}
+      {items.length === 0 ? <div className="sidebar-empty">No threads yet.</div> : null}
+    </div>
+  );
+}
+
+function SearchPopup({
+  items,
+  onSelectSession,
+  onClose,
+}: {
+  readonly items: readonly SearchableThread[];
+  readonly onSelectSession: (target: { workspaceId: string; sessionId: string }) => void;
+  readonly onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const trimmed = query.trim().toLowerCase();
+  const results = (trimmed
+    ? items.filter(
+        ({ thread, workspaceName }) =>
+          thread.session.title.toLowerCase().includes(trimmed) ||
+          thread.session.preview.toLowerCase().includes(trimmed) ||
+          workspaceName.toLowerCase().includes(trimmed),
+      )
+    : [...items].sort((left, right) =>
+        right.thread.session.updatedAt.localeCompare(left.thread.session.updatedAt),
+      )
+  ).slice(0, 9);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="search-overlay"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="search-panel" role="dialog" aria-label="Search chats">
+        <input
+          type="search"
+          className="search-panel-input"
+          placeholder="Search chats"
+          aria-label="Search chats"
+          value={query}
+          autoFocus
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <div className="search-panel-heading">Chats</div>
+        <ul className="search-panel-results">
+          {results.map(({ thread, workspaceName }) => (
+            <li key={`${thread.workspaceId}:${thread.session.id}`}>
+              <button
+                type="button"
+                className="search-panel-result"
+                onClick={() =>
+                  onSelectSession({
+                    workspaceId: thread.workspaceId,
+                    sessionId: thread.session.id,
+                  })
+                }
+              >
+                <span className="search-panel-result-title">{thread.session.title}</span>
+                <span className="search-panel-result-location">{workspaceName}</span>
+              </button>
+            </li>
+          ))}
+          {results.length === 0 ? <li className="sidebar-empty">No matching chats.</li> : null}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function bucketSidebarThreads(
+  items: readonly SearchableThread[],
+  nowMs: number,
+): Array<{ title: string; items: SearchableThread[] }> {
+  const sorted = [...items].sort((left, right) =>
+    right.thread.session.updatedAt.localeCompare(left.thread.session.updatedAt),
+  );
+  const startOfToday = new Date(nowMs);
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayMs = startOfToday.getTime();
+  const yesterdayMs = todayMs - 86_400_000;
+  const weekMs = todayMs - 6 * 86_400_000;
+
+  const priority: SearchableThread[] = [];
+  const today: SearchableThread[] = [];
+  const yesterday: SearchableThread[] = [];
+  const week: SearchableThread[] = [];
+  const older: SearchableThread[] = [];
+
+  for (const item of sorted) {
+    const recency = sessionRecencyMs(item.thread.session);
+    if (item.thread.session.status === "running" || nowMs - recency <= PRIORITY_WINDOW_MS) {
+      priority.push(item);
+    } else if (recency >= todayMs) {
+      today.push(item);
+    } else if (recency >= yesterdayMs) {
+      yesterday.push(item);
+    } else if (recency >= weekMs) {
+      week.push(item);
+    } else {
+      older.push(item);
+    }
+  }
+
+  return [
+    { title: "Priority", items: priority },
+    { title: "Today", items: today },
+    { title: "Yesterday", items: yesterday },
+    { title: "This week", items: week },
+    { title: "Older", items: older },
+  ];
+}
+
+function sessionRecencyMs(session: SessionRecord): number {
+  const parsed = Date.parse(session.updatedAt);
+  return Number.isFinite(parsed) ? parsed : 0;
 }

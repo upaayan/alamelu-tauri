@@ -333,6 +333,30 @@ export function RefreshIcon() {
   );
 }
 
+export function SearchIcon() {
+  return (
+    <Icon>
+      <circle cx="8.5" cy="8.5" r="5.2" stroke="currentColor" strokeWidth="1.45" />
+      <path d="m12.2 12.2 4 4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.45" />
+    </Icon>
+  );
+}
+
+export function BellIcon() {
+  return (
+    <Icon>
+      <path
+        d="M15.2 8.2a5.2 5.2 0 1 0-10.4 0c0 4.6-1.7 5.6-1.7 5.6h13.8s-1.7-1-1.7-5.6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.45"
+      />
+      <path d="M8.4 16.4a1.7 1.7 0 0 0 3.2 0" stroke="currentColor" strokeLinecap="round" strokeWidth="1.45" />
+    </Icon>
+  );
+}
+
 export function WorktreeIcon() {
   return (
     <Icon>
