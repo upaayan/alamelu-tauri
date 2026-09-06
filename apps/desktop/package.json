@@ -31,7 +31,7 @@
     "verify:external-runtime": "node scripts/assert-external-pi-runtime.mjs",
     "verify:packaged-runtime-deps": "pnpm run verify:external-runtime && node scripts/assert-packaged-runtime-deps.mjs",
     "smoke:alpi:candidate": "node scripts/smoke-alpi-packaged-candidate.mjs",
-    "test:unit": "node --experimental-strip-types --test src/message-markdown-split.test.ts",
+    "test:rendering": "pnpm run build && pnpm run test:e2e:runner -- apps/desktop/tests/core/timeline-pinning.spec.ts",
     "test": "pnpm run test:e2e",
     "test:tauri:unit": "node --test tests/unit/tauri-api-parity.test.mjs tests/unit/tauri-backend-transport.test.mjs",
     "test:tauri:functional": "node --test tests/unit/tauri-functional-smoke.test.mjs",

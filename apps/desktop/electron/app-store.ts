@@ -1963,6 +1963,7 @@ export class DesktopAppStore implements AppStoreInternals {
       workspaceId: sessionRef.workspaceId,
       sessionId: sessionRef.sessionId,
       transcript: (this.sessionState.transcriptCache.get(sessionKey(sessionRef)) ?? []).map(cloneTranscriptMessage),
+      activeAssistantMessageId: this.sessionState.activeAssistantMessageBySession.get(sessionKey(sessionRef)),
     };
   }
 

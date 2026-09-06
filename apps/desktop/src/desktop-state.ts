@@ -69,6 +69,7 @@ export interface SessionRecord {
 }
 
 export interface SelectedTranscriptRecord {
+  readonly activeAssistantMessageId?: string;
   readonly workspaceId: string;
   readonly sessionId: string;
   readonly transcript: readonly TranscriptMessage[];

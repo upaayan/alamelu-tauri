@@ -45,6 +45,13 @@ export function mapRpcEventToSessionDriverEvents(event: RpcEvent, context: Event
     }
   }
 
+  if (event.type === "message_end") {
+    const message = event.message as Record<string, unknown> | undefined;
+    if (message?.role === "assistant" && message.stopReason !== "error") {
+      return [{ ...base, type: "assistantMessageCompleted" }];
+    }
+  }
+
   if (event.type === "tool_execution_start") {
     return [
       {

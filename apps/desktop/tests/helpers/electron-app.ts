@@ -57,6 +57,7 @@ export interface LaunchDesktopOptions {
   readonly initialWorkspaces?: readonly string[];
   readonly notificationLogPath?: string;
   readonly testMode?: DesktopTestMode;
+  readonly recordVideoDir?: string;
   readonly agentDir?: string;
   readonly realAuthSourceDir?: string;
   readonly scrubProviderEnv?: boolean;
@@ -191,6 +192,7 @@ export async function launchDesktop(
     args: [desktopDir],
     cwd: desktopDir,
     env,
+    ...(normalized.recordVideoDir ? { recordVideo: { dir: normalized.recordVideoDir } } : {}),
   });
 
   return createDesktopHarness(electronApp);
@@ -1221,6 +1223,7 @@ export async function streamAssistantDeltas(
   window: Page,
   chunks: readonly string[],
   runId = `stream-run-${Date.now()}`,
+  finishRun = true,
 ): Promise<{ readonly sessionRef: SessionRef; readonly fullText: string }> {
   const state = await getDesktopState(window);
   const selectedWorkspace = state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId);
@@ -1267,7 +1270,9 @@ export async function streamAssistantDeltas(
     });
   }
 
-  await emitSuccessfulRunCompletion(harness, {
+  await emitTestSessionEvent(harness, { type: "assistantMessageCompleted", sessionRef, timestamp: completedAt, runId });
+
+  if (finishRun) await emitSuccessfulRunCompletion(harness, {
     sessionRef,
     workspace,
     title: selectedSession.title,

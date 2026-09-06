@@ -52,7 +52,7 @@ export function ConversationTimeline({
   // Giant prose blocks and attachment-heavy rows routinely blow past the estimator,
   // so keep those transcripts on the exact DOM path instead of restoring to a fake bottom.
   const hasUnreliableVirtualizedHeights = transcript.some(
-    (item) => item.kind === "message" && (item.text.length > 2000 || Boolean(item.attachments?.length)),
+    (item) => item.kind === "message" && ((item.id !== streamingMessageId && item.text.length > 2000) || Boolean(item.attachments?.length)),
   );
   const shouldVirtualize =
     !threadSearch.isOpen &&
@@ -130,7 +130,8 @@ export function ConversationTimeline({
     }
     measuredHeightsRef.current.set(id, nextHeight);
     setMeasurementVersion((current) => current + 1);
-  }, []);
+    if (!shouldVirtualize) onContentHeightChange();
+  }, [shouldVirtualize, onContentHeightChange]);
 
   const assignTimelinePaneRef = useCallback((node: HTMLDivElement | null) => {
     timelinePaneRef.current = node;
@@ -257,7 +258,7 @@ function VirtualizedTranscriptList({
     };
   }, [timelinePaneRef]);
 
-  const rowHeights = transcript.map((item) => measuredHeightsRef.current.get(item.id) ?? estimateTimelineItemHeight(item));
+  const rowHeights = transcript.map((item) => measuredHeightsRef.current.get(item.id) ?? estimateTimelineItemHeight(item, item.id === streamingMessageId));
   const rowOffsets: number[] = [];
   let totalHeight = 0;
   for (const [index, rowHeight] of rowHeights.entries()) {
@@ -348,6 +349,7 @@ function MeasuredTimelineItem({
   return (
     <div
       className={className}
+      data-timeline-id={item.id}
       ref={rowRef}
       style={top == null ? undefined : { transform: `translateY(${top}px)` }}
     >
@@ -400,7 +402,8 @@ function findEndIndex(offsets: readonly number[], targetOffset: number): number 
   return Math.min(offsets.length, Math.max(lastVisibleIndex + 1, 1));
 }
 
-function estimateTimelineItemHeight(item: TranscriptMessage): number {
+function estimateTimelineItemHeight(item: TranscriptMessage, streaming = false): number {
+  if (streaming) return 24;
   if (item.kind === "message") {
     const attachmentHeight = item.attachments?.some((attachment) => attachment.kind === "image")
       ? 120

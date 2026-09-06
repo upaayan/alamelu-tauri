@@ -379,6 +379,14 @@ test('mapRpcEventToSessionDriverEvents maps text, tool, completion, and failure 
     { type: 'toolStarted', sessionRef, timestamp: '2026-01-01T00:00:00.000Z', runId: 'run-1', callId: 'call-1', toolName: 'read', input: { path: 'x' } },
   ]);
 
+  for (const stopReason of ['stop', 'toolUse', 'length']) {
+    const events = mapRpcEventToSessionDriverEvents({ type: 'message_end', message: { role: 'assistant', stopReason } }, base);
+    assert.deepEqual(events, [{ type: 'assistantMessageCompleted', sessionRef, timestamp: '2026-01-01T00:00:00.000Z', runId: 'run-1' }]);
+  }
+  for (const message of [{ role: 'user' }, { role: 'toolResult' }, { role: 'assistant', stopReason: 'error' }]) {
+    assert.deepEqual(mapRpcEventToSessionDriverEvents({ type: 'message_end', message }, base), []);
+  }
+
   const completed = mapRpcEventToSessionDriverEvents({ type: 'agent_end' }, { ...base, snapshot: { ...snapshot, status: 'idle', runningRunId: undefined } });
   assert.equal(completed[0].type, 'runCompleted');
   assert.equal(completed[0].snapshot.status, 'idle');

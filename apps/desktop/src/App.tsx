@@ -231,6 +231,9 @@ export default function App() {
   const newThreadComposerRef = useRef<HTMLTextAreaElement | null>(null);
   const timelinePaneRef = useRef<HTMLDivElement | null>(null);
   const lastTranscriptMarkerRef = useRef("");
+  const readingAnchorRef = useRef<{ sessionKey: string; id: string; offset: number } | null>(null);
+  const alignmentFrameRef = useRef<number | null>(null);
+
   const pinnedToBottomRef = useRef(true);
   const previousTimelinePaneSizeRef = useRef<{ width: number; height: number } | null>(null);
   const lastTimelineScrollTopBySessionRef = useRef(new Map<string, number>());
@@ -549,12 +552,10 @@ export default function App() {
     selectedTranscript.sessionId === selectedSession.id
       ? selectedTranscript.transcript
       : [];
-  const lastTranscriptItem = activeTranscript.at(-1);
   const streamingMessageId =
-    selectedSession?.status === "running" &&
-    lastTranscriptItem?.kind === "message" &&
-    lastTranscriptItem.role === "assistant"
-      ? lastTranscriptItem.id
+    selectedTranscript?.workspaceId === selectedWorkspace?.id &&
+    selectedTranscript?.sessionId === selectedSession?.id
+      ? selectedTranscript?.activeAssistantMessageId
       : undefined;
   const isTranscriptLoading = Boolean(selectedSession) && activeTranscript.length === 0 && (
     !selectedTranscript ||
@@ -621,30 +622,15 @@ export default function App() {
       return;
     }
 
-    const align = (remainingChecks: number) => {
-      if (behavior === "auto") {
-        pane.scrollTop = pane.scrollHeight;
-      } else {
-        pane.scrollTo({ top: pane.scrollHeight, behavior });
-      }
-      pinnedToBottomRef.current = true;
-      lastTimelineScrollTopBySessionRef.current.set(selectedSessionKey, pane.scrollTop);
-      lastTimelinePinnedBySessionRef.current.set(selectedSessionKey, true);
-      setShowJumpToLatest(false);
-
-      if (remainingChecks <= 0) {
-        return;
-      }
-
-      window.requestAnimationFrame(() => {
-        const remaining = pane.scrollHeight - pane.scrollTop - pane.clientHeight;
-        if (remaining > 1 || remainingChecks > 1) {
-          align(remainingChecks - 1);
-        }
-      });
-    };
-
-    align(6);
+    if (behavior === "auto") {
+      pane.scrollTop = pane.scrollHeight;
+    } else {
+      pane.scrollTo({ top: pane.scrollHeight, behavior });
+    }
+    pinnedToBottomRef.current = true;
+    lastTimelineScrollTopBySessionRef.current.set(selectedSessionKey, pane.scrollTop);
+    lastTimelinePinnedBySessionRef.current.set(selectedSessionKey, true);
+    setShowJumpToLatest(false);
   }, [selectedSessionKey]);
 
   const requestPinnedBottomAlignment = useCallback((
@@ -741,6 +727,7 @@ export default function App() {
 
     const savedPinned = lastTimelinePinnedBySessionRef.current.get(selectedSessionKey);
     const savedScrollTop = lastTimelineScrollTopBySessionRef.current.get(selectedSessionKey);
+    pinnedToBottomRef.current = savedPinned ?? true;
 
     if (!selectedSessionKey || snapshot?.activeView !== "threads") {
       setDisableTimelineVirtualization(false);
@@ -780,24 +767,42 @@ export default function App() {
   }, [scrollTimelineToBottom, selectedSessionKey, snapshot?.activeView]);
 
   const schedulePinnedBottomRealignment = useCallback((delayFrames = 0) => {
+    if (alignmentFrameRef.current !== null) window.cancelAnimationFrame(alignmentFrameRef.current);
     const waitForFrames = (remainingFrames: number) => {
-      window.requestAnimationFrame(() => {
+      alignmentFrameRef.current = window.requestAnimationFrame(() => {
+        alignmentFrameRef.current = null;
+        if (!pinnedToBottomRef.current && !preserveBottomOnNextPaneResizeRef.current) return;
         if (remainingFrames > 0) {
           waitForFrames(remainingFrames - 1);
           return;
         }
-        requestPinnedBottomAlignment("auto", { preferExactRestore: true });
-        window.requestAnimationFrame(() => {
-          preserveBottomOnNextPaneResizeRef.current = false;
-          if (pinnedToBottomRef.current) {
-            requestPinnedBottomAlignment("auto", { preferExactRestore: true });
-          }
-        });
+        requestPinnedBottomAlignment();
+        preserveBottomOnNextPaneResizeRef.current = false;
       });
     };
-
     waitForFrames(delayFrames);
   }, [requestPinnedBottomAlignment]);
+
+  useLayoutEffect(() => () => {
+    if (alignmentFrameRef.current !== null) window.cancelAnimationFrame(alignmentFrameRef.current);
+    alignmentFrameRef.current = null;
+    readingAnchorRef.current = null;
+  }, [selectedSessionKey]);
+
+  useLayoutEffect(() => {
+    const pane = timelinePaneRef.current;
+    if (!pane) return;
+    const releaseBottom = (event: WheelEvent) => {
+      if (event.deltaY >= 0 || pane.scrollHeight <= pane.clientHeight) return;
+      pinnedToBottomRef.current = false;
+      preserveBottomOnNextPaneResizeRef.current = false;
+      resetExactBottomRestoreState();
+      if (alignmentFrameRef.current !== null) window.cancelAnimationFrame(alignmentFrameRef.current);
+      alignmentFrameRef.current = null;
+    };
+    pane.addEventListener("wheel", releaseBottom, { passive: true });
+    return () => pane.removeEventListener("wheel", releaseBottom);
+  }, [selectedSessionKey, timelinePaneMountVersion]);
 
   const handleViewFileInDiff = useCallback((path: string) => {
     setShowDiffPanel(true);
@@ -1275,7 +1280,7 @@ export default function App() {
   useLayoutEffect(() => {
     setShowJumpToLatest(false);
     lastTranscriptMarkerRef.current = "";
-    pinnedToBottomRef.current = true;
+    pinnedToBottomRef.current = lastTimelinePinnedBySessionRef.current.get(selectedSessionKey) ?? true;
     previousTimelinePaneSizeRef.current = null;
     preserveBottomOnNextPaneResizeRef.current = false;
     resetExactBottomRestoreState(selectedSessionKey || null);
@@ -1392,21 +1397,6 @@ export default function App() {
   }, [composerDraft, requestPinnedBottomAlignment]);
 
   useLayoutEffect(() => {
-    if (snapshot?.activeView !== "threads" || !selectedSession) {
-      return undefined;
-    }
-
-    return () => {
-      const pane = timelinePaneRef.current;
-      if (!pane) {
-        return;
-      }
-      lastTimelineScrollTopBySessionRef.current.set(selectedSessionKey, pane.scrollTop);
-      lastTimelinePinnedBySessionRef.current.set(selectedSessionKey, isNearBottom(pane));
-    };
-  }, [selectedSession, selectedSessionKey, snapshot?.activeView]);
-
-  useLayoutEffect(() => {
     const pane = timelinePaneRef.current;
     if (!pane || !selectedSession || snapshot?.activeView !== "threads") {
       previousTimelinePaneSizeRef.current = null;
@@ -1415,15 +1405,7 @@ export default function App() {
 
     const stickToBottomAfterLayoutChange = () => {
       preserveBottomOnNextPaneResizeRef.current = false;
-      pinnedToBottomRef.current = true;
-      window.requestAnimationFrame(() => {
-        requestPinnedBottomAlignment("auto", { preferExactRestore: true });
-        window.requestAnimationFrame(() => {
-          if (pinnedToBottomRef.current) {
-            requestPinnedBottomAlignment("auto", { preferExactRestore: true });
-          }
-        });
-      });
+      scrollTimelineToBottom();
     };
 
     const updateMeasuredSize = (nextSize: { width: number; height: number }) => {
@@ -1439,15 +1421,14 @@ export default function App() {
       stickToBottomAfterLayoutChange();
     };
 
-    const paneRect = pane.getBoundingClientRect();
-    updateMeasuredSize({ width: paneRect.width, height: paneRect.height });
+    updateMeasuredSize({ width: pane.clientWidth, height: pane.clientHeight });
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) {
         return;
       }
-      updateMeasuredSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+      updateMeasuredSize({ width: pane.clientWidth, height: pane.clientHeight });
     });
 
     resizeObserver.observe(pane);
@@ -1455,40 +1436,44 @@ export default function App() {
       resizeObserver.disconnect();
       previousTimelinePaneSizeRef.current = null;
     };
-  }, [requestPinnedBottomAlignment, selectedSessionKey, showDiffPanel, snapshot?.activeView, timelinePaneMountVersion]);
+  }, [scrollTimelineToBottom, selectedSessionKey, showDiffPanel, snapshot?.activeView, timelinePaneMountVersion]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const pane = timelinePaneRef.current;
     if (!pane || !selectedSession) {
       return;
     }
 
-    const marker = buildTranscriptChangeMarker(selectedSessionKey, activeTranscript);
+    const marker = buildTranscriptChangeMarker(selectedSessionKey, activeTranscript, streamingMessageId);
     if (marker === lastTranscriptMarkerRef.current) {
       return;
     }
     lastTranscriptMarkerRef.current = marker;
 
     if (pinnedToBottomRef.current) {
-      requestPinnedBottomAlignment("auto", { preferExactRestore: true });
+      scrollTimelineToBottom();
       return;
     }
 
     setShowJumpToLatest(true);
-  }, [activeTranscript, requestPinnedBottomAlignment, selectedSession, selectedSessionKey]);
+  }, [activeTranscript, scrollTimelineToBottom, selectedSession, selectedSessionKey, streamingMessageId]);
 
   const handleTimelineContentHeightChange = useCallback(() => {
-    if (!pinnedToBottomRef.current && !preserveBottomOnNextPaneResizeRef.current) {
+    const pane = timelinePaneRef.current;
+    if (!pane) return;
+    if (pinnedToBottomRef.current || preserveBottomOnNextPaneResizeRef.current) {
+      scrollTimelineToBottom();
       return;
     }
-
-    window.requestAnimationFrame(() => {
-      if (!pinnedToBottomRef.current && !preserveBottomOnNextPaneResizeRef.current) {
-        return;
-      }
-      requestPinnedBottomAlignment("auto", { preferExactRestore: true });
-    });
-  }, [requestPinnedBottomAlignment]);
+    const anchor = readingAnchorRef.current;
+    if (anchor?.sessionKey !== selectedSessionKey) return;
+    const row = Array.from(pane.querySelectorAll<HTMLElement>("[data-timeline-id]"))
+      .find((entry) => entry.dataset.timelineId === anchor.id);
+    if (row) {
+      const offset = row.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+      pane.scrollTop += offset - anchor.offset;
+    }
+  }, [scrollTimelineToBottom, selectedSessionKey]);
 
   if (!api || !snapshot) {
     return (
@@ -2032,11 +2017,27 @@ export default function App() {
     }
 
     const pinned = isNearBottom(pane);
-    if (preserveBottomOnNextPaneResizeRef.current && !pinned) {
+    const measuredSize = previousTimelinePaneSizeRef.current;
+    const pendingResize = measuredSize &&
+      (measuredSize.width !== pane.clientWidth || measuredSize.height !== pane.clientHeight);
+    // A resize can dispatch scroll before ResizeObserver restores the existing bottom pin.
+    if (!pinned && (preserveBottomOnNextPaneResizeRef.current || (pinnedToBottomRef.current && pendingResize))) {
       return;
     }
 
     pinnedToBottomRef.current = pinned;
+    if (!pinned) {
+      if (alignmentFrameRef.current !== null) window.cancelAnimationFrame(alignmentFrameRef.current);
+      alignmentFrameRef.current = null;
+      const paneTop = pane.getBoundingClientRect().top;
+      const row = Array.from(pane.querySelectorAll<HTMLElement>("[data-timeline-id]"))
+        .find((entry) => entry.getBoundingClientRect().bottom > paneTop);
+      readingAnchorRef.current = row
+        ? { sessionKey: selectedSessionKey, id: row.dataset.timelineId!, offset: row.getBoundingClientRect().top - paneTop }
+        : null;
+    } else {
+      readingAnchorRef.current = null;
+    }
     lastTimelineScrollTopBySessionRef.current.set(selectedSessionKey, pane.scrollTop);
     lastTimelinePinnedBySessionRef.current.set(selectedSessionKey, pinned);
     if (pinned) {
@@ -2570,9 +2571,14 @@ export default function App() {
   );
 }
 
-function buildTranscriptChangeMarker(sessionKey: string, transcript: SelectedTranscriptRecord["transcript"]): string {
+function buildTranscriptChangeMarker(sessionKey: string, transcript: SelectedTranscriptRecord["transcript"], streamingMessageId?: string): string {
   const lastItem = transcript.at(-1);
-  return `${sessionKey}:${transcript.length}:${lastItem ? JSON.stringify(lastItem) : ""}`;
+  const visibleItem = lastItem && lastItem.id === streamingMessageId
+    ? { id: lastItem.id, preparing: true }
+    : lastItem?.kind === "tool"
+      ? { id: lastItem.id, status: lastItem.status, label: lastItem.label, input: lastItem.input, output: lastItem.output }
+      : lastItem;
+  return `${sessionKey}:${transcript.length}:${streamingMessageId ?? ""}:${visibleItem ? JSON.stringify(visibleItem) : ""}`;
 }
 
 function isNearBottom(element: HTMLDivElement): boolean {

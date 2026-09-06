@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   commitAllInGitRepo,
+  emitTestSessionEvent,
   desktopShortcut,
   getDesktopState,
   getTimelineScrollMetrics,
@@ -250,6 +251,7 @@ test("keeps the latest assistant content visible when the composer grows at the 
   const harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
   });
 
   try {
@@ -319,6 +321,7 @@ test("restores bottom pinning after leaving and returning to the thread surface"
   const harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
   });
 
   try {
@@ -367,6 +370,7 @@ test("restores the true bottom when reopening a virtualized thread with oversize
   let harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
   });
 
   try {
@@ -391,7 +395,7 @@ test("restores the true bottom when reopening a virtualized thread with oversize
 
     await harness.close();
 
-    harness = await launchDesktop(userDataDir, { testMode: "background" });
+    harness = await launchDesktop(userDataDir, { testMode: "background", envOverrides: { PI_GUI_BRAND: "alpi" } });
     window = await harness.firstWindow();
     await expect(window.locator(".topbar__session")).toHaveText(targetTitle);
     await expect(window.locator(".timeline-item--assistant", { hasText: finalMarker })).toBeVisible();
@@ -400,6 +404,8 @@ test("restores the true bottom when reopening a virtualized thread with oversize
     await createTimelineSession(window, "Neighbor session");
     await expect(window.locator(".topbar__session")).toHaveText("Neighbor session");
 
+    const collapsedWorkspace = window.locator(".workspace-row--active .workspace-row__select:has([data-collapsed])");
+    if (await collapsedWorkspace.count()) await collapsedWorkspace.click();
     await selectSession(window, targetTitle);
     const finalRow = window.locator(".timeline-item--assistant", { hasText: finalMarker });
     await expect(finalRow).toBeVisible();
@@ -416,6 +422,7 @@ test("keeps a virtualized thread off-bottom after switching sessions", async () 
   let harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
   });
 
   try {
@@ -441,6 +448,8 @@ test("keeps a virtualized thread off-bottom after switching sessions", async () 
     await createTimelineSession(window, "Neighbor session");
     await expect(window.locator(".topbar__session")).toHaveText("Neighbor session");
 
+    const collapsedWorkspace = window.locator(".workspace-row--active .workspace-row__select:has([data-collapsed])");
+    if (await collapsedWorkspace.count()) await collapsedWorkspace.click();
     await selectSession(window, targetTitle);
     await expect(window.locator(".topbar__session")).toHaveText(targetTitle);
     await expect.poll(async () => (await getTimelineScrollMetrics(window)).remainingFromBottom).toBeGreaterThan(500);
@@ -456,6 +465,7 @@ test("keeps a reopened virtualized long transcript stable", async () => {
   let harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
   });
 
   try {
@@ -476,7 +486,7 @@ test("keeps a reopened virtualized long transcript stable", async () => {
 
     await harness.close();
 
-    harness = await launchDesktop(userDataDir, { testMode: "background" });
+    harness = await launchDesktop(userDataDir, { testMode: "background", envOverrides: { PI_GUI_BRAND: "alpi" } });
     window = await harness.firstWindow();
     await expect(window.locator(".topbar__session")).toHaveText(targetTitle);
     const reopenedFinalRow = window.locator(".timeline-item--assistant", { hasText: finalMarker });
@@ -492,11 +502,13 @@ test("keeps a reopened virtualized long transcript stable", async () => {
     const postComposerBaseline = await waitForStableVirtualizedBottom(window, reopenedFinalRow);
     await expectStableTimelineWindow(window, reopenedFinalRow, postComposerBaseline);
 
+    // This is a cached UI transcript fixture, not a persisted Pi runtime session.
+    // Complete the message without asking a nonexistent runtime to complete the run.
     const pinnedStream = await streamAssistantDeltas(harness, window, [
       "VIRTUALIZED_REOPEN_STREAM_A ",
       "VIRTUALIZED_REOPEN_STREAM_B ",
       "VIRTUALIZED_REOPEN_STREAM_C",
-    ]);
+    ], "reopened-message", false);
     const streamedRow = window.locator(".timeline-item--assistant", { hasText: pinnedStream.fullText });
     await expect(streamedRow).toBeVisible();
     const streamedBaseline = await waitForStableVirtualizedBottom(window, streamedRow);
@@ -517,6 +529,7 @@ test("keeps the mid-thread viewport stable when the composer grows away from the
   const harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
   });
 
   try {
@@ -594,6 +607,7 @@ test("keeps transcript pinning semantics while assistant deltas stream into the 
   const harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
     testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
   });
 
   try {
@@ -645,6 +659,224 @@ test("keeps transcript pinning semantics while assistant deltas stream into the 
       return Math.abs(metrics.scrollTop - beforeScrollTop);
     }).toBeLessThanOrEqual(12);
     await expect(window.getByTestId("timeline-jump")).toHaveCount(1);
+  } finally {
+    await harness.close();
+  }
+});
+
+
+test("final-only rendering keeps unfinished Markdown out of the visible transcript", async ({}, testInfo) => {
+  test.setTimeout(90_000);
+  const harness = await launchDesktop(await makeUserDataDir(), {
+    initialWorkspaces: [await makeWorkspace("final-only-rendering")],
+    testMode: "background",
+    envOverrides: { PI_GUI_BRAND: "alpi" },
+    recordVideoDir: testInfo.outputPath("video"),
+  });
+  try {
+    const window = await harness.firstWindow();
+    await createTimelineSession(window, "Final-only rendering");
+    const state = await getDesktopState(window);
+    const ws = state.workspaces.find((entry) => entry.id === state.selectedWorkspaceId)!;
+    const session = ws.sessions.find((entry) => entry.id === state.selectedSessionId)!;
+    const sessionRef = { workspaceId: ws.id, sessionId: session.id };
+    const base = { sessionRef, timestamp: new Date().toISOString(), runId: "final-only-run" };
+    await emitTestSessionEvent(harness, {
+      ...base, type: "sessionUpdated", snapshot: {
+        ref: sessionRef, workspace: { workspaceId: ws.id, path: ws.path },
+        title: session.title, status: "running", updatedAt: base.timestamp, runningRunId: base.runId,
+      },
+    });
+    await emitTestSessionEvent(harness, { ...base, type: "assistantDelta", text: "## Finished heading\n\n| Name | Value |\n" });
+    await window.waitForTimeout(100);
+    await window.screenshot({ path: testInfo.outputPath("streaming.png") });
+    const assistant = window.locator(".timeline-item--assistant").last();
+    await expect(assistant).toHaveText("Preparing response…");
+    const activeRecord = await window.evaluate(() => window.piApp!.getSelectedTranscript());
+    expect(activeRecord?.activeAssistantMessageId).toBeTruthy();
+    const activeId = activeRecord!.activeAssistantMessageId!;
+    const beforeBox = await assistant.boundingBox();
+    const chunks = [
+      "| --- | --- |\n| **Ready** | 42 |\n\n",
+      "> - parent\n>   - child\n\n```ts\nconst answer = 42;\n```\n\n",
+      "~~~\nplain tilde code\n~~~\n\n```\nunlabelled code\n```\n\n",
+      "[Reference][end]\n\n" + "long prose ".repeat(230),
+      "\n\n[end]: https://example.com/final\n",
+    ];
+    // Sample every frame, including async IPC and React commits between assertions.
+    await window.evaluate(() => {
+      const state = { samples: [] as { text: string; height: number }[], stop: false };
+      (window as any).__renderSamples = state;
+      const sample = () => {
+        const row = document.querySelector(".timeline-item--assistant:last-child")
+          ?? Array.from(document.querySelectorAll(".timeline-item--assistant")).at(-1);
+        if (row) state.samples.push({ text: row.textContent ?? "", height: row.getBoundingClientRect().height });
+        if (!state.stop) requestAnimationFrame(sample);
+      };
+      sample();
+    });
+    for (const text of chunks) {
+      await emitTestSessionEvent(harness, { ...base, type: "assistantDelta", text });
+      await window.waitForTimeout(50);
+      await expect(assistant).toHaveText("Preparing response…");
+      expect((await assistant.boundingBox())?.height).toBe(beforeBox?.height);
+    }
+    // An unrelated activity must not expose the still-active assistant row.
+    await emitTestSessionEvent(harness, {
+      ...base, type: "hostUiRequest", request: { kind: "notify", requestId: "notice", message: "Still working", level: "info" },
+    });
+    await expect(assistant).toHaveText("Preparing response…");
+    const samples = await window.evaluate(() => {
+      (window as any).__renderSamples.stop = true;
+      return (window as any).__renderSamples.samples as { text: string; height: number }[];
+    });
+    expect(samples.length).toBeGreaterThan(3);
+    expect(samples.every((sample) => sample.text === "Preparing response…" && sample.height === beforeBox?.height)).toBe(true);
+    await emitTestSessionEvent(harness, { ...base, type: "assistantMessageCompleted" });
+    await expect(assistant.locator("h2")).toHaveText("Finished heading");
+    await expect(assistant.locator("table tbody tr")).toHaveCount(1);
+    await expect(assistant.locator("blockquote li")).toHaveCount(2);
+    await expect(assistant.locator("a")).toHaveAttribute("href", "https://example.com/final");
+    await expect(assistant.locator("code")).toHaveCount(3);
+    expect((await window.evaluate(() => window.piApp!.getSelectedTranscript()))?.activeAssistantMessageId).toBeUndefined();
+    expect((await getDesktopState(window)).workspaces.flatMap((entry) => entry.sessions).find((entry) => entry.id === session.id)?.status).toBe("running");
+    const completedHtml = await assistant.innerHTML();
+    // A subsequent assistant message does not append to, hide or reparse the finished one.
+    await emitTestSessionEvent(harness, { ...base, type: "assistantDelta", text: "**Stopped partial**" });
+    await expect(window.locator(".message__preparing")).toHaveCount(1);
+    const first = window.locator(`[data-timeline-id="${activeId}"] .timeline-item--assistant`);
+    expect(await first.innerHTML()).toBe(completedHtml);
+    await emitTestSessionEvent(harness, { ...base, type: "runCancelled" });
+    await expect(window.locator(".message__preparing")).toHaveCount(0);
+    await expect(window.locator(".timeline-item--assistant").last().locator("strong")).toHaveText("Stopped partial");
+    await window.screenshot({ path: testInfo.outputPath("completed.png") });
+    await writeFile(testInfo.outputPath("frame-samples.json"), JSON.stringify(samples, null, 2));
+
+  } finally {
+    await harness.close();
+  }
+});
+
+
+test("final-only rendering stabilizes image loads, tools and virtualized hidden deltas", async ({}, testInfo) => {
+  test.setTimeout(90_000);
+  const harness = await launchDesktop(await makeUserDataDir(), {
+    initialWorkspaces: [await makeWorkspace("final-only-layout")],
+    testMode: "background", envOverrides: { PI_GUI_BRAND: "alpi" },
+    recordVideoDir: testInfo.outputPath("video"),
+  });
+  try {
+    const window = await harness.firstWindow();
+    const metrics: unknown[] = [];
+    const recordMetrics = async (step: string) => {
+      metrics.push({ step, ...await getTimelineScrollMetrics(window) });
+      await writeFile(testInfo.outputPath("scroll-steps.json"), JSON.stringify(metrics, null, 2));
+    };
+    await createTimelineSession(window, "Layout stability");
+    // A wheel nudge in a short, non-scrollable thread must not release follow mode.
+    await window.getByTestId("timeline-pane").evaluate((pane) => {
+      if (pane.scrollHeight > pane.clientHeight) throw new Error("Expected a short thread");
+      pane.dispatchEvent(new WheelEvent("wheel", { deltaY: -5, bubbles: true }));
+    });
+    const pendingImages = new Map<string, () => Promise<void>>();
+    await window.route("https://render-test.invalid/**", async (route) => {
+      if (route.request().url().endsWith("broken.svg")) { await route.abort(); return; }
+      await new Promise<void>((resolve) => pendingImages.set(route.request().url(), async () => {
+        await route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240"><rect width="640" height="240" fill="#456"/></svg>' });
+        resolve();
+      }));
+    });
+    await seedTranscriptMessages(harness, window, {
+      count: 20,
+      textFactory: (index) => index === 3 ? "![slow](https://render-test.invalid/older.svg)" : `Image anchor row ${index} ` + "content ".repeat(25),
+    });
+    await expect.poll(async () => (await getTimelineScrollMetrics(window)).remainingFromBottom).toBeLessThanOrEqual(1);
+    const anchor = window.locator(".timeline-item--assistant", { hasText: "Image anchor row 7" });
+    await anchor.evaluate((row) => {
+      const pane = document.querySelector<HTMLElement>("[data-testid=timeline-pane]")!;
+      pane.scrollTop += row.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+      pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await expect.poll(async () => (await getTimelineScrollMetrics(window)).remainingFromBottom).toBeGreaterThan(100);
+    // Let the deliberate scroll and its anchor capture settle before releasing the delayed image.
+    await window.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const before = (await anchor.boundingBox())!.y;
+    await expect.poll(() => pendingImages.has("https://render-test.invalid/older.svg")).toBe(true);
+    await pendingImages.get("https://render-test.invalid/older.svg")!();
+    await expect.poll(() => window.locator('img[alt="slow"]').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(640);
+    await expect.poll(async () => Math.abs((await anchor.boundingBox())!.y - before)).toBeLessThanOrEqual(1);
+    await jumpTimelineToBottom(window);
+    await streamAssistantDeltas(harness, window, ["![pinned](https://render-test.invalid/pinned.svg)\n\n![broken](https://render-test.invalid/broken.svg)"]);
+    await expect.poll(() => pendingImages.has("https://render-test.invalid/pinned.svg")).toBe(true);
+    await pendingImages.get("https://render-test.invalid/pinned.svg")!();
+    await expect.poll(() => window.locator('img[alt="pinned"]').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(640);
+    await expect.poll(async () => (await getTimelineScrollMetrics(window)).remainingFromBottom).toBeLessThanOrEqual(1);
+    // Exercise an actually virtualized history; hidden text must not flip it to exact DOM.
+    await createTimelineSession(window, "Virtual placeholder");
+    await seedTranscriptMessages(harness, window, { count: 50, textFactory: (i) => `Short history ${i} ` + "word ".repeat(15) });
+    await expect(window.locator(".timeline--virtualized")).toHaveCount(1);
+    const state = await getDesktopState(window);
+    const ws = state.workspaces.find((w) => w.id === state.selectedWorkspaceId)!;
+    const session = ws.sessions.find((entry) => entry.id === state.selectedSessionId)!;
+    const sessionRef = { workspaceId: ws.id, sessionId: session.id };
+    const base = { sessionRef, timestamp: new Date().toISOString(), runId: "layout-run" };
+    await emitTestSessionEvent(harness, { ...base, type: "sessionUpdated", snapshot: {
+      ref: sessionRef, workspace: { workspaceId: ws.id, path: ws.path }, title: session.title,
+      status: "running", updatedAt: base.timestamp, runningRunId: base.runId,
+    }});
+    await emitTestSessionEvent(harness, { ...base, type: "assistantDelta", text: "## Hidden\n\n" });
+    await expect(window.locator(".message__preparing")).toHaveCount(1);
+    await recordMetrics("hidden-start");
+    const beforeMetrics = await getTimelineScrollMetrics(window);
+    for (let i = 0; i < 4; i++) {
+      await emitTestSessionEvent(harness, { ...base, type: "assistantDelta", text: "wide words ".repeat(100) });
+      await window.waitForTimeout(50);
+      await expect(window.locator(".timeline--virtualized")).toHaveCount(1);
+      const next = await getTimelineScrollMetrics(window);
+      expect(Math.abs(next.scrollHeight - beforeMetrics.scrollHeight)).toBeLessThanOrEqual(1);
+      expect(Math.abs(next.scrollTop - beforeMetrics.scrollTop)).toBeLessThanOrEqual(1);
+    }
+    // Switching away/back while active keeps the preparation row and actual active ID.
+    const activeRecord = await window.evaluate(() => window.piApp!.getSelectedTranscript());
+    await createTimelineSession(window, "Unrelated empty session");
+    await window.evaluate((ref) => window.piApp!.selectSession(ref), sessionRef);
+    await expect(window.locator(".message__preparing")).toHaveCount(1);
+    expect((await window.evaluate(() => window.piApp!.getSelectedTranscript()))?.activeAssistantMessageId).toBe(activeRecord?.activeAssistantMessageId);
+    await recordMetrics("switch-back");
+    await emitTestSessionEvent(harness, { ...base, type: "toolStarted", callId: "render-tool", toolName: "edit", input: { path: "example.ts", text: "input" } });
+    await expect(window.locator(".message__preparing")).toHaveCount(0);
+    const tool = window.locator(".timeline-tool").last();
+    await recordMetrics("before-click");
+    await tool.locator(".timeline-tool__header").click();
+    await expect(tool.locator(".timeline-tool__pre")).toContainText("input");
+    await window.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await recordMetrics("expanded");
+    const toolHeight = (await tool.boundingBox())!.height;
+    const toolScroll = await getTimelineScrollMetrics(window);
+    await emitTestSessionEvent(harness, { ...base, type: "toolUpdated", callId: "render-tool", text: "invisible details ".repeat(400) });
+    await window.waitForTimeout(100);
+    expect((await tool.boundingBox())!.height).toBe(toolHeight);
+    expect(Math.abs((await getTimelineScrollMetrics(window)).scrollTop - toolScroll.scrollTop)).toBeLessThanOrEqual(1);
+    await emitTestSessionEvent(harness, { ...base, type: "toolFinished", callId: "render-tool", success: true, output: { diff: "@@ -1 +1 @@\n-old\n+new" } });
+    await expect(tool.locator(".diff-inline")).toContainText("new");
+    await recordMetrics("tool-finished");
+    await emitTestSessionEvent(harness, { ...base, type: "assistantDelta", text: "**Failed partial**" });
+    await expect(window.locator(".message__preparing")).toHaveCount(1);
+    await emitTestSessionEvent(harness, { ...base, type: "runFailed", error: { message: "Fixture failure" } });
+    await expect(window.locator(".message__preparing")).toHaveCount(0);
+    await expect(window.locator(".timeline-item--assistant").last().locator("strong")).toHaveText("Failed partial");
+    await recordMetrics("run-failed");
+    // Wide final tables stay within the pane at a narrow supported window width.
+    await harness.electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1200, 760));
+    await recordMetrics("resized");
+    await streamAssistantDeltas(harness, window, ["| " + "column".repeat(120) + " | two |\n| --- | --- |\n| one | two |"]);
+    await expect(window.locator(".message__content table").last()).toBeVisible();
+    const widths = await window.getByTestId("timeline-pane").evaluate((pane) => ({ width: pane.clientWidth, scrollWidth: pane.scrollWidth }));
+    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.width + 1);
+    await expect.poll(async () => (await getTimelineScrollMetrics(window)).remainingFromBottom).toBeLessThanOrEqual(1);
+    await expect(window.getByTestId("timeline-jump")).toHaveCount(0);
+    await recordMetrics("completed");
+    await window.screenshot({ path: testInfo.outputPath("layout-completed.png") });
   } finally {
     await harness.close();
   }

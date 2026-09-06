@@ -3,7 +3,6 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CopyIcon } from "./icons";
-import { splitStreamingMarkdown } from "./message-markdown-split";
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -73,19 +72,13 @@ export const MessageMarkdown = memo(function MessageMarkdown({
   readonly text: string;
   readonly streaming?: boolean;
 }) {
-  if (!streaming) {
-    return (
-      <div className="message__content">
-        <MarkdownBody text={text} />
-      </div>
-    );
-  }
-
-  const { stable, tail } = splitStreamingMarkdown(text);
   return (
     <div className="message__content">
-      {stable ? <MarkdownBody text={stable} /> : null}
-      {tail ? <span className="message__stream-tail">{tail}</span> : null}
+      {streaming ? (
+        <div className="message__preparing" role="status">Preparing response…</div>
+      ) : (
+        <MarkdownBody text={text} />
+      )}
     </div>
   );
 });

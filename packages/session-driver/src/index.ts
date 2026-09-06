@@ -1,5 +1,6 @@
 export type {
   AssistantDeltaEvent,
+  AssistantMessageCompletedEvent,
   CreateSessionOptions,
   ExtensionCompatibilityIssue,
   ExtensionCompatibilityIssueEvent,
