@@ -430,8 +430,10 @@ test('PiRpcDriver cold-opens an existing isolated lab session id', async (t) => 
       return { type: 'response', id, command: command.type, success: true };
     }
   }
+  let now = '2026-09-12T12:00:00.000Z';
   const driver = createPiRpcDriver({
     piBin: '/usr/local/bin/pi',
+    now: () => now,
     agentDir: path.join(tmp, 'agent'),
     sessionDir,
     userDataDir: path.join(tmp, 'user-data'),
@@ -445,9 +447,23 @@ test('PiRpcDriver cold-opens an existing isolated lab session id', async (t) => 
     },
   });
 
-  const snapshot = await driver.openSession({ workspaceId: 'ws', sessionId: 'existing-session' });
+  const ref = { workspaceId: 'ws', sessionId: 'existing-session' };
+  const storedUpdatedAt = '2026-01-01T00:00:00.000Z';
+  const events = [];
+  const unsubscribe = driver.subscribe(ref, (event) => events.push(event));
+  const snapshot = await driver.openSession(ref, storedUpdatedAt);
   assert.equal(snapshot.title, 'Cold Open');
   assert.equal(snapshot.ref.sessionId, 'existing-session');
+  assert.equal(snapshot.updatedAt, storedUpdatedAt);
+  assert.equal(events.find((event) => event.type === 'sessionOpened').snapshot.updatedAt, storedUpdatedAt);
+  now = '2026-09-12T12:01:00.000Z';
+  assert.equal((await driver.openSession(ref, storedUpdatedAt)).updatedAt, storedUpdatedAt);
+  await driver.sendUserMessage(ref, { text: 'A real update' });
+  assert.equal(events.findLast((event) => event.type === 'sessionUpdated').snapshot.updatedAt, now);
+  // A subsequent warm read must not replace newer in-memory activity with an older catalog value.
+  assert.equal((await driver.openSession(ref, storedUpdatedAt)).updatedAt, now);
+  unsubscribe();
+  await driver.closeSession(ref);
 });
 
 test('PiRpcDriver lets Pi generate a new session ID and adopts the returned ID', async (t) => {

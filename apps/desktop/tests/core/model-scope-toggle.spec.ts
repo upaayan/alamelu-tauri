@@ -89,7 +89,7 @@ test("switches between app-global and per-repo model scope while worktrees inher
       environment: "worktree",
       prompt: "Repo A worktree session",
     });
-    await expect(window.locator(".topbar__session")).toHaveText("New thread");
+    await expect(window.locator(".topbar__session")).toHaveText("New Thread");
     await expectComposerModelState(window, {
       activeModel: "openai:gpt-4o",
       visibleModelLabels: ["GPT-4o", "GPT-4 Turbo"],

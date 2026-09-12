@@ -13,6 +13,7 @@ import { ComposerSurface } from "./composer-surface";
 import { ModelOnboardingNoticeBanner } from "./model-onboarding-notice";
 import type { ModelOnboardingState, ModelOnboardingSettingsSection } from "./model-onboarding";
 import { ModelSelector } from "./model-selector";
+import { isNoRepositoryWorkspace } from "./workspace-roots";
 
 interface NewThreadViewProps {
   readonly workspaces: readonly WorkspaceRecord[];
@@ -159,9 +160,9 @@ export function NewThreadView({
                 onSelectWorkspace(event.target.value);
               }}
             >
-              {workspaces.map((entry) => (
+              {[...workspaces].sort((a, b) => Number(isNoRepositoryWorkspace(a)) - Number(isNoRepositoryWorkspace(b))).map((entry) => (
                 <option key={entry.id} value={entry.id}>
-                  {entry.name}
+                  {isNoRepositoryWorkspace(entry) ? "Others ( No Workspace )" : entry.name}
                 </option>
               ))}
               <option value={NEW_WORKSPACE_OPTION_VALUE}>New Workspace...</option>

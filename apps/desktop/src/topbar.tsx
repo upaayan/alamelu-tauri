@@ -1,11 +1,16 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode, Dispatch, SetStateAction } from "react";
 import type { AppView, DesktopAppState, SessionRecord, WorkspaceRecord, WorktreeRecord } from "./desktop-state";
-import { DiffIcon, FolderIcon, TerminalIcon } from "./icons";
+import { BellIcon, DiffIcon, FolderIcon, SearchIcon, TerminalIcon } from "./icons";
+import { workspaceDisplayName } from "./workspace-roots";
 import { getDesktopShortcutLabel, type PiDesktopApi } from "./ipc";
 import type { WorkspaceMenuState } from "./hooks/use-workspace-menu";
 
 interface TopbarProps {
   readonly primarySidebarToggle?: ReactNode;
+  readonly onSearch: () => void;
+  readonly timelineView: boolean;
+  readonly onToggleTimeline: () => void;
+  readonly hasUnseen: boolean;
   readonly activeView: AppView;
   readonly rootWorkspace: WorkspaceRecord | undefined;
   readonly selectedWorkspace: WorkspaceRecord | undefined;
@@ -32,6 +37,10 @@ interface TopbarProps {
 export function Topbar(props: TopbarProps) {
   const {
     primarySidebarToggle,
+    onSearch,
+    timelineView,
+    onToggleTimeline,
+    hasUnseen,
     activeView,
     rootWorkspace,
     selectedWorkspace,
@@ -60,7 +69,7 @@ export function Topbar(props: TopbarProps) {
       return;
     }
 
-    if (target.closest(".topbar__actions")) {
+    if (target.closest("button, .topbar__actions, .topbar__left")) {
       return;
     }
 
@@ -68,11 +77,36 @@ export function Topbar(props: TopbarProps) {
   };
 
   return (
-    <header className="topbar" data-testid="topbar" onDoubleClick={handleDoubleClick}>
-      {primarySidebarToggle}
+    <header className={`topbar${api.platform === "darwin" ? " topbar--mac" : ""}`} data-testid="topbar" onDoubleClick={handleDoubleClick}>
+      <div className="topbar__left">
+        {primarySidebarToggle}
+        <button className="icon-button topbar__icon" aria-label="Search chats" title="Search chats" type="button" onClick={onSearch}>
+          <SearchIcon />
+        </button>
+        <button
+          className={`icon-button topbar__icon sidebar-bell${timelineView ? " icon-button--active" : ""}`}
+          aria-label={timelineView ? "Show projects" : "Show recent activity"}
+          aria-pressed={timelineView}
+          title={timelineView ? "Back to projects" : "Recent activity"}
+          type="button"
+          onClick={onToggleTimeline}
+        >
+          <BellIcon />
+          {hasUnseen ? <span className="sidebar-unseen-dot" /> : null}
+        </button>
+        <button
+          className="icon-button topbar__icon"
+          aria-label="Open folder"
+          title={`Open folder · ${openFolderShortcut}`}
+          type="button"
+          onClick={() => { void updateSnapshot(api, setSnapshot, () => api.pickWorkspace()); }}
+        >
+          <FolderIcon />
+        </button>
+      </div>
       <div className="topbar__title">
         <span className="topbar__workspace">
-          {rootWorkspace ? rootWorkspace.name : "Open a folder to begin"}
+          {rootWorkspace ? workspaceDisplayName(rootWorkspace) : "Open a folder to begin"}
         </span>
         {selectedWorkspace && activeView === "threads" ? (
           <>
@@ -131,7 +165,7 @@ export function Topbar(props: TopbarProps) {
         ) : activeView === "new-thread" && rootWorkspace ? (
           <>
             <span className="topbar__separator">/</span>
-            <span className="topbar__session">New thread</span>
+            <span className="topbar__session">New Thread</span>
           </>
         ) : null}
       </div>

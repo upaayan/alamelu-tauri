@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { launchDesktop, makeUserDataDir, makeWorkspace } from "../helpers/electron-app";
+import { launchDesktop, makeUserDataDir, makeWorkspace, openSidebarDestination } from "../helpers/electron-app";
 
 async function readSettingsLog(path: string): Promise<string> {
   try {
@@ -25,7 +25,7 @@ test("shows not enabled yet and enables via Ask macOS", async () => {
 
   try {
     const window = await harness.firstWindow();
-    await window.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSidebarDestination(window, "Settings");
     await window.getByRole("button", { name: "Notifications", exact: true }).click();
 
     await expect(window.locator(".settings-view")).toContainText("Not enabled yet");
@@ -57,7 +57,7 @@ test("shows turned off and opens System Settings when macOS notifications are de
 
   try {
     const window = await harness.firstWindow();
-    await window.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSidebarDestination(window, "Settings");
     await window.getByRole("button", { name: "Notifications", exact: true }).click();
 
     await expect(window.locator(".settings-view")).toContainText("Turned off");

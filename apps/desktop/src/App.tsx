@@ -35,7 +35,7 @@ import { SettingsView, type SettingsSection } from "./settings-view";
 import { SecondarySurface } from "./secondary-surface";
 import { NewThreadView } from "./new-thread-view";
 import { buildThreadGroups } from "./thread-groups";
-import { Sidebar } from "./sidebar";
+import { SearchPopup, Sidebar } from "./sidebar";
 import { SidebarToggleButton } from "./sidebar-toggle-button";
 import { Topbar } from "./topbar";
 import { TerminalPanel } from "./terminal-panel";
@@ -48,7 +48,7 @@ import { buildExtensionDockModel, ExtensionDialog, hasExtensionDockContent } fro
 import { TreeModal } from "./tree-modal";
 import { isProviderLoginDialogVisible, isProviderLoginPending, ProviderLoginDialog } from "./provider-login-dialog";
 import { getEffectiveModelRuntime } from "./model-settings";
-import { isNoRepositoryWorkspace, isSystemWorkspace, resolveRepoWorkspaceId } from "./workspace-roots";
+import { isNoRepositoryWorkspace, isSystemWorkspace, resolveRepoWorkspaceId, workspaceDisplayName } from "./workspace-roots";
 import {
   extractImageFilesFromClipboardData,
   extractFilesFromDataTransfer,
@@ -247,6 +247,8 @@ export default function App() {
   const handledComposerSyncNonceRef = useRef(0);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [timelineView, setTimelineView] = useState(false);
   const [openTerminalSessionKey, setOpenTerminalSessionKey] = useState("");
   const [takeoverTerminalSessionKey, setTakeoverTerminalSessionKey] = useState("");
   const [terminalHeight, setTerminalHeight] = useState(340);
@@ -586,6 +588,14 @@ export default function App() {
     () => (snapshot ? buildThreadGroups(snapshot) : []),
     [snapshot?.workspaces, snapshot?.worktreesByWorkspace, snapshot?.workspaceOrder],
   );
+  const searchableThreads = useMemo(() => threadGroups.flatMap((group) =>
+    group.threads.map((thread) => ({
+      thread,
+      workspaceName: thread.environment.kind === "worktree"
+        ? thread.environment.label
+        : workspaceDisplayName(group.rootWorkspace),
+    })),
+  ), [threadGroups]);
   const focusComposer = () => {
     window.requestAnimationFrame(() => {
       composerRef.current?.focus();
@@ -1325,11 +1335,10 @@ export default function App() {
       return;
     }
 
-    if (snapshot.activeView === "new-thread" && previousActiveViewRef.current !== "new-thread") {
-      const nextRootWorkspaceId = resolveRepoWorkspaceId(visibleWorkspaces, selectedWorkspace?.id);
-      if (nextRootWorkspaceId) {
-        setNewThreadRootWorkspaceId(nextRootWorkspaceId);
-      }
+    // Initialize an unchosen draft on startup, but never replace an explicit repo + selection.
+    if (snapshot.activeView === "new-thread" && !newThreadRootWorkspaceId) {
+      const initialRepoId = resolveRepoWorkspaceId(visibleWorkspaces, selectedWorkspace?.id);
+      if (initialRepoId) setNewThreadRootWorkspaceId(initialRepoId);
     }
 
     if (snapshot.activeView !== "threads") {
@@ -1350,7 +1359,7 @@ export default function App() {
     }
 
     previousActiveViewRef.current = snapshot.activeView;
-  }, [schedulePinnedBottomRealignment, selectedSession, selectedWorkspace?.id, snapshot, visibleWorkspaces]);
+  }, [schedulePinnedBottomRealignment, selectedSession, selectedWorkspace?.id, snapshot, visibleWorkspaces, newThreadRootWorkspaceId]);
 
   useEffect(() => {
     if (!api || composerDraft === persistedComposerDraft) {
@@ -2281,16 +2290,43 @@ export default function App() {
 
   return (
     <div className={shellClassName} style={shellStyle}>
-      {primarySidebarToggleVisible && !snapshot.sidebarCollapsed ? (
-        <SidebarToggleButton
-          collapsed={false}
-          shortcutLabel={sidebarToggleShortcutLabel}
-          onToggle={handleTogglePrimarySidebar}
+      <Topbar
+        primarySidebarToggle={primarySidebarToggleVisible ? (
+          <SidebarToggleButton collapsed={snapshot.sidebarCollapsed} shortcutLabel={sidebarToggleShortcutLabel} onToggle={handleTogglePrimarySidebar} />
+        ) : undefined}
+        onSearch={() => setSearchOpen(true)}
+        timelineView={timelineView}
+        onToggleTimeline={() => setTimelineView((current) => !current)}
+        hasUnseen={searchableThreads.some((item) => item.thread.session.hasUnseenUpdate)}
+        activeView={snapshot.activeView}
+        rootWorkspace={snapshot.activeView === "new-thread" ? newThreadWorkspace : rootWorkspace}
+        selectedWorkspace={selectedWorkspace}
+        selectedSession={selectedSession}
+        selectedSessionTitle={displayedSessionTitle || selectedSession?.title}
+        selectedWorktree={selectedWorktree}
+        activeWorktrees={activeWorktrees}
+        workspaces={visibleWorkspaces}
+        wsMenu={wsMenu}
+        api={api}
+        setSnapshot={setSnapshot}
+        updateSnapshot={updateSnapshot}
+        terminalAvailable={Boolean(selectedSessionKey)}
+        terminalVisible={isTerminalVisibleForSelectedThread}
+        onToggleTerminal={toggleTerminal}
+        showDiffPanel={showDiffPanel}
+        onToggleDiffPanel={toggleDiffPanel}
+      />
+      {searchOpen ? (
+        <SearchPopup
+          items={searchableThreads}
+          onSelectSession={(target) => { setSearchOpen(false); handleSelectSession(target); }}
+          onClose={() => setSearchOpen(false)}
         />
       ) : null}
       {!snapshot.sidebarCollapsed ? (
         <Sidebar
-          activeView={snapshot.activeView}
+          timelineView={timelineView}
+          searchableThreads={searchableThreads}
           selectedWorkspace={selectedWorkspace}
           selectedSession={selectedSession}
           visibleWorkspaces={visibleWorkspaces}
@@ -2300,8 +2336,7 @@ export default function App() {
           api={api}
           setSnapshot={setSnapshot}
           updateSnapshot={updateSnapshot}
-          onNewThread={() => openNewThreadSurface(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
-          onSetActiveView={setActiveView}
+          onNewThread={(workspaceId) => { setTimelineView(false); openNewThreadSurface(workspaceId); }}
           onOpenSkills={openSkills}
           onOpenExtensions={openExtensions}
           onOpenSettings={openSettings}
@@ -2325,35 +2360,6 @@ export default function App() {
       ) : null}
 
       <main className={mainClassName}>
-        <Topbar
-          primarySidebarToggle={
-            primarySidebarToggleVisible && snapshot.sidebarCollapsed ? (
-              <SidebarToggleButton
-                collapsed={true}
-                shortcutLabel={sidebarToggleShortcutLabel}
-                onToggle={handleTogglePrimarySidebar}
-              />
-            ) : undefined
-          }
-          activeView={snapshot.activeView}
-          rootWorkspace={rootWorkspace}
-          selectedWorkspace={selectedWorkspace}
-          selectedSession={selectedSession}
-          selectedSessionTitle={displayedSessionTitle || selectedSession?.title}
-          selectedWorktree={selectedWorktree}
-          activeWorktrees={activeWorktrees}
-          workspaces={visibleWorkspaces}
-          wsMenu={wsMenu}
-          api={api}
-          setSnapshot={setSnapshot}
-          updateSnapshot={updateSnapshot}
-          terminalAvailable={Boolean(selectedSessionKey)}
-          terminalVisible={isTerminalVisibleForSelectedThread}
-          onToggleTerminal={toggleTerminal}
-          showDiffPanel={showDiffPanel}
-          onToggleDiffPanel={toggleDiffPanel}
-        />
-
         {showTerminalTakeover ? (
           terminalPanel
         ) : (

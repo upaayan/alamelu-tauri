@@ -40,6 +40,8 @@ const child = spawn(executable, [], {
     PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
     PI_APP_TEST_MODE: "background",
     PI_APP_USER_DATA_DIR: stateDir,
+    PI_GUI_SHARED_THREAD_DATA_DIR: stateDir,
+    PI_CODING_AGENT_SESSION_DIR: path.join(stateDir, "sessions"),
     ALAMELU_TAURI_SMOKE_FILE: reportPath,
     ALAMELU_TAURI_SMOKE_WORKSPACE: smokeWorkspace,
     ALAMELU_TAURI_SMOKE_ATTACHMENT: smokeAttachment,
@@ -64,6 +66,7 @@ try {
   assert.equal(result.signal, null);
   assert.equal(result.code, 0, Buffer.concat(output).toString());
   const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+  assert.equal(report.error, undefined, report.error);
   assert.equal(report.ping, "pi desktop ready");
   assert.equal(report.hasPiApp, true);
   assert.ok(report.apiMethodCount >= 90);
@@ -80,9 +83,16 @@ try {
   assert.equal(report.nativeAttachmentAdded, true);
   assert.equal(report.pastedImageAdded, true);
   assert.ok(["granted", "denied", "default", "unknown"].includes(report.notificationPermission));
-  assert.match(report.bodyText, /New thread/);
-  assert.match(report.bodyText, /Skills/);
-  assert.match(report.bodyText, /Extensions/);
+  assert.match(report.bodyText, /New Thread/);
+  assert.deepEqual(report.display.navigation, ["Skills", "Extensions", "Settings"]);
+  assert.equal(report.display.navigationInitiallyCollapsed, true);
+  assert.equal(report.display.draftTitle, "New Thread");
+  assert.deepEqual(report.display.pickerTail, ["Others ( No Workspace )", "New Workspace..."]);
+  for (const key of ["fourThreadOverflow", "searchWhileCollapsed", "recentActivity", "plusAligned", "othersLast", "noThreadsRows", "noBrandChevron"]) {
+    assert.equal(report.display[key], true, key);
+  }
+  assert.ok(report.display.expandedTitleError <= 1);
+  assert.ok(report.display.collapsedTitleError <= 1);
 
   await new Promise((resolve) => setTimeout(resolve, 500));
   const processes = execFileSync("ps", ["-axo", "command="], { encoding: "utf8" });

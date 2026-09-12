@@ -9,6 +9,10 @@ export function isNoRepositoryWorkspace(workspace: { readonly specialKind?: stri
   return workspace?.specialKind === "no-repository";
 }
 
+export function workspaceDisplayName(workspace: { readonly name: string; readonly specialKind?: string }): string {
+  return isNoRepositoryWorkspace(workspace) ? "Others" : workspace.name;
+}
+
 export function isSystemWorkspace(workspace: { readonly specialKind?: string } | undefined): boolean {
   return workspace?.specialKind === "system";
 }

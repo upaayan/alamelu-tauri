@@ -126,7 +126,7 @@ export class PiRpcDriver implements SessionDriver {
     }
   }
 
-  async openSession(sessionRef: SessionRef): Promise<SessionSnapshot> {
+  async openSession(sessionRef: SessionRef, storedUpdatedAt?: string): Promise<SessionSnapshot> {
     const existing = this.sessions.get(this.key(sessionRef));
     if (existing) {
       this.emit(sessionRef, { type: "sessionOpened", sessionRef, timestamp: this.now(), snapshot: existing.snapshot });
@@ -147,6 +147,8 @@ export class PiRpcDriver implements SessionDriver {
       const snapshot = this.makeSnapshot(sessionRef, workspace, {
         title: sessionNameFromState(state.data) ?? "RPC Session",
         status: "idle",
+        // Opening a stored conversation is a read, not a new update.
+        ...(storedUpdatedAt ? { updatedAt: storedUpdatedAt } : {}),
         ...(stateConfig ? { config: stateConfig } : {}),
       });
       const record: SessionRecord = {
@@ -641,14 +643,14 @@ export class PiRpcDriver implements SessionDriver {
   private makeSnapshot(
     ref: SessionRef,
     workspace: WorkspaceRef,
-    values: Pick<SessionSnapshot, "title" | "status"> & Partial<Pick<SessionSnapshot, "config" | "runningRunId">>,
+    values: Pick<SessionSnapshot, "title" | "status"> & Partial<Pick<SessionSnapshot, "config" | "runningRunId" | "updatedAt">>,
   ): SessionSnapshot {
     return {
       ref,
       workspace,
       title: values.title,
       status: values.status,
-      updatedAt: this.now(),
+      updatedAt: values.updatedAt ?? this.now(),
       ...(values.config ? { config: values.config } : {}),
       ...(values.runningRunId ? { runningRunId: values.runningRunId } : {}),
     };

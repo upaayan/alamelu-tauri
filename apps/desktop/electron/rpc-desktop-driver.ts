@@ -71,7 +71,7 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
 
   async openSession(sessionRef: SessionRef): Promise<SessionSnapshot> {
     const existing = await this.catalogs.sessions.getSession(sessionRef);
-    const opened = await this.rpc.openSession(sessionRef);
+    const opened = await this.rpc.openSession(sessionRef, existing?.updatedAt);
     const snapshot = preserveExistingTitleOnGenericOpen(opened, existing?.title);
     this.openSessions.set(sessionKey(snapshot.ref), snapshot.ref);
     try {

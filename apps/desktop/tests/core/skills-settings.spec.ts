@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createNamedThread, launchDesktop, makeUserDataDir, makeWorkspace } from "../helpers/electron-app";
+import { createNamedThread, launchDesktop, makeUserDataDir, makeWorkspace, openSidebarDestination } from "../helpers/electron-app";
 
 test("shows skills and settings surfaces from runtime data", async () => {
   test.setTimeout(60_000);
@@ -31,17 +31,18 @@ Use this skill when the user wants a short demo workflow.
     const window = await harness.firstWindow();
     await createNamedThread(window, "Skill test session");
 
-    await window.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSidebarDestination(window, "Skills");
     await expect(window.locator(".skills-view")).toBeVisible();
     await expect(window.getByTestId("skills-list")).toContainText("Demo Skill");
     await window.getByRole("button", { name: /Demo Skill/i }).click();
     await expect(window.locator(".skill-detail")).toContainText("/skill:demo-skill");
 
     await window.getByRole("button", { name: "Try", exact: true }).click();
-    await expect(window.getByRole("button", { name: "Threads", exact: true })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Alamelu Pi", exact: true })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Threads", exact: true })).toHaveCount(0);
     await expect(window.getByTestId("composer")).toHaveValue("/skill:demo-skill ");
 
-    await window.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSidebarDestination(window, "Settings");
     await expect(window.locator(".settings-view")).toBeVisible();
     await expect(window.getByText("Notifications", { exact: true })).toBeVisible();
     await expect(window.locator(".settings-view")).toContainText("Enable skill slash commands");
@@ -54,7 +55,7 @@ Use this skill when the user wants a short demo workflow.
     await composer.fill("/skill");
     await expect(window.getByTestId("slash-menu")).toHaveCount(0);
 
-    await window.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSidebarDestination(window, "Settings");
     await expect(skillCommandsToggle).not.toBeChecked();
     await skillCommandsToggle.click();
     await window.getByRole("button", { name: "Back to app", exact: true }).click();

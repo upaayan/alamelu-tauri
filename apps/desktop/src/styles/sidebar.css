@@ -3,14 +3,11 @@
   --sidebar-resizer-width: 8px;
   --titlebar-toggle-left: 86px;
   --titlebar-toggle-size: 30px;
-  --titlebar-toggle-main-gap: 16px;
-  --titlebar-collapsed-main-padding-left: calc(
-    var(--titlebar-toggle-left) + var(--titlebar-toggle-size) + var(--titlebar-toggle-main-gap)
-  );
   width: 100%;
   height: 100%;
   display: grid;
   grid-template-columns: var(--sidebar-width) var(--sidebar-resizer-width) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
   padding: 0;
   position: relative;
@@ -19,6 +16,7 @@
 
 .shell--loading {
   grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
   place-items: center;
 }
 
@@ -74,7 +72,7 @@
 
 .sidebar {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   background: var(--sidebar);
   border-right: 1px solid var(--line);
@@ -90,8 +88,31 @@
   padding: 14px 16px;
 }
 
-.sidebar__top {
-  padding-top: 54px;
+.sidebar__brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 7px;
+  border-radius: 9px;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.sidebar__brand img {
+  width: 29px;
+  height: 29px;
+  border-radius: 7px;
+}
+
+.sidebar__brand:hover {
+  background: var(--surface-overlay-hover);
 }
 
 .sidebar__nav {
@@ -125,21 +146,12 @@
   color: var(--text-strong);
 }
 
-.sidebar__new {
+.sidebar__new.icon-button,
+.workspace-row__new.icon-button {
   -webkit-app-region: no-drag;
-  width: 100%;
-  min-height: 36px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--surface-muted);
-  border: 1px solid var(--line);
-  color: var(--text-strong);
-  font-size: 14px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
 }
 
 .sidebar__new:disabled,
@@ -150,6 +162,7 @@
 
 .sidebar__section {
   overflow: auto;
+  padding-top: 0;
 }
 
 .section__head {
@@ -231,10 +244,12 @@
 }
 
 .workspace-row {
-  padding: 2px 4px 1px;
+  padding: 2px 0 1px 4px;
   border-radius: 9px;
   position: relative;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 2px;
+  border: 0;
 }
 
 .workspace-row__select--draggable {

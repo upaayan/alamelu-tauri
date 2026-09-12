@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { launchPackagedDesktop, makeUserDataDir, makeWorkspace } from "../helpers/electron-app";
+import { launchPackagedDesktop, makeUserDataDir, makeWorkspace, openSidebarDestination } from "../helpers/electron-app";
 
 async function readSettingsLog(path: string): Promise<string> {
   try {
@@ -12,7 +12,7 @@ async function readSettingsLog(path: string): Promise<string> {
 }
 
 async function openNotificationSettings(window: Page): Promise<void> {
-  await window.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSidebarDestination(window, "Settings");
   await window.getByRole("button", { name: "Notifications", exact: true }).click();
 }
 

@@ -300,6 +300,8 @@ function buildDesktopLaunchEnv(
   const env = {
     ...baseEnv,
     PI_APP_USER_DATA_DIR: userDataDir,
+    PI_CODING_AGENT_SESSION_DIR: join(userDataDir, "sessions"),
+    PI_GUI_SHARED_THREAD_DATA_DIR: userDataDir,
     PI_APP_INITIAL_WORKSPACES: (options.initialWorkspaces ?? []).join(delimiter),
     PI_APP_TEST_MODE: options.testMode ?? process.env.PI_APP_TEST_MODE ?? "foreground",
     PI_CODING_AGENT_DIR: agentDir,
@@ -1400,6 +1402,13 @@ export async function clickSession(window: Page, sessionTitle: string): Promise<
   await window.locator(".session-row__select", { hasText: sessionTitle }).click();
 }
 
+export async function openSidebarDestination(window: Page, name: "Skills" | "Extensions" | "Settings"): Promise<void> {
+  const brand = window.getByRole("button", { name: "Alamelu Pi", exact: true });
+  await expect(brand).toBeVisible();
+  if (await brand.getAttribute("aria-expanded") !== "true") await brand.click();
+  await window.getByRole("button", { name, exact: true }).click();
+}
+
 export async function openNewThread(window: Page): Promise<void> {
   const composer = window.getByTestId("new-thread-composer");
   if (await composer.isVisible().catch(() => false)) {
@@ -1562,6 +1571,10 @@ export async function createNamedThread(
     await app.selectSession({ workspaceId, sessionId });
   }, { workspaceId: targetWorkspaceId, sessionId: session.id });
   await expect(window.locator(".topbar__session")).toHaveText(title);
+  const workspace = (await getDesktopState(window)).workspaces.find((entry) => entry.id === targetWorkspaceId)!;
+  const displayName = workspace.specialKind === "no-repository" ? "Others" : workspace.name;
+  const group = window.locator(".workspace-group").filter({ has: window.getByRole("button", { name: displayName, exact: true }) });
+  if (!(await group.locator(".session-list").count())) await group.locator(".workspace-row__select").click();
   const composer = window.getByTestId("composer");
   await expect(composer).toBeVisible({ timeout: 15_000 });
   await composer.click();

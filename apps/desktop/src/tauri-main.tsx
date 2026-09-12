@@ -15,7 +15,9 @@ async function main(): Promise<void> {
   );
   if (await invoke<boolean>("native_smoke_enabled")) {
     window.setTimeout(() => {
-      void recordSmoke();
+      void recordSmoke().catch((error) => invoke("native_record_smoke", {
+        report: { error: error instanceof Error ? error.message : String(error) },
+      }));
     }, 1_500);
   }
 }
@@ -120,8 +122,10 @@ async function recordSmoke(): Promise<void> {
     await window.piApp?.removeComposerAttachment(pastedAttachment.id);
   }
 
+  const display = await inspectApprovedDisplay(nativeWorkspaceId);
   await invoke("native_record_smoke", {
     report: {
+      display,
       ping: await window.piApp?.ping(),
       hasPiApp: Boolean(window.piApp),
       apiMethodCount: Object.keys(window.piApp ?? {}).length,
@@ -147,6 +151,68 @@ async function recordSmoke(): Promise<void> {
       notificationPermission: await window.piApp?.getNotificationPermissionStatus(),
     },
   });
+}
+
+async function inspectApprovedDisplay(workspaceId: string) {
+  const button = (selector: string) => document.querySelector<HTMLButtonElement>(selector)!;
+  const brand = () => button(".sidebar__brand");
+  const titleCenterError = () => {
+    const r = document.querySelector(".topbar__title")!.getBoundingClientRect();
+    return Math.abs(r.x + r.width / 2 - window.innerWidth / 2);
+  };
+  const navigationInitiallyCollapsed = brand().getAttribute("aria-expanded") === "false";
+  brand().click();
+  await waitFor(() => document.querySelectorAll(".sidebar__nav-item").length === 3, "brand navigation");
+  const navigation = [...document.querySelectorAll(".sidebar__nav-item")].map((el) => el.textContent?.trim());
+  brand().click();
+  await waitFor(() => !document.querySelector(".sidebar__nav"), "collapse brand navigation");
+
+  // Seed only this smoke's disposable workspace; exercise existing per-group overflow.
+  for (let i = 1; i <= 4; i++) await window.piApp?.createSession({ workspaceId, title: `Display smoke ${i}` });
+  const state = await window.piApp!.getState();
+  const name = state.workspaces.find((w) => w.id === workspaceId)!.name;
+  const repo = () => [...document.querySelectorAll<HTMLElement>(".workspace-group")]
+    .find((el) => el.querySelector(".workspace-row__name")?.textContent === name)!;
+  await waitFor(() => Boolean(repo()), "smoke repo group");
+  if (!repo().querySelector(".session-list")) repo().querySelector<HTMLButtonElement>(".workspace-row__select")!.click();
+  await waitFor(() => repo().querySelectorAll(".session-row").length === 4, "four visible threads");
+  repo().querySelector<HTMLButtonElement>(".sidebar-show-more")!.click();
+  await waitFor(() => repo().querySelectorAll(".session-row").length === 5, "show more");
+  repo().querySelector<HTMLButtonElement>(".sidebar-show-more")!.click();
+  await waitFor(() => repo().querySelectorAll(".session-row").length === 4, "show less");
+  repo().querySelector<HTMLButtonElement>(".workspace-row__new")!.click();
+  await waitFor(() => document.querySelector<HTMLSelectElement>(".new-thread__workspace")?.value === workspaceId, "repo-specific draft").catch(() => {
+    const picker = document.querySelector<HTMLSelectElement>(".new-thread__workspace");
+    throw new Error(`Repo draft requested=${workspaceId}, actual=${picker?.value}, options=${[...(picker?.options ?? [])].map((option) => option.value).join(",")}, title=${document.querySelector(".topbar__title")?.textContent}`);
+  });
+  const draftTitle = document.querySelector(".topbar__session")?.textContent;
+  const pickerTail = [...document.querySelectorAll(".new-thread__workspace option")].slice(-2).map((el) => el.textContent?.trim());
+  const plusCenters = [...document.querySelectorAll(".sidebar__new, .workspace-row__new")].map((el) => {
+    const r = el.getBoundingClientRect(); return r.x + r.width / 2;
+  });
+  const expandedTitleError = titleCenterError();
+  button('[data-testid="sidebar-toggle"]').click();
+  await waitFor(() => !document.querySelector(".sidebar"), "hide sidebar");
+  const collapsedTitleError = titleCenterError();
+  button('[aria-label="Search chats"]').click();
+  await waitFor(() => Boolean(document.querySelector('.search-panel')), "search with hidden sidebar");
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  await waitFor(() => !document.querySelector(".search-panel"), "close search");
+  button('[data-testid="sidebar-toggle"]').click();
+  await waitFor(() => Boolean(document.querySelector(".sidebar")), "show sidebar");
+  button('[aria-label="Show recent activity"]').click();
+  await waitFor(() => Boolean(document.querySelector(".sidebar-timeline")), "recent activity");
+  button('[aria-label="Show projects"]').click();
+  await waitFor(() => Boolean(document.querySelector(".workspace-group")), "restore repo groups");
+  return {
+    navigationInitiallyCollapsed, navigation, draftTitle, pickerTail,
+    fourThreadOverflow: true, searchWhileCollapsed: true, recentActivity: true,
+    plusAligned: plusCenters.every((x) => Math.abs(x - plusCenters[0]!) <= 1),
+    expandedTitleError, collapsedTitleError,
+    othersLast: [...document.querySelectorAll(".workspace-row__name")].at(-1)?.textContent === "Others",
+    noThreadsRows: ![...document.querySelectorAll(".sidebar button, .sidebar .section__head")].some((el) => el.textContent?.trim() === "Threads"),
+    noBrandChevron: !brand().querySelector("svg"),
+  };
 }
 
 function pngFile(name: string): File {

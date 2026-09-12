@@ -5,6 +5,7 @@ import {
   launchDesktop,
   makeUserDataDir,
   makeWorkspace,
+  openSidebarDestination,
   waitForWorkspaceByPath,
 } from "../helpers/electron-app";
 
@@ -69,7 +70,7 @@ test("toggles and persists the primary sidebar from the button and keyboard shor
     await window.getByRole("button", { name: "Back to app", exact: true }).click();
 
     await restoreSidebarIfNeeded(window);
-    await window.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSidebarDestination(window, "Skills");
     await expect(window.getByTestId("skills-surface")).toBeVisible();
     await expect(window.getByTestId("sidebar-toggle")).toHaveCount(0);
     await window.keyboard.press(desktopShortcut("B"));
@@ -77,7 +78,7 @@ test("toggles and persists the primary sidebar from the button and keyboard shor
     await window.getByRole("button", { name: "Back to app", exact: true }).click();
 
     await restoreSidebarIfNeeded(window);
-    await window.getByRole("button", { name: "Extensions", exact: true }).click();
+    await openSidebarDestination(window, "Extensions");
     await expect(window.getByTestId("extensions-surface")).toBeVisible();
     await expect(window.getByTestId("sidebar-toggle")).toHaveCount(0);
     await window.keyboard.press(desktopShortcut("B"));

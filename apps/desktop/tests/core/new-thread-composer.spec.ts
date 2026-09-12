@@ -202,7 +202,7 @@ test("thread content reserves room above horizontal scrollbars", async () => {
   }
 });
 
-test("Alpi new thread can start from No Repository", async () => {
+test("Alpi new thread can start from Others without renaming its stored workspace", async () => {
   test.setTimeout(60_000);
   const userDataDir = await makeUserDataDir();
   const agentDir = join(userDataDir, "agent");
@@ -222,9 +222,9 @@ test("Alpi new thread can start from No Repository", async () => {
     await openNewThread(window);
 
     const picker = window.locator(".new-thread__workspace");
-    await expect(picker).toContainText("No Repository");
+    await expect(picker).toContainText("Others ( No Workspace )");
     await expect(picker).toContainText("New Workspace...");
-    await picker.selectOption({ label: "No Repository" });
+    await picker.selectOption({ label: "Others ( No Workspace )" });
 
     await expect(window.getByRole("button", { name: "Local", exact: true })).toBeEnabled();
     await expect(window.getByRole("button", { name: "Worktree", exact: true })).toBeDisabled();

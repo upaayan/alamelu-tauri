@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,21 +13,22 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { AppView, SessionRecord, WorkspaceRecord, WorktreeRecord } from "./desktop-state";
-import { ArchiveIcon, BellIcon, ChevronDownIcon, EditIcon, ExtensionIcon, FolderIcon, PlusIcon, RestoreIcon, SearchIcon, SettingsIcon, SkillIcon, WorktreeIcon } from "./icons";
+import type { SessionRecord, WorkspaceRecord, WorktreeRecord } from "./desktop-state";
+import { AlameluPiLogoMark, ArchiveIcon, ChevronDownIcon, EditIcon, ExtensionIcon, FolderIcon, PlusIcon, RestoreIcon, SearchIcon, SettingsIcon, SkillIcon, WorktreeIcon } from "./icons";
 import type { PiDesktopApi } from "./ipc";
 import { formatRelativeTime } from "./string-utils";
 import type { WorkspaceMenuState } from "./hooks/use-workspace-menu";
 import type { ThreadGroup, ThreadListEntry } from "./thread-groups";
 import type { Dispatch, SetStateAction } from "react";
 import type { DesktopAppState } from "./desktop-state";
-import { isNoRepositoryWorkspace } from "./workspace-roots";
+import { isNoRepositoryWorkspace, workspaceDisplayName } from "./workspace-roots";
 
 const COLLAPSED_THREAD_COUNT = 4;
 const PRIORITY_WINDOW_MS = 30 * 60 * 1000;
 
 interface SidebarProps {
-  readonly activeView: AppView;
+  readonly timelineView: boolean;
+  readonly searchableThreads: readonly SearchableThread[];
   readonly selectedWorkspace: WorkspaceRecord | undefined;
   readonly selectedSession: SessionRecord | undefined;
   readonly visibleWorkspaces: readonly WorkspaceRecord[];
@@ -41,8 +42,7 @@ interface SidebarProps {
     setSnapshot: Dispatch<SetStateAction<DesktopAppState | null>>,
     action: () => Promise<DesktopAppState>,
   ) => Promise<DesktopAppState>;
-  readonly onNewThread: () => void;
-  readonly onSetActiveView: (view: AppView) => void;
+  readonly onNewThread: (workspaceId?: string) => void;
   readonly onOpenSkills: (workspaceId?: string) => void;
   readonly onOpenExtensions: (workspaceId?: string) => void;
   readonly onOpenSettings: (workspaceId?: string) => void;
@@ -54,7 +54,8 @@ interface SidebarProps {
 
 export function Sidebar(props: SidebarProps) {
   const {
-    activeView,
+    timelineView,
+    searchableThreads,
     selectedWorkspace,
     selectedSession,
     visibleWorkspaces,
@@ -65,7 +66,6 @@ export function Sidebar(props: SidebarProps) {
     setSnapshot,
     updateSnapshot,
     onNewThread,
-    onSetActiveView,
     onOpenSkills,
     onOpenExtensions,
     onOpenSettings,
@@ -76,8 +76,7 @@ export function Sidebar(props: SidebarProps) {
   } = props;
 
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [timelineView, setTimelineView] = useState(false);
+  const [navigationExpanded, setNavigationExpanded] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   // Collision detection based on workspace row headers only (~30px top of each group),
@@ -99,8 +98,11 @@ export function Sidebar(props: SidebarProps) {
     return closest ? [{ id: closest.id, data: { droppableContainer: args.droppableContainers.find((c) => String(c.id) === closest!.id)! } }] : [];
   };
 
-  const rootGroups = threadGroups.filter((g) => g.rootWorkspace.kind === "primary");
-  const orphanGroups = threadGroups.filter((g) => g.rootWorkspace.kind !== "primary");
+  const rootGroups = threadGroups.filter((g) => g.rootWorkspace.kind === "primary" && !isNoRepositoryWorkspace(g.rootWorkspace));
+  const trailingGroups = [
+    ...threadGroups.filter((g) => g.rootWorkspace.kind !== "primary" && !isNoRepositoryWorkspace(g.rootWorkspace)),
+    ...threadGroups.filter((g) => isNoRepositoryWorkspace(g.rootWorkspace)),
+  ];
   const rootGroupIds = rootGroups.map((g) => g.rootWorkspace.id);
   const canDrag = rootGroups.length > 1;
 
@@ -124,43 +126,34 @@ export function Sidebar(props: SidebarProps) {
   }
 
   const activeGroup = activeId ? rootGroups.find((g) => g.rootWorkspace.id === activeId) : undefined;
-  const searchableThreads = useMemo(
-    () =>
-      threadGroups.flatMap((group) =>
-        group.threads.map((thread) => ({
-          thread,
-          workspaceName:
-            thread.environment.kind === "worktree"
-              ? thread.environment.label
-              : group.rootWorkspace.name,
-        })),
-      ),
-    [threadGroups],
-  );
-  const hasUnseen = searchableThreads.some((item) => item.thread.session.hasUnseenUpdate);
 
   return (
     <aside className="sidebar">
       <div className="sidebar__top">
-        <button
-          className="sidebar__new"
-          type="button"
-          disabled={!selectedWorkspace}
-          onClick={onNewThread}
-        >
-          <PlusIcon />
-          <span>New thread</span>
-        </button>
-
-        <div className="sidebar__nav">
+        <div className="sidebar__brand-row">
           <button
-            className={`sidebar__nav-item ${activeView === "threads" ? "sidebar__nav-item--active" : ""}`}
+            className="sidebar__brand"
             type="button"
-            onClick={() => onSetActiveView("threads")}
+            aria-expanded={navigationExpanded}
+            aria-controls="sidebar-navigation"
+            onClick={() => setNavigationExpanded((current) => !current)}
           >
-            <FolderIcon />
-            <span>Threads</span>
+            <AlameluPiLogoMark />
+            <span>Alamelu Pi</span>
           </button>
+          <button
+            className="icon-button sidebar__new"
+            type="button"
+            aria-label="New thread"
+            title="New thread"
+            disabled={!selectedWorkspace}
+            onClick={() => onNewThread(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
+          >
+            <PlusIcon />
+          </button>
+        </div>
+
+        {navigationExpanded ? <div className="sidebar__nav" id="sidebar-navigation">
           <button
             className="sidebar__nav-item"
             type="button"
@@ -185,44 +178,11 @@ export function Sidebar(props: SidebarProps) {
             <SettingsIcon />
             <span>Settings</span>
           </button>
-        </div>
+        </div> : null}
       </div>
 
       <div className="sidebar__section">
-        <div className="section__head">
-          <span>{timelineView ? "Recent activity" : "Threads"}</span>
-          <div className="section__tools">
-            <button
-              aria-label="Search chats"
-              className="icon-button"
-              title="Search chats"
-              type="button"
-              onClick={() => setSearchOpen(true)}
-            >
-              <SearchIcon />
-            </button>
-            <button
-              aria-label={timelineView ? "Show projects" : "Show recent activity"}
-              className={`icon-button sidebar-bell${timelineView ? " icon-button--active" : ""}`}
-              title={timelineView ? "Back to projects" : "Recent activity"}
-              type="button"
-              onClick={() => setTimelineView((current) => !current)}
-            >
-              <BellIcon />
-              {hasUnseen ? <span className="sidebar-unseen-dot" /> : null}
-            </button>
-            <button
-              aria-label="Open folder"
-              className="icon-button"
-              type="button"
-              onClick={() => {
-                void updateSnapshot(api, setSnapshot, () => api.pickWorkspace());
-              }}
-            >
-              <FolderIcon />
-            </button>
-          </div>
-        </div>
+        {timelineView ? <div className="sidebar-timeline-heading">Recent activity</div> : null}
 
         {visibleWorkspaces.length === 0 ? (
           <div className="empty-state" data-testid="empty-state">
@@ -256,6 +216,7 @@ export function Sidebar(props: SidebarProps) {
                     key={group.rootWorkspace.id}
                     group={group}
                     canDrag={canDrag}
+                    onNewThread={onNewThread}
                     selectedWorkspace={selectedWorkspace}
                     selectedSession={selectedSession}
                     linkedWorktreeByWorkspaceId={linkedWorktreeByWorkspaceId}
@@ -267,11 +228,12 @@ export function Sidebar(props: SidebarProps) {
                     onUnarchiveSession={onUnarchiveSession}
                   />
                 ))}
-                {orphanGroups.map((group) => (
+                {trailingGroups.map((group) => (
+                  <section className="workspace-group" key={group.rootWorkspace.id}>
                   <WorkspaceGroupContent
-                    key={group.rootWorkspace.id}
                     group={group}
                     canDrag={false}
+                    onNewThread={onNewThread}
                     selectedWorkspace={selectedWorkspace}
                     selectedSession={selectedSession}
                     linkedWorktreeByWorkspaceId={linkedWorktreeByWorkspaceId}
@@ -282,6 +244,7 @@ export function Sidebar(props: SidebarProps) {
                     onSelectSession={onSelectSession}
                     onUnarchiveSession={onUnarchiveSession}
                   />
+                  </section>
                 ))}
               </div>
             </SortableContext>
@@ -291,6 +254,7 @@ export function Sidebar(props: SidebarProps) {
                   <WorkspaceGroupContent
                     group={activeGroup}
                     canDrag={false}
+                    onNewThread={onNewThread}
                     selectedWorkspace={selectedWorkspace}
                     selectedSession={selectedSession}
                     linkedWorktreeByWorkspaceId={linkedWorktreeByWorkspaceId}
@@ -306,16 +270,6 @@ export function Sidebar(props: SidebarProps) {
             </DragOverlay>
           </DndContext>
         )}
-        {searchOpen ? (
-          <SearchPopup
-            items={searchableThreads}
-            onSelectSession={(target) => {
-              setSearchOpen(false);
-              onSelectSession(target);
-            }}
-            onClose={() => setSearchOpen(false)}
-          />
-        ) : null}
       </div>
     </aside>
   );
@@ -325,6 +279,7 @@ export function Sidebar(props: SidebarProps) {
 
 interface WorkspaceGroupProps {
   readonly group: ThreadGroup;
+  readonly onNewThread: (workspaceId: string) => void;
   readonly canDrag: boolean;
   readonly selectedWorkspace: WorkspaceRecord | undefined;
   readonly selectedSession: SessionRecord | undefined;
@@ -386,6 +341,7 @@ function WorkspaceGroupContent(
     onRenameSession,
     onSelectSession,
     onUnarchiveSession,
+    onNewThread,
     dragHandleProps,
   } = props;
 
@@ -396,6 +352,7 @@ function WorkspaceGroupContent(
   const archivedSectionOpen = wsMenu.expandedArchivedByWorkspace[rootWorkspace.id] ?? false;
   const isCollapsed = wsMenu.isWorkspaceCollapsed(rootWorkspace.id);
   const isNoRepository = isNoRepositoryWorkspace(rootWorkspace);
+  const displayName = workspaceDisplayName(rootWorkspace);
   const [showAllThreads, setShowAllThreads] = useState(false);
   const visibleThreads = showAllThreads ? threads : threads.slice(0, COLLAPSED_THREAD_COUNT);
 
@@ -412,14 +369,14 @@ function WorkspaceGroupContent(
             <span className="workspace-row__icon-folder"><FolderIcon /></span>
             <span className="workspace-row__icon-chevron"><ChevronDownIcon /></span>
           </span>
-          <span className="workspace-row__name">{rootWorkspace.name}</span>
+          <span className="workspace-row__name">{displayName}</span>
         </button>
         <span
           className="workspace-row__menu-wrap"
           ref={wsMenu.workspaceMenuId === rootWorkspace.id ? wsMenu.workspaceMenuWrapRef : undefined}
         >
           <button
-            aria-label={`Workspace actions for ${rootWorkspace.name}`}
+            aria-label={`Workspace actions for ${displayName}`}
             aria-haspopup="menu"
             className="icon-button workspace-row__menu-button"
             aria-expanded={wsMenu.workspaceMenuId === rootWorkspace.id}
@@ -485,6 +442,15 @@ function WorkspaceGroupContent(
             </div>
           ) : null}
         </span>
+        <button
+          className="icon-button workspace-row__new"
+          type="button"
+          aria-label={`New thread in ${displayName}`}
+          title={`New thread in ${displayName}`}
+          onClick={() => onNewThread(rootWorkspace.id)}
+        >
+          <PlusIcon />
+        </button>
       </div>
       {wsMenu.workspaceRenameId === rootWorkspace.id ? (
         <form
@@ -849,7 +815,7 @@ function TimelineView({
   );
 }
 
-function SearchPopup({
+export function SearchPopup({
   items,
   onSelectSession,
   onClose,
