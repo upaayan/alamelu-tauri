@@ -35,6 +35,7 @@ const SETTINGS_WRITE_MODE = 0o600;
 interface ExternalPiRuntimeSupervisorOptions {
   readonly piBin: string;
   readonly agentDir: string;
+  readonly userDataDir: string;
   readonly env?: NodeJS.ProcessEnv;
 }
 
@@ -212,6 +213,9 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
   }
 
   private async runPi(args: readonly string[]): Promise<string> {
+    // Metadata probes can start CodeGraph helpers; never inherit the signed app's cwd.
+    const cwd = join(this.options.userDataDir, "runtime-metadata");
+    await mkdir(cwd, { recursive: true });
     const resolvedPiBin = await realPiPath(this.options.piBin);
     const command = resolvePiRpcSpawnCommand(this.options.piBin, resolvedPiBin);
     const baseEnv = {
@@ -225,6 +229,7 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
       : baseEnv;
     return new Promise((resolve, reject) => {
       execFile(command.command, [...command.args, ...args], {
+        cwd,
         env,
         timeout: LIST_MODELS_TIMEOUT_MS,
         maxBuffer: 8 * 1024 * 1024,

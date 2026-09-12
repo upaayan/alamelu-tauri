@@ -53,7 +53,11 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
     this.paths = validateLabPaths(options);
     this.rpc = new PiRpcDriver(options);
     this.catalogs = new JsonCatalogStore({ catalogFilePath: options.catalogFilePath });
-    this.runtimeSupervisor = new ExternalPiRuntimeSupervisor({ piBin: options.piBin, agentDir: this.paths.agentDir });
+    this.runtimeSupervisor = new ExternalPiRuntimeSupervisor({
+      piBin: options.piBin,
+      agentDir: this.paths.agentDir,
+      userDataDir: this.paths.userDataDir,
+    });
   }
 
   async createSession(workspace: WorkspaceRef, options?: CreateSessionOptions): Promise<SessionSnapshot> {
