@@ -370,6 +370,7 @@ export async function submitComposer(
         await store.driver.replaceQueuedMessages(sessionRef, nextSessionQueuedMessages);
       } else {
         await store.driver.sendUserMessage(sessionRef, {
+          id: nextMessage.id,
           text,
           attachments: toSessionAttachments(attachments),
           deliverAs,
@@ -662,9 +663,9 @@ async function runComposerCommand(
   }
 
   if (parsed.type === "compact") {
+    // Resolves at acceptance; progress and outcome arrive as compactionStarted/compactionEnded events.
     await store.driver.compactSession(sessionRef, parsed.customInstructions);
-    await store.reloadTranscriptFromDriver(sessionRef);
-    return finishComposerCommand(store, sessionRef, key, "Compacted session context");
+    return finishComposerCommand(store, sessionRef, key);
   }
 
   if (parsed.type === "reload") {
@@ -689,11 +690,13 @@ function finishComposerCommand(
   store: AppStoreInternals,
   sessionRef: SessionRef,
   key: string,
-  label: string,
+  label?: string,
 ): DesktopAppState {
   store.sessionState.composerDraftsBySession.delete(key);
   store.sessionState.composerAttachmentsBySession.delete(key);
-  appendLocalActivity(store, sessionRef, label);
+  if (label) {
+    appendLocalActivity(store, sessionRef, label);
+  }
   const transcript = store.sessionState.transcriptCache.get(key) ?? [];
   const preview = previewFromTranscript(transcript);
   store.state = {

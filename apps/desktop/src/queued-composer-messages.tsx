@@ -3,6 +3,8 @@ import { FileIcon } from "./icons";
 
 interface QueuedComposerMessagesProps {
   readonly messages: readonly QueuedComposerMessage[];
+  /** When false the queue is display-only: the driver cannot edit, remove or re-mode entries. */
+  readonly editable?: boolean;
   readonly editingQueuedMessageId?: string;
   readonly onEditMessage: (messageId: string) => void;
   readonly onRemoveMessage: (messageId: string) => void;
@@ -12,6 +14,7 @@ interface QueuedComposerMessagesProps {
 
 export function QueuedComposerMessages({
   messages,
+  editable = true,
   editingQueuedMessageId,
   onEditMessage,
   onRemoveMessage,
@@ -40,19 +43,25 @@ export function QueuedComposerMessages({
         >
           <div className="queued-composer-message__header">
             {message.text ? <div className="queued-composer-message__text">{message.text}</div> : null}
-            <div className="queued-composer-message__actions">
-              {message.mode !== "steer" ? (
-                <button type="button" onClick={() => onSteerMessage(message.id)}>
-                  Steer
+            {editable ? (
+              <div className="queued-composer-message__actions">
+                {message.mode !== "steer" ? (
+                  <button type="button" onClick={() => onSteerMessage(message.id)}>
+                    Steer
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => onEditMessage(message.id)}>
+                  Edit
                 </button>
-              ) : null}
-              <button type="button" onClick={() => onEditMessage(message.id)}>
-                Edit
-              </button>
-              <button aria-label={`Delete queued message ${message.text || message.id}`} type="button" onClick={() => onRemoveMessage(message.id)}>
-                Delete
-              </button>
-            </div>
+                <button aria-label={`Delete queued message ${message.text || message.id}`} type="button" onClick={() => onRemoveMessage(message.id)}>
+                  Delete
+                </button>
+              </div>
+            ) : (
+              <div className="queued-composer-message__actions" aria-label="Queued">
+                <span className="queued-composer-message__status">Queued</span>
+              </div>
+            )}
           </div>
           {message.attachments.length > 0 ? (
             <div className="queued-composer-message__attachments">

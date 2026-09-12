@@ -28,6 +28,7 @@ export function buildWorkspaceRecords(
   sessionConfigBySession: Map<string, SessionConfig>,
   lastViewedAtBySession: Map<string, string>,
   noRepositoryWorkspacePath?: string,
+  compactingSinceBySession?: Map<string, string>,
 ): WorkspaceRecord[] {
   const workspaceRoots = resolveWorkspaceRoots(workspaces, worktrees);
 
@@ -61,6 +62,7 @@ export function buildWorkspaceRecords(
             runningSinceBySession,
             sessionConfigBySession,
             lastViewedAtBySession,
+            compactingSinceBySession,
           ),
         ),
     };
@@ -212,6 +214,7 @@ function buildSessionRecord(
   runningSinceBySession: Map<string, string>,
   sessionConfigBySession: Map<string, SessionConfig>,
   lastViewedAtBySession: Map<string, string>,
+  compactingSinceBySession?: Map<string, string>,
 ): SessionRecord {
   const key = sessionKey(session.sessionRef);
   const transcript = transcriptCache.get(key) ?? [];
@@ -226,6 +229,7 @@ function buildSessionRecord(
     preview,
     status: session.status,
     runningSince: runningSinceBySession.get(key),
+    compactingSince: compactingSinceBySession?.get(key),
     hasUnseenUpdate: hasUnseenSessionUpdate(session.status, session.updatedAt, lastViewedAt, transcript),
     config: sessionConfigBySession.get(key),
   };

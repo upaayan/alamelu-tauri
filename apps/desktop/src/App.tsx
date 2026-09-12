@@ -154,41 +154,43 @@ function storeSidebarWidth(width: number): void {
   }
 }
 
-function useRunningLabel(startedAt: string | undefined) {
-  const [label, setLabel] = useState(() => formatRunningLabel(startedAt));
+type BusyActivity = "Working" | "Compacting conversation";
+
+function useBusyLabel(startedAt: string | undefined, activity: BusyActivity) {
+  const [label, setLabel] = useState(() => formatBusyLabel(startedAt, activity));
 
   useEffect(() => {
-    setLabel(formatRunningLabel(startedAt));
+    setLabel(formatBusyLabel(startedAt, activity));
     if (!startedAt) {
       return undefined;
     }
 
     const interval = window.setInterval(() => {
-      setLabel(formatRunningLabel(startedAt));
+      setLabel(formatBusyLabel(startedAt, activity));
     }, 1000);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [startedAt]);
+  }, [startedAt, activity]);
 
   return label;
 }
 
-function formatRunningLabel(startedAt: string | undefined): string {
+function formatBusyLabel(startedAt: string | undefined, activity: BusyActivity): string {
   if (!startedAt) {
-    return "Working…";
+    return `${activity}…`;
   }
 
   const diffMs = Math.max(0, Date.now() - Date.parse(startedAt));
   const seconds = Math.max(1, Math.floor(diffMs / 1000));
   if (seconds < 60) {
-    return `Working for ${seconds}s`;
+    return `${activity} for ${seconds}s`;
   }
 
   const minutes = Math.floor(seconds / 60);
   const remaining = seconds % 60;
-  return remaining === 0 ? `Working for ${minutes}m` : `Working for ${minutes}m ${remaining}s`;
+  return remaining === 0 ? `${activity} for ${minutes}m` : `${activity} for ${minutes}m ${remaining}s`;
 }
 
 export default function App() {
@@ -542,7 +544,12 @@ export default function App() {
   const composerAttachments = attachmentsClearedOnSubmit ? [] : (snapshot?.composerAttachments ?? []);
   const queuedComposerMessages = snapshot?.queuedComposerMessages ?? [];
   const editingQueuedMessageId = snapshot?.editingQueuedMessageId;
-  const runningLabel = useRunningLabel(selectedSession?.status === "running" ? selectedSession.runningSince : undefined);
+  // Compaction (automatic inside a run, or manual) takes precedence over the generic working label.
+  const compactingSince = selectedSession?.compactingSince;
+  const runningLabel = useBusyLabel(
+    compactingSince ?? (selectedSession?.status === "running" ? selectedSession.runningSince : undefined),
+    compactingSince ? "Compacting conversation" : "Working",
+  );
   const selectedSessionKey = selectedWorkspace && selectedSession ? `${selectedWorkspace.id}:${selectedSession.id}` : "";
   const isTerminalVisibleForSelectedThread = Boolean(selectedSessionKey) && openTerminalSessionKey === selectedSessionKey;
   const isTerminalTakeoverForSelectedThread = Boolean(selectedSessionKey) && takeoverTerminalSessionKey === selectedSessionKey;
@@ -2466,6 +2473,7 @@ export default function App() {
               activeSlashCommandMeta={slashMenu.activeSlashFlow?.command?.description}
               attachments={composerAttachments}
               queuedMessages={queuedComposerMessages}
+              canEditQueuedMessages={snapshot.driverCapabilities.queueEditing !== false}
               editingQueuedMessageId={editingQueuedMessageId}
               composerDraft={composerDraft}
               composerRef={composerRef}

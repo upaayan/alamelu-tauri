@@ -968,6 +968,7 @@ export class DesktopAppStore implements AppStoreInternals {
         this.sessionState.sessionConfigBySession,
         this.sessionState.lastViewedAtBySession,
         this.enableNoRepositoryWorkspace ? this.noRepositoryWorkspacePath : undefined,
+        this.sessionState.compactingSinceBySession,
       );
       const worktreesByWorkspace = buildWorktreeRecords(workspacesSnapshot.workspaces, worktreeEntries);
       const liveWorkspaceIds = new Set(workspaces.map((w) => w.id));
@@ -1450,6 +1451,10 @@ export class DesktopAppStore implements AppStoreInternals {
       }
     }
 
+    // Refreshing commands waits on the Pi child. It runs after this event's state is applied
+    // and published, so an older idle snapshot can never overwrite a newer running one that
+    // arrived meanwhile (e.g. the manual-compaction drain starting right after compaction_end).
+    let refreshCommandsAfterApply = false;
     switch (event.type) {
       case "assistantDelta":
         appendAssistantDelta(this.sessionState.transcriptCache, this.sessionState.activeAssistantMessageBySession, event.sessionRef, event.text);
@@ -1458,13 +1463,13 @@ export class DesktopAppStore implements AppStoreInternals {
       case "runCompleted":
         this.updateSessionConfig(event.sessionRef, event.snapshot.config);
         this.updateQueuedComposerMessages(event.sessionRef, event.snapshot.queuedMessages);
-        await this.refreshSessionCommands(event.sessionRef);
+        refreshCommandsAfterApply = true;
         break;
       case "sessionUpdated":
         this.updateSessionConfig(event.sessionRef, event.snapshot.config);
         this.updateQueuedComposerMessages(event.sessionRef, event.snapshot.queuedMessages);
         if (event.snapshot.status !== "running") {
-          await this.refreshSessionCommands(event.sessionRef);
+          refreshCommandsAfterApply = true;
         }
         break;
       case "runFailed": {
@@ -1474,11 +1479,11 @@ export class DesktopAppStore implements AppStoreInternals {
           lastError: described.headline,
           ...(described.detail ? { lastErrorDetail: described.detail } : { lastErrorDetail: undefined }),
         };
-        await this.refreshSessionCommands(event.sessionRef);
+        refreshCommandsAfterApply = true;
         break;
       }
       case "runCancelled":
-        await this.refreshSessionCommands(event.sessionRef);
+        refreshCommandsAfterApply = true;
         break;
       case "extensionCompatibilityIssue":
         this.reportExtensionCompatibilityIssue(event.sessionRef, event.issue, event.timestamp);
@@ -1519,6 +1524,8 @@ export class DesktopAppStore implements AppStoreInternals {
       runningSinceBySession: this.sessionState.runningSinceBySession,
       activeAssistantMessageBySession: this.sessionState.activeAssistantMessageBySession,
       activeWorkingActivityBySession: this.sessionState.activeWorkingActivityBySession,
+      compactingSinceBySession: this.sessionState.compactingSinceBySession,
+      activeCompactionActivityBySession: this.sessionState.activeCompactionActivityBySession,
     });
     this.state = applySessionEventState(
       this.state,
@@ -1526,6 +1533,7 @@ export class DesktopAppStore implements AppStoreInternals {
       this.sessionState.transcriptCache,
       this.sessionState.runningSinceBySession,
       this.sessionState.lastViewedAtBySession,
+      this.sessionState.compactingSinceBySession,
     );
     this.markSessionViewedIfActivelyViewed(event.sessionRef);
     this.state = this.syncDerivedSessionState(this.state, event.sessionRef);
@@ -1552,6 +1560,11 @@ export class DesktopAppStore implements AppStoreInternals {
     const snapshot = this.emit();
     this.publishSelectedTranscriptFor(event.sessionRef);
     await this.emitSessionEvent(event, snapshot);
+    if (refreshCommandsAfterApply) {
+      await this.refreshSessionCommands(event.sessionRef);
+      this.state = this.syncDerivedSessionState(this.state, event.sessionRef);
+      this.emit();
+    }
   }
 
   workspaceRefFromState(workspaceId: string): WorkspaceRef | undefined {
@@ -2398,6 +2411,7 @@ export class DesktopAppStore implements AppStoreInternals {
                   transcript,
                   preview,
                   runningSince: this.sessionState.runningSinceBySession.get(key),
+                  compactingSince: this.sessionState.compactingSinceBySession.get(key),
                   lastViewedAt,
                 });
               }),

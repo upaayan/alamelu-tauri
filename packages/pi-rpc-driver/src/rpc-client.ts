@@ -32,10 +32,17 @@ export interface RpcClientOptions {
   readonly onStderr?: (line: string) => void;
 }
 
+/**
+ * Explicit "no acknowledgement deadline" for commands whose response legitimately waits
+ * behind long work (prompt preflight compaction, manual compact). Node timers cannot
+ * express this, so sendCommand simply creates no timer for it.
+ */
+export const NO_RPC_DEADLINE = Number.POSITIVE_INFINITY;
+
 interface PendingCommand {
   readonly resolve: (response: RpcResponse) => void;
   readonly reject: (error: Error) => void;
-  readonly timer: NodeJS.Timeout;
+  readonly timer?: NodeJS.Timeout;
 }
 
 export class RpcClient {
@@ -91,14 +98,16 @@ export class RpcClient {
     const line = JSON.stringify(outgoing) + "\n";
 
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`RPC command timed out: ${String(command.type ?? id)}`));
-      }, timeoutMs);
-      this.pending.set(id, { resolve: resolve as (response: RpcResponse) => void, reject, timer });
+      const timer = Number.isFinite(timeoutMs)
+        ? setTimeout(() => {
+            this.pending.delete(id);
+            reject(new Error(`RPC command timed out: ${String(command.type ?? id)}`));
+          }, timeoutMs)
+        : undefined;
+      this.pending.set(id, { resolve: resolve as (response: RpcResponse) => void, reject, ...(timer ? { timer } : {}) });
       this.transport.stdin.write(line, "utf8", (error) => {
         if (!error) return;
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         this.pending.delete(id);
         reject(error instanceof Error ? error : new Error(String(error)));
       });
@@ -130,7 +139,7 @@ export class RpcClient {
         if (id) {
           const pending = this.pending.get(id);
           if (pending) {
-            clearTimeout(pending.timer);
+            if (pending.timer) clearTimeout(pending.timer);
             this.pending.delete(id);
             pending.resolve(response);
             continue;
@@ -148,7 +157,7 @@ export class RpcClient {
 
   private rejectAll(error: Error): void {
     for (const [id, pending] of this.pending) {
-      clearTimeout(pending.timer);
+      if (pending.timer) clearTimeout(pending.timer);
       this.pending.delete(id);
       pending.reject(error);
     }

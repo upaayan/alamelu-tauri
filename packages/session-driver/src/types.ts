@@ -27,6 +27,12 @@ export interface SessionQueuedMessage {
   readonly updatedAt: Timestamp;
 }
 
+/** Pi is compacting the conversation (automatic or manual); absent when it is not. */
+export interface SessionCompactionState {
+  readonly reason: string;
+  readonly startedAt: Timestamp;
+}
+
 export interface SessionSnapshot {
   readonly ref: SessionRef;
   readonly workspace: WorkspaceRef;
@@ -38,6 +44,7 @@ export interface SessionSnapshot {
   readonly config?: SessionConfig;
   readonly runningRunId?: RunId;
   readonly queuedMessages?: readonly SessionQueuedMessage[];
+  readonly compacting?: SessionCompactionState;
 }
 
 export interface SessionImageAttachment {
@@ -110,6 +117,8 @@ export interface SessionModelSelection {
 }
 
 export interface SessionMessageInput {
+  /** Composer-assigned id for a queued message, so its echo, queue chip and start event share one identity. */
+  readonly id?: string;
   readonly text: string;
   readonly attachments?: readonly SessionAttachment[];
   readonly deliverAs?: SessionMessageDeliveryMode;
@@ -176,6 +185,25 @@ export interface ToolFinishedEvent extends SessionEventBase {
 export interface RunCompletedEvent extends SessionEventBase {
   readonly type: "runCompleted";
   readonly snapshot: SessionSnapshot;
+}
+
+export interface CompactionStartedEvent extends SessionEventBase {
+  readonly type: "compactionStarted";
+  readonly reason: string;
+  readonly startedAt: Timestamp;
+}
+
+export type CompactionOutcome = "completed" | "cancelled" | "failed";
+
+export interface CompactionEndedEvent extends SessionEventBase {
+  readonly type: "compactionEnded";
+  readonly reason: string;
+  readonly startedAt: Timestamp;
+  readonly endedAt: Timestamp;
+  readonly outcome: CompactionOutcome;
+  readonly error?: string;
+  readonly tokensBefore?: number;
+  readonly estimatedTokensAfter?: number;
 }
 
 export interface SessionErrorInfo {
@@ -307,6 +335,8 @@ export type SessionDriverEvent =
   | ToolUpdatedEvent
   | ToolFinishedEvent
   | RunCompletedEvent
+  | CompactionStartedEvent
+  | CompactionEndedEvent
   | RunFailedEvent
   | RunCancelledEvent
   | HostUiRequestEvent

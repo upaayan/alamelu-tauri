@@ -387,7 +387,8 @@ test('mapRpcEventToSessionDriverEvents maps text, tool, completion, and failure 
     assert.deepEqual(mapRpcEventToSessionDriverEvents({ type: 'message_end', message }, base), []);
   }
 
-  const completed = mapRpcEventToSessionDriverEvents({ type: 'agent_end' }, { ...base, snapshot: { ...snapshot, status: 'idle', runningRunId: undefined } });
+  assert.deepEqual(mapRpcEventToSessionDriverEvents({ type: 'agent_end', willRetry: false }, base), [], 'agent_end may still be followed by retry/compaction/queued work');
+  const completed = mapRpcEventToSessionDriverEvents({ type: 'agent_settled' }, { ...base, snapshot: { ...snapshot, status: 'idle', runningRunId: undefined } });
   assert.equal(completed[0].type, 'runCompleted');
   assert.equal(completed[0].snapshot.status, 'idle');
 
@@ -547,7 +548,7 @@ test('PiRpcDriver rejects a new session when Pi does not return its generated se
 });
 
 test('PiRpcDriver emits runFailed and returns to idle when prompt command fails', async () => {
-  const { createPiRpcDriver } = await import('../dist/index.js');
+  const { createPiRpcDriver, NO_RPC_DEADLINE } = await import('../dist/index.js');
   let promptTimeoutMs;
   class FakeClient {
     onEvent() { return () => undefined; }
@@ -576,8 +577,10 @@ test('PiRpcDriver emits runFailed and returns to idle when prompt command fails'
   const snapshot = await driver.createSession({ workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' });
   const events = [];
   driver.subscribe(snapshot.ref, (event) => events.push(event));
-  await assert.rejects(() => driver.sendUserMessage(snapshot.ref, { text: 'fail' }), /nope/);
-  assert.equal(promptTimeoutMs, 120_000);
+  // Send resolves at app-level acceptance; Pi's rejection arrives as a runFailed event.
+  await driver.sendUserMessage(snapshot.ref, { text: 'fail' });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(promptTimeoutMs, NO_RPC_DEADLINE);
   assert.equal(events.some((event) => event.type === 'runFailed' && event.error.message === 'nope'), true);
   const lastUpdate = events.filter((event) => event.type === 'sessionUpdated').at(-1);
   assert.equal(lastUpdate.snapshot.status, 'idle');
@@ -868,6 +871,7 @@ test('PiRpcDriver marks stream errors failed and suppresses later completion', a
           listener({ type: 'agent_start' });
           listener({ type: 'message_update', assistantMessageEvent: { type: 'error', error: 'stream exploded' } });
           listener({ type: 'agent_end' });
+          listener({ type: 'agent_settled' });
         }
         return { type: 'response', id, command: 'prompt', success: true };
       }
@@ -916,6 +920,7 @@ test('PiRpcDriver keeps the run active across Pi retry after a finalized assista
         this.emit({ type: 'agent_start' });
         this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'RECOVERED_AFTER_RETRY' } });
         this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -964,6 +969,7 @@ test('PiRpcDriver reports a finalized assistant error only after Pi declines to 
           message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-5.6-luna', stopReason: 'error', errorMessage: 'WebSocket error' },
         });
         this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -1013,6 +1019,7 @@ test('PiRpcDriver internally reopens a successful Luna thread before its next pr
         this.emit({ type: 'agent_start' });
         this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: `${this.name}_OK` } });
         this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -1068,6 +1075,7 @@ test('PiRpcDriver lets Pi finish a Luna retry, then rotates the recovered child 
         }
         this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: `${this.name}_OK` } });
         this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -1117,6 +1125,7 @@ test('PiRpcDriver leaves Sol and Terra children running across successful idle p
       if (command.type === 'prompt') {
         this.emit({ type: 'agent_start' });
         this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -1164,6 +1173,7 @@ test('PiRpcDriver keeps the previous Luna child intact if its internal reopen fa
       if (command.type === 'prompt') {
         this.emit({ type: 'agent_start' });
         this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -1220,6 +1230,7 @@ test('PiRpcDriver waits for an internal Luna reopen before sending a concurrent 
       if (command.type === 'prompt') {
         this.emit({ type: 'agent_start' });
         this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -1275,7 +1286,10 @@ test('PiRpcDriver rejects a model change queued after the replacement prompt has
       }
       if (command.type === 'prompt') {
         this.emit({ type: 'agent_start' });
-        if (this.name === 'original') this.emit({ type: 'agent_end', willRetry: false });
+        if (this.name === 'original') {
+          this.emit({ type: 'agent_end', willRetry: false });
+          this.emit({ type: 'agent_settled' });
+        }
         return { type: 'response', id, command: 'prompt', success: true };
       }
       return { type: 'response', id, command: command.type, success: true };
@@ -1355,9 +1369,11 @@ test('PiRpcDriver replaces only a tainted Luna child before the next prompt and 
             message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-5.6-luna', stopReason: 'error', errorMessage: 'Model not found gpt-5.6-luna' },
           });
           this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         } else {
           this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'FRESH_CHILD_OK' } });
           this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
         }
         return { type: 'response', id, command: 'prompt', success: true };
       }
@@ -1475,6 +1491,7 @@ test('PiRpcDriver creates a chat session and maps fake RPC stream into driver ev
           listener({ type: 'agent_start' });
           listener({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'RPC_OK' } });
           listener({ type: 'agent_end' });
+          listener({ type: 'agent_settled' });
         }
         return { type: 'response', id, command: 'prompt', success: true };
       }
@@ -1646,6 +1663,7 @@ test('PiRpcDriver ignores benign closed-pipe stream failures after a run is alre
           listener({ type: 'agent_start' });
           listener({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'RPC_OK' } });
           listener({ type: 'agent_end' });
+          listener({ type: 'agent_settled' });
           listener({ type: 'rpc_transport_closed', reason: 'stdout_error', error: 'write EPIPE' });
         }
         return { type: 'response', id, command: 'prompt', success: true };
@@ -1686,6 +1704,7 @@ test('PiRpcDriver treats prompt EPIPE after run completion as benign', async () 
           listener({ type: 'agent_start' });
           listener({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'RPC_OK' } });
           listener({ type: 'agent_end' });
+          listener({ type: 'agent_settled' });
         }
         throw new Error('write EPIPE');
       }

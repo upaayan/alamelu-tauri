@@ -387,3 +387,77 @@ test(
     }
   },
 );
+
+test(
+  "Tauri backend accepts /compact promptly and streams the compaction outcome",
+  { timeout: 120_000 },
+  async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "alamelu-tauri-compaction-"));
+    const workspace = path.join(root, "workspace");
+    const userData = path.join(root, "state");
+    fs.mkdirSync(workspace);
+    fs.mkdirSync(userData);
+    const child = spawn(process.execPath, [path.join(backendDir, "main.cjs")], {
+      cwd: backendDir,
+      env: {
+        ...process.env,
+        ALAMELU_TAURI_BACKEND_DIR: backendDir,
+        ALAMELU_TAURI_RESOURCES: backendDir,
+        PI_APP_TEST_MODE: "background",
+        PI_APP_INITIAL_WORKSPACES: workspace,
+        PI_APP_USER_DATA_DIR: userData,
+        PI_GUI_SHARED_THREAD_DATA_DIR: userData,
+        PI_CODING_AGENT_SESSION_DIR: path.join(userData, "sessions"),
+        PI_GUI_BRAND: "alpi",
+        PI_GUI_PI_BIN: executable("pi"),
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const backend = new BackendClient(child);
+    try {
+      await backend.waitFor((message) => message.type === "ready", "backend readiness");
+      const state = await backend.request("alamelu-pi:state-request");
+      const workspaceId = state.workspaces.find(
+        (entry) => fs.realpathSync(entry.path) === fs.realpathSync(workspace),
+      )?.id;
+      assert.ok(workspaceId, "temporary workspace was not loaded");
+      const created = await backend.request("alamelu-pi:create-session", [
+        { workspaceId, title: "Compaction acceptance" },
+      ]);
+      assert.ok(created.selectedSessionId);
+
+      // The UI call returns at app-level acceptance, not when compaction finishes.
+      const startedAt = Date.now();
+      await backend.request("alamelu-pi:submit-composer", ["/compact"]);
+      const acceptanceMs = Date.now() - startedAt;
+      assert.ok(acceptanceMs < 15_000, `/compact acceptance took ${acceptanceMs}ms`);
+
+      // Pi rejects compaction of an empty thread after emitting compaction_start/compaction_end;
+      // the outcome reaches the transport as a transcript change.
+      await backend.waitFor(
+        (message) =>
+          message.type === "event" &&
+          message.channel === "alamelu-pi:selected-transcript-changed" &&
+          JSON.stringify(message.payload).includes("Compaction failed"),
+        "compaction outcome event",
+        60_000,
+      );
+      const transcript = await backend.request("alamelu-pi:selected-transcript-request");
+      const outcome = transcript.transcript.find(
+        (item) => item.kind === "activity" && item.label === "Compaction failed",
+      );
+      assert.ok(outcome, "compaction outcome row is missing");
+      assert.match(outcome.detail ?? "", /Nothing to compact/);
+      assert.equal(outcome.pending, undefined);
+      const finalState = await backend.request("alamelu-pi:state-request");
+      const session = finalState.workspaces
+        .flatMap((entry) => entry.sessions)
+        .find((entry) => entry.id === created.selectedSessionId);
+      assert.equal(session.status, "idle", "busy state clears after the terminal compaction outcome");
+      assert.equal(session.compactingSince, undefined);
+    } finally {
+      await backend.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

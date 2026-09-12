@@ -22,6 +22,7 @@ interface ComposerSurfaceProps {
   readonly composerRef: RefObject<HTMLTextAreaElement | null>;
   readonly attachments: readonly ComposerAttachment[];
   readonly queuedMessages: readonly import("./desktop-state").QueuedComposerMessage[];
+  readonly canEditQueuedMessages?: boolean;
   readonly editingQueuedMessageId?: string;
   readonly slashSections: readonly ComposerSlashCommandSection[];
   readonly slashOptions: readonly ComposerSlashOption[];
@@ -66,6 +67,7 @@ export function ComposerSurface({
   composerRef,
   attachments,
   queuedMessages,
+  canEditQueuedMessages = true,
   editingQueuedMessageId,
   slashSections,
   slashOptions,
@@ -179,6 +181,7 @@ export function ComposerSurface({
       ) : null}
       <QueuedComposerMessages
         messages={queuedMessages}
+        editable={canEditQueuedMessages}
         editingQueuedMessageId={editingQueuedMessageId}
         onEditMessage={onEditQueuedMessage}
         onCancelEdit={onCancelQueuedEdit}

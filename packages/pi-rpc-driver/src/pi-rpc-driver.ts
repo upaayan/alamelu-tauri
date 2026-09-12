@@ -10,6 +10,7 @@ import type {
   SessionDriverEvent,
   SessionEventListener,
   SessionAttachment,
+  SessionMessageDeliveryMode,
   SessionMessageInput,
   SessionModelSelection,
   SessionQueuedMessage,
@@ -25,10 +26,8 @@ import type {
 import type { RuntimeCommandRecord } from "@alamelu-pi/session-driver/runtime-types";
 import { mapRpcEventToSessionDriverEvents } from "./event-mapper.js";
 import type { RpcClient, RpcEvent, RpcResponse } from "./rpc-client.js";
-import { spawnPiRpcClient } from "./rpc-client.js";
+import { NO_RPC_DEADLINE, spawnPiRpcClient } from "./rpc-client.js";
 import { canonicalizePath, pathContains, validateLabPaths, type LabPathInput, type ValidatedLabPaths } from "./path-guards.js";
-
-const PROMPT_COMMAND_TIMEOUT_MS = 120_000;
 
 export interface RpcClientLike {
   sendCommand<T extends RpcResponse = RpcResponse>(command: Record<string, unknown>, id?: string, timeoutMs?: number): Promise<T>;
@@ -52,6 +51,12 @@ export interface PiRpcDriverOptions extends LabPathInput {
   readonly onStderr?: (line: string) => void;
 }
 
+/** A message the user sent during work; `handedToPi` once Pi's own queue holds it. */
+interface QueuedEntry {
+  readonly message: SessionQueuedMessage;
+  handedToPi: boolean;
+}
+
 interface SessionRecord {
   readonly ref: SessionRef;
   readonly workspace: WorkspaceRef;
@@ -60,6 +65,19 @@ interface SessionRecord {
   clientGeneration: number;
   snapshot: SessionSnapshot;
   transcriptText: string;
+  /** Accepted queue entries in order: held locally (manual compaction) or handed to Pi. */
+  queue: QueuedEntry[];
+  /** Last per-mode queue sizes reported by Pi's queue_update; decreases mean consumption. */
+  piQueueCounts: Record<SessionMessageDeliveryMode, number>;
+  /** Set from manual /compact acceptance until its terminal event, so failures before compaction_start still end it. */
+  manualOperation?: { readonly token: string };
+  /**
+   * Frees the manual compaction's wait for Pi's response on a terminal failure, even after
+   * compaction_end already cleared the marker (a fatal parse error can hit the response line
+   * itself); cleared once that wait completes.
+   */
+  releaseManualWait?: () => void;
+  drainScheduled?: boolean;
   lunaChildNeedsRotation?: boolean;
   restartingClient?: Promise<void>;
   idleOperationTail?: Promise<void>;
@@ -67,6 +85,10 @@ interface SessionRecord {
   cancellingRunId?: string;
   pendingAssistantError?: string;
   suppressRunEvents?: boolean;
+}
+
+function emptyQueueCounts(): Record<SessionMessageDeliveryMode, number> {
+  return { steer: 0, followUp: 0 };
 }
 
 export class PiRpcDriver implements SessionDriver {
@@ -98,9 +120,11 @@ export class PiRpcDriver implements SessionDriver {
 
       const ref = { workspaceId: workspace.workspaceId, sessionId };
       const stateConfig = sessionConfigFromState(state.data);
+      const compacting = compactingFromState(state.data, this.now());
       const snapshot = this.makeSnapshot(ref, workspace, {
         title: options?.title ?? sessionNameFromState(state.data) ?? "RPC Session",
-        status: "idle",
+        status: compacting ? "running" : "idle",
+        ...(compacting ? { compacting } : {}),
         config: {
           ...(stateConfig ?? {}),
           ...(options?.initialModel ? { provider: options.initialModel.provider, modelId: options.initialModel.modelId } : {}),
@@ -113,6 +137,8 @@ export class PiRpcDriver implements SessionDriver {
         client,
         snapshot,
         transcriptText: "",
+        queue: [],
+        piQueueCounts: emptyQueueCounts(),
         clientGeneration: 0,
         unsubscribeClient: () => undefined,
       };
@@ -143,10 +169,12 @@ export class PiRpcDriver implements SessionDriver {
       const state = await client.sendCommand({ type: "get_state" }, `open-state-${sessionRef.sessionId}`);
       if (!state.success) throw new Error(state.error ?? "RPC get_state failed");
       const stateConfig = sessionConfigFromState(state.data);
+      const compacting = compactingFromState(state.data, this.now());
 
       const snapshot = this.makeSnapshot(sessionRef, workspace, {
         title: sessionNameFromState(state.data) ?? "RPC Session",
-        status: "idle",
+        status: compacting ? "running" : "idle",
+        ...(compacting ? { compacting } : {}),
         // Opening a stored conversation is a read, not a new update.
         ...(storedUpdatedAt ? { updatedAt: storedUpdatedAt } : {}),
         ...(stateConfig ? { config: stateConfig } : {}),
@@ -157,6 +185,8 @@ export class PiRpcDriver implements SessionDriver {
         client,
         snapshot,
         transcriptText: "",
+        queue: [],
+        piQueueCounts: emptyQueueCounts(),
         clientGeneration: 0,
         unsubscribeClient: () => undefined,
       };
@@ -179,51 +209,179 @@ export class PiRpcDriver implements SessionDriver {
   }
 
   async sendUserMessage(sessionRef: SessionRef, input: SessionMessageInput): Promise<void> {
-    let record = this.requireSession(sessionRef);
+    const record = this.requireSession(sessionRef);
     if (input.deliverAs) {
-      if (record.snapshot.status !== "running" && !record.snapshot.runningRunId) {
-        throw new Error("RPC steering and follow-up messages require a running session");
+      const message = queuedMessageFromInput(input, input.deliverAs, this.now());
+      if (record.snapshot.runningRunId) {
+        return this.handOffToPi(record, message);
       }
-      const commandType = input.deliverAs === "steer" ? "steer" : "follow_up";
-      const response = await record.client.sendCommand(
-        { type: commandType, message: input.text, images: imageAttachments(input) },
-        `${commandType}-${randomUUID()}`,
+      if (record.snapshot.status === "running") {
+        // Accepted manual work (a /compact) is in progress. Pi's follow_up queue would park the
+        // message forever after a manual compaction, so hold it here and start it afterwards.
+        record.queue.push({ message, handedToPi: false });
+        this.publishQueue(record);
+        this.scheduleDrain(record);
+        return;
+      }
+      throw new Error("RPC steering and follow-up messages require a running session");
+    }
+    return this.enqueueIdleOperation(record, () => this.startPrompt(sessionRef, input));
+  }
+
+  /**
+   * Normal prompt path. Resolves once the command is dispatched (app-level acceptance);
+   * Pi acknowledges only after preflight, which may wait behind automatic compaction, so
+   * that acknowledgement has no deadline and its failure surfaces as a runFailed event.
+   */
+  private async startPrompt(sessionRef: SessionRef, input: SessionMessageInput): Promise<void> {
+    let record = this.requireSession(sessionRef);
+    if (record.snapshot.status === "running" || record.snapshot.runningRunId) {
+      throw new Error("RPC session is already running; re-entrant prompts are not supported by the prototype");
+    }
+    await this.rotateLunaChildBeforePrompt(record);
+    record = this.requireSession(sessionRef);
+    if (record.snapshot.status === "running" || record.snapshot.runningRunId) {
+      throw new Error("RPC session became active while preparing a prompt");
+    }
+    const runId = randomUUID();
+    // Stale-run suppression stays until Pi's agent_start for this run: a late agent_settled of a
+    // failed run must not complete this one. Compaction and queue events bypass that gate.
+    record.snapshot = { ...record.snapshot, status: "running", runningRunId: runId, updatedAt: this.now() };
+    record.transcriptText += `${record.transcriptText ? "\n" : ""}User: ${input.text}\nAssistant: `;
+    this.emit(sessionRef, { type: "sessionUpdated", sessionRef, timestamp: this.now(), runId, snapshot: record.snapshot });
+
+    record.client
+      .sendCommand({ type: "prompt", message: input.text, images: imageAttachments(input) }, `prompt-${runId}`, NO_RPC_DEADLINE)
+      .then(
+        (response) => {
+          if (!response.success) this.failAcceptedRun(record, runId, response.error ?? "RPC prompt failed");
+        },
+        (error) => this.failAcceptedRun(record, runId, error instanceof Error ? error.message : String(error)),
       );
-      if (!response.success) throw new Error(response.error ?? `RPC ${commandType} failed`);
+  }
+
+  /** Fails a run only while it is still the active one; a run ended by events is left alone. */
+  private failAcceptedRun(record: SessionRecord, runId: string, message: string): void {
+    if (record.snapshot.runningRunId !== runId) return;
+    this.failRun(record, runId, message);
+  }
+
+  /** Registers the entry before Pi's insertion event can arrive, then hands it to Pi's queue. */
+  private async handOffToPi(record: SessionRecord, message: SessionQueuedMessage): Promise<void> {
+    const entry: QueuedEntry = { message, handedToPi: true };
+    record.queue.push(entry);
+    this.publishQueue(record);
+    const commandType = message.mode === "steer" ? "steer" : "follow_up";
+    let failure: string | undefined;
+    try {
+      const response = await record.client.sendCommand(
+        { type: commandType, message: message.text, images: imageAttachments(message) },
+        `${commandType}-${message.id}`,
+      );
+      if (!response.success) failure = response.error ?? `RPC ${commandType} failed`;
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
+    }
+    if (failure !== undefined) {
+      this.dropQueueEntry(record, entry);
+      throw new Error(failure);
+    }
+  }
+
+  /** Drain hand-off: written without awaiting so several entries keep their stdin order. */
+  private writeQueueCommand(record: SessionRecord, entry: QueuedEntry): void {
+    const commandType = entry.message.mode === "steer" ? "steer" : "follow_up";
+    void record.client
+      .sendCommand(
+        { type: commandType, message: entry.message.text, images: imageAttachments(entry.message) },
+        `${commandType}-${entry.message.id}`,
+      )
+      .then(
+        (response) => {
+          if (!response.success) this.rejectHandOff(record, entry, response.error ?? `RPC ${commandType} failed`);
+        },
+        (error) => this.rejectHandOff(record, entry, error instanceof Error ? error.message : String(error)),
+      );
+  }
+
+  private rejectHandOff(record: SessionRecord, entry: QueuedEntry, message: string): void {
+    // Already cleared by a terminal outcome: that failure was reported once.
+    if (!record.queue.includes(entry)) return;
+    this.dropQueueEntry(record, entry);
+    this.emit(record.ref, {
+      type: "hostUiRequest",
+      sessionRef: record.ref,
+      timestamp: this.now(),
+      ...(record.snapshot.runningRunId ? { runId: record.snapshot.runningRunId } : {}),
+      request: { kind: "notify", requestId: randomUUID(), message: `Queued message was not accepted: ${message}`, level: "error" },
+    });
+  }
+
+  private dropQueueEntry(record: SessionRecord, entry: QueuedEntry): void {
+    const index = record.queue.indexOf(entry);
+    if (index < 0) return;
+    record.queue.splice(index, 1);
+    this.publishQueue(record);
+  }
+
+  private publishQueue(record: SessionRecord): void {
+    const { queuedMessages: _queuedMessages, ...rest } = record.snapshot;
+    record.snapshot =
+      record.queue.length > 0
+        ? { ...rest, queuedMessages: record.queue.map((entry) => entry.message), updatedAt: this.now() }
+        : { ...rest, updatedAt: this.now() };
+    this.emitSnapshot(record);
+  }
+
+  private emitSnapshot(record: SessionRecord): void {
+    this.emit(record.ref, {
+      type: "sessionUpdated",
+      sessionRef: record.ref,
+      timestamp: this.now(),
+      ...(record.snapshot.runningRunId ? { runId: record.snapshot.runningRunId } : {}),
+      snapshot: record.snapshot,
+    });
+  }
+
+  /** One drain per wait: runs behind the current idle operation (the manual compaction). */
+  private scheduleDrain(record: SessionRecord): void {
+    if (record.drainScheduled) return;
+    record.drainScheduled = true;
+    void this.enqueueIdleOperation(record, async () => {
+      record.drainScheduled = false;
+      await this.drainHeldMessages(record);
+    }).catch(() => undefined);
+  }
+
+  /**
+   * Starts the first held message as a normal prompt and hands the rest to Pi's queue in
+   * order. Held entries are left alone while compaction is still running (compaction_end
+   * schedules the next drain) or when a terminal outcome already cleared them.
+   */
+  private async drainHeldMessages(record: SessionRecord): Promise<void> {
+    if (record.closed || this.sessions.get(this.key(record.ref)) !== record) return;
+    if (record.snapshot.runningRunId || record.snapshot.compacting || record.manualOperation) return;
+    const held = record.queue.filter((entry) => !entry.handedToPi);
+    if (held.length === 0) return;
+    const [first, ...rest] = held as [QueuedEntry, ...QueuedEntry[]];
+    this.dropQueueEntry(record, first);
+    this.emit(record.ref, { type: "queuedMessageStarted", sessionRef: record.ref, timestamp: this.now(), message: first.message });
+    try {
+      await this.startPrompt(record.ref, {
+        id: first.message.id,
+        text: first.message.text,
+        ...(first.message.attachments ? { attachments: first.message.attachments } : {}),
+      });
+    } catch (error) {
+      // The prompt never reached Pi (guard or child replacement failure): one terminal failure.
+      this.failRun(record, randomUUID(), error instanceof Error ? error.message : String(error));
       return;
     }
-    return this.enqueueIdleOperation(record, async () => {
-      record = this.requireSession(sessionRef);
-      if (record.snapshot.status === "running" || record.snapshot.runningRunId) {
-        throw new Error("RPC session is already running; re-entrant prompts are not supported by the prototype");
-      }
-      await this.rotateLunaChildBeforePrompt(record);
-      record = this.requireSession(sessionRef);
-      if (record.snapshot.status === "running" || record.snapshot.runningRunId) {
-        throw new Error("RPC session became active while preparing a prompt");
-      }
-      const runId = randomUUID();
-      record.snapshot = { ...record.snapshot, status: "running", runningRunId: runId, updatedAt: this.now() };
-      record.transcriptText += `${record.transcriptText ? "\n" : ""}User: ${input.text}\nAssistant: `;
-      this.emit(sessionRef, { type: "sessionUpdated", sessionRef, timestamp: this.now(), runId, snapshot: record.snapshot });
-
-      const commandType = "prompt";
-      try {
-        const response = await record.client.sendCommand(
-          { type: commandType, message: input.text, images: imageAttachments(input) },
-          `${commandType}-${runId}`,
-          PROMPT_COMMAND_TIMEOUT_MS,
-        );
-        if (!response.success) throw new Error(response.error ?? `RPC ${commandType} failed`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!record.snapshot.runningRunId && isBenignInactiveStreamFailure(message)) {
-          return;
-        }
-        this.failRun(record, runId, message);
-        throw error;
-      }
-    });
+    for (const entry of rest) {
+      entry.handedToPi = true;
+      this.writeQueueCommand(record, entry);
+    }
+    this.publishQueue(record);
   }
 
   replaceQueuedMessages(_sessionRef: SessionRef, _messages: readonly SessionQueuedMessage[]): Promise<void> {
@@ -280,19 +438,55 @@ export class PiRpcDriver implements SessionDriver {
     });
   }
 
-  async compactSession(sessionRef: SessionRef, customInstructions?: string): Promise<void> {
+  /**
+   * Manual compaction. Resolves at app-level acceptance; the session stays busy (no run id)
+   * and the idle-operation tail stays occupied until Pi's response so a sequenced prompt
+   * cannot reach Pi mid-compaction. Outcome, tokens and errors arrive via compaction_end.
+   */
+  compactSession(sessionRef: SessionRef, customInstructions?: string): Promise<void> {
     const record = this.requireSession(sessionRef);
-    return this.enqueueIdleOperation(record, async () => {
-      const current = await this.prepareIdleLunaClientForMutation(record);
-      // Pi answers only once compaction finishes, which outlives the 30s default.
-      const response = await current.client.sendCommand(
-        { type: "compact", ...(customInstructions ? { customInstructions } : {}) },
-        `compact-${randomUUID()}`,
-        PROMPT_COMMAND_TIMEOUT_MS,
-      );
-      if (!response.success) throw new Error(response.error ?? "RPC compact failed");
-      current.snapshot = { ...current.snapshot, updatedAt: this.now() };
-      this.emit(sessionRef, { type: "sessionUpdated", sessionRef, timestamp: this.now(), snapshot: current.snapshot });
+    return new Promise<void>((resolveAccepted, rejectAccepted) => {
+      void this.enqueueIdleOperation(record, async () => {
+        const token = randomUUID();
+        let current: SessionRecord;
+        let pending: Promise<RpcResponse>;
+        let release: () => void = () => undefined;
+        const terminated = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        try {
+          current = await this.prepareIdleLunaClientForMutation(record);
+          current.manualOperation = { token };
+          current.releaseManualWait = release;
+          current.snapshot = { ...current.snapshot, status: "running", updatedAt: this.now() };
+          this.emitSnapshot(current);
+          pending = current.client.sendCommand(
+            { type: "compact", ...(customInstructions ? { customInstructions } : {}) },
+            `compact-${token}`,
+            NO_RPC_DEADLINE,
+          );
+        } catch (error) {
+          rejectAccepted(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+        resolveAccepted();
+        let failure: string | undefined;
+        try {
+          // A terminal failure (transport closed, fatal parse error) releases this wait even
+          // when the command promise can never settle, so later operations are not stuck.
+          pending.catch(() => undefined);
+          const response = await Promise.race([pending, terminated.then(() => undefined)]);
+          if (response && !response.success) failure = response.error ?? "RPC compact failed";
+        } catch (error) {
+          failure = error instanceof Error ? error.message : String(error);
+        } finally {
+          if (current.releaseManualWait === release) delete current.releaseManualWait;
+        }
+        if (current.manualOperation?.token === token) {
+          // No compaction_end (or transport failure) reported this operation: fail it exactly once.
+          this.failRun(current, randomUUID(), failure ?? "RPC compact finished without a compaction_end event");
+        }
+      });
     });
   }
 
@@ -507,6 +701,7 @@ export class PiRpcDriver implements SessionDriver {
       record.client = replacement;
       record.unsubscribeClient = replacementUnsubscribe;
       record.clientGeneration = replacementGeneration;
+      record.piQueueCounts = emptyQueueCounts();
       delete record.lunaChildNeedsRotation;
       if (restoredConfig) {
         record.snapshot = { ...record.snapshot, config: { ...record.snapshot.config, ...restoredConfig }, updatedAt: this.now() };
@@ -532,18 +727,40 @@ export class PiRpcDriver implements SessionDriver {
       this.emit(sessionRef, { type: "sessionUpdated", sessionRef, timestamp: this.now(), runId, snapshot: record.snapshot });
       return;
     }
+    // Session-level state that outlives any single run is handled ahead of the stale-run gate:
+    // a /compact after a stopped run, or preflight compaction of the next prompt, must be visible.
+    if (event.type === "compaction_start") {
+      this.handleCompactionStart(record, event);
+      return;
+    }
+    if (event.type === "compaction_end") {
+      this.handleCompactionEnd(record, event);
+      return;
+    }
+    if (event.type === "queue_update") {
+      this.handleQueueUpdate(record, event);
+      return;
+    }
+    const streamFailure = streamFailureMessage(event);
+    if (streamFailure && (record.manualOperation || record.releaseManualWait) && !record.snapshot.runningRunId) {
+      // Accepted manual work — including a compact still waiting for Pi's acknowledgement after
+      // compaction_end — must terminate on a transport/parse failure while the stale-run gate
+      // of a previous Stop/failure is active.
+      this.failRun(record, randomUUID(), streamFailure);
+      return;
+    }
     if (record.suppressRunEvents) return;
 
     if (record.cancellingRunId && record.snapshot.runningRunId === record.cancellingRunId) {
       // A stream failure arriving mid-cancel is the user's own stop landing, not an error.
-      if (streamFailureMessage(event)) this.endRun(record, record.cancellingRunId, { cancelled: true });
+      if (streamFailure) this.endRun(record, record.cancellingRunId, { cancelled: true });
       return;
     }
 
     const activeRunId = record.snapshot.runningRunId;
-    const streamFailure = streamFailureMessage(event);
     if (streamFailure) {
-      if (!activeRunId && isBenignInactiveStreamFailure(streamFailure)) {
+      // Accepted manual work counts as active: a dead child can never send its compaction_end.
+      if (!activeRunId && !record.manualOperation && isBenignInactiveStreamFailure(streamFailure)) {
         return;
       }
       this.failRun(record, activeRunId ?? randomUUID(), streamFailure);
@@ -556,8 +773,9 @@ export class PiRpcDriver implements SessionDriver {
       return;
     }
 
-    if (event.type === "agent_end") {
-      if (event.willRetry === true) return;
+    if (event.type === "agent_settled") {
+      // agent_end may be followed by retry, compaction retry or queued continuations; only
+      // Pi's session-level agent_settled ends the run.
       if (!activeRunId) return;
       if (record.pendingAssistantError) {
         this.failRun(record, activeRunId, record.pendingAssistantError);
@@ -579,6 +797,84 @@ export class PiRpcDriver implements SessionDriver {
     }
   }
 
+  private handleCompactionStart(record: SessionRecord, event: RpcEvent): void {
+    const startedAt = this.now();
+    const reason = typeof event.reason === "string" ? event.reason : "unknown";
+    record.snapshot = { ...record.snapshot, status: "running", compacting: { reason, startedAt }, updatedAt: startedAt };
+    this.emitSnapshot(record);
+    this.emit(record.ref, {
+      type: "compactionStarted",
+      sessionRef: record.ref,
+      timestamp: startedAt,
+      ...(record.snapshot.runningRunId ? { runId: record.snapshot.runningRunId } : {}),
+      reason,
+      startedAt,
+    });
+  }
+
+  private handleCompactionEnd(record: SessionRecord, event: RpcEvent): void {
+    const endedAt = this.now();
+    const compacting = record.snapshot.compacting;
+    const reason = typeof event.reason === "string" ? event.reason : compacting?.reason ?? "unknown";
+    const startedAt = compacting?.startedAt ?? endedAt;
+    const errorMessage = typeof event.errorMessage === "string" ? event.errorMessage : undefined;
+    const outcome = event.aborted === true ? "cancelled" : errorMessage ? "failed" : "completed";
+    const result = typeof event.result === "object" && event.result !== null ? (event.result as Record<string, unknown>) : undefined;
+    const tokensBefore = typeof result?.tokensBefore === "number" ? result.tokensBefore : undefined;
+    const estimatedTokensAfter = typeof result?.estimatedTokensAfter === "number" ? result.estimatedTokensAfter : undefined;
+    delete record.manualOperation;
+    const { compacting: _compacting, ...rest } = record.snapshot;
+    record.snapshot = { ...rest, status: rest.runningRunId ? "running" : "idle", updatedAt: endedAt };
+    this.emit(record.ref, {
+      type: "compactionEnded",
+      sessionRef: record.ref,
+      timestamp: endedAt,
+      ...(record.snapshot.runningRunId ? { runId: record.snapshot.runningRunId } : {}),
+      reason,
+      startedAt,
+      endedAt,
+      outcome,
+      ...(errorMessage ? { error: errorMessage } : {}),
+      ...(tokensBefore !== undefined ? { tokensBefore } : {}),
+      ...(estimatedTokensAfter !== undefined ? { estimatedTokensAfter } : {}),
+    });
+    this.emitSnapshot(record);
+    if (!record.snapshot.runningRunId && record.queue.some((entry) => !entry.handedToPi)) {
+      this.scheduleDrain(record);
+    }
+  }
+
+  /** Consumption is a decrease in Pi's per-mode count; insertions (increases) remove nothing. */
+  private handleQueueUpdate(record: SessionRecord, event: RpcEvent): void {
+    const counts: Record<SessionMessageDeliveryMode, number> = {
+      steer: Array.isArray(event.steering) ? event.steering.length : 0,
+      followUp: Array.isArray(event.followUp) ? event.followUp.length : 0,
+    };
+    const consumed: SessionQueuedMessage[] = [];
+    for (const mode of ["steer", "followUp"] as const) {
+      let decrease = record.piQueueCounts[mode] - counts[mode];
+      record.piQueueCounts[mode] = counts[mode];
+      while (decrease > 0) {
+        const index = record.queue.findIndex((entry) => entry.handedToPi && entry.message.mode === mode);
+        if (index < 0) break;
+        const [entry] = record.queue.splice(index, 1);
+        if (entry) consumed.push(entry.message);
+        decrease -= 1;
+      }
+    }
+    if (consumed.length === 0) return;
+    for (const message of consumed) {
+      this.emit(record.ref, {
+        type: "queuedMessageStarted",
+        sessionRef: record.ref,
+        timestamp: this.now(),
+        ...(record.snapshot.runningRunId ? { runId: record.snapshot.runningRunId } : {}),
+        message,
+      });
+    }
+    this.publishQueue(record);
+  }
+
   private failRun(record: SessionRecord, runId: string, message: string): void {
     this.endRun(record, runId, { message });
   }
@@ -588,10 +884,17 @@ export class PiRpcDriver implements SessionDriver {
    * reported as `runCancelled` so the UI never paints them as an error.
    */
   private endRun(record: SessionRecord, runId: string, outcome: { message: string } | { cancelled: true }): void {
-    if (record.suppressRunEvents && !record.snapshot.runningRunId) return;
-    const { runningRunId: _runningRunId, ...snapshotWithoutRunId } = record.snapshot;
+    // Stale events after a terminated run are ignored, but accepted manual work (marker, or a
+    // compact still awaiting its acknowledgement) is live and must end.
+    if (record.suppressRunEvents && !record.snapshot.runningRunId && !record.manualOperation && !record.releaseManualWait) return;
+    const { runningRunId: _runningRunId, compacting: _compacting, queuedMessages: _queuedMessages, ...snapshotWithoutRunId } = record.snapshot;
     delete record.cancellingRunId;
     delete record.pendingAssistantError;
+    delete record.manualOperation;
+    record.releaseManualWait?.();
+    delete record.releaseManualWait;
+    record.queue = [];
+    record.piQueueCounts = emptyQueueCounts();
     record.suppressRunEvents = true;
     record.snapshot = { ...snapshotWithoutRunId, status: "idle", updatedAt: this.now() };
     if (isLunaSession(record.snapshot)) record.lunaChildNeedsRotation = true;
@@ -643,7 +946,7 @@ export class PiRpcDriver implements SessionDriver {
   private makeSnapshot(
     ref: SessionRef,
     workspace: WorkspaceRef,
-    values: Pick<SessionSnapshot, "title" | "status"> & Partial<Pick<SessionSnapshot, "config" | "runningRunId" | "updatedAt">>,
+    values: Pick<SessionSnapshot, "title" | "status"> & Partial<Pick<SessionSnapshot, "config" | "runningRunId" | "updatedAt" | "compacting">>,
   ): SessionSnapshot {
     return {
       ref,
@@ -653,6 +956,7 @@ export class PiRpcDriver implements SessionDriver {
       updatedAt: values.updatedAt ?? this.now(),
       ...(values.config ? { config: values.config } : {}),
       ...(values.runningRunId ? { runningRunId: values.runningRunId } : {}),
+      ...(values.compacting ? { compacting: values.compacting } : {}),
     };
   }
 
@@ -992,6 +1296,23 @@ function sessionIdFromState(data: unknown): string | undefined {
     : undefined;
 }
 
+function compactingFromState(data: unknown, startedAt: string): SessionSnapshot["compacting"] | undefined {
+  return typeof data === "object" && data !== null && (data as { isCompacting?: unknown }).isCompacting === true
+    ? { reason: "unknown", startedAt }
+    : undefined;
+}
+
+function queuedMessageFromInput(input: SessionMessageInput, mode: SessionMessageDeliveryMode, timestamp: string): SessionQueuedMessage {
+  return {
+    id: input.id ?? randomUUID(),
+    mode,
+    text: input.text,
+    ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
 function sessionNameFromState(data: unknown): string | undefined {
   return typeof data === "object" && data !== null && typeof (data as { sessionName?: unknown }).sessionName === "string"
     ? (data as { sessionName: string }).sessionName
@@ -1030,7 +1351,7 @@ function assertRestoredSessionConfig(expected: SessionSnapshot["config"], actual
 
 type SessionImageLike = Extract<SessionAttachment, { kind: "image" }>;
 
-function imageAttachments(input: SessionMessageInput): unknown[] | undefined {
+function imageAttachments(input: { readonly attachments?: readonly SessionAttachment[] }): unknown[] | undefined {
   const images = input.attachments?.filter((attachment): attachment is SessionImageLike => attachment.kind === "image");
   if (!images || images.length === 0) return undefined;
   return images.map((image) => ({ type: "image", data: image.data, mimeType: image.mimeType }));

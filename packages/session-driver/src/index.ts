@@ -1,6 +1,9 @@
 export type {
   AssistantDeltaEvent,
   AssistantMessageCompletedEvent,
+  CompactionEndedEvent,
+  CompactionOutcome,
+  CompactionStartedEvent,
   CreateSessionOptions,
   ExtensionCompatibilityIssue,
   ExtensionCompatibilityIssueEvent,
@@ -15,6 +18,7 @@ export type {
   RunId,
   SessionAttachment,
   SessionClosedEvent,
+  SessionCompactionState,
   SessionConfig,
   SessionDriver,
   SessionDriverEvent,

@@ -26,6 +26,8 @@ interface ComposerPanelProps {
   readonly runningLabel: string;
   readonly attachments: readonly ComposerAttachment[];
   readonly queuedMessages: readonly QueuedComposerMessage[];
+  /** False when the driver cannot edit, remove or re-mode queued messages (the RPC driver). */
+  readonly canEditQueuedMessages?: boolean;
   readonly editingQueuedMessageId?: string;
   readonly provider: string | undefined;
   readonly modelId: string | undefined;
@@ -78,6 +80,7 @@ export function ComposerPanel({
   runningLabel,
   attachments,
   queuedMessages,
+  canEditQueuedMessages = true,
   editingQueuedMessageId,
   provider,
   modelId,
@@ -137,6 +140,7 @@ export function ComposerPanel({
           composerRef={composerRef}
           attachments={attachments}
           queuedMessages={queuedMessages}
+          canEditQueuedMessages={canEditQueuedMessages}
           editingQueuedMessageId={editingQueuedMessageId}
           slashSections={slashSections}
           slashOptions={slashOptions}

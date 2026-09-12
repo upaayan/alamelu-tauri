@@ -23,7 +23,11 @@ interface TimelineRuntimeState {
   readonly runningSinceBySession: Map<string, string>;
   readonly activeAssistantMessageBySession: Map<string, string>;
   readonly activeWorkingActivityBySession: Map<string, string>;
+  readonly compactingSinceBySession: Map<string, string>;
+  readonly activeCompactionActivityBySession: Map<string, string>;
 }
+
+const COMPACTING_LABEL = "Compacting conversation…";
 
 export function appendUserMessage(
   transcriptCache: Map<string, TranscriptMessage[]>,
@@ -127,7 +131,27 @@ export function applyTimelineEvent(
       break;
     case "sessionOpened":
       transcript.push(makeActivityItem("Resumed session", { metadata: relativeDetail(event.timestamp) }));
+      // Returning to a thread that is still compacting shows that state, not only the original start event.
+      if (event.snapshot.compacting && !state.activeCompactionActivityBySession.has(key)) {
+        beginCompactionRow(transcript, key, event.snapshot.compacting.reason, event.snapshot.compacting.startedAt, state);
+      }
       break;
+    case "compactionStarted":
+      beginCompactionRow(transcript, key, event.reason, event.startedAt, state);
+      break;
+    case "compactionEnded": {
+      const activityId = state.activeCompactionActivityBySession.get(key);
+      const index = activityId ? transcript.findIndex((item) => item.kind === "activity" && item.id === activityId) : -1;
+      const finished = compactionEndedItem(event);
+      if (index >= 0) {
+        transcript[index] = { ...finished, id: activityId as string, createdAt: transcript[index]?.createdAt ?? finished.createdAt };
+      } else {
+        transcript.push(finished);
+      }
+      state.activeCompactionActivityBySession.delete(key);
+      state.compactingSinceBySession.delete(key);
+      break;
+    }
     case "sessionUpdated":
       if (event.snapshot.status === "running" && event.snapshot.runningRunId && !state.runningSinceBySession.has(key)) {
         state.runningSinceBySession.set(key, event.timestamp);
@@ -294,6 +318,56 @@ function clearRunState(
   state.activeWorkingActivityBySession.delete(key);
   state.runningSinceBySession.delete(key);
   state.runMetricsBySession.delete(key);
+  // A terminal outcome must not leave a compaction row spinning.
+  const compactionActivityId = state.activeCompactionActivityBySession.get(key);
+  if (compactionActivityId) {
+    const index = transcript.findIndex((item) => item.kind === "activity" && item.id === compactionActivityId);
+    if (index >= 0) {
+      const current = transcript[index];
+      if (current?.kind === "activity") {
+        transcript[index] = { ...current, label: "Compaction interrupted", pending: false };
+      }
+    }
+    state.activeCompactionActivityBySession.delete(key);
+  }
+  state.compactingSinceBySession.delete(key);
+}
+
+function beginCompactionRow(
+  transcript: TranscriptMessage[],
+  key: string,
+  reason: string,
+  startedAt: string,
+  state: TimelineRuntimeState,
+): void {
+  state.compactingSinceBySession.set(key, startedAt);
+  if (state.activeCompactionActivityBySession.has(key)) {
+    return;
+  }
+  const activity = makeActivityItem(COMPACTING_LABEL, { pending: true, metadata: compactionReasonLabel(reason) });
+  state.activeCompactionActivityBySession.set(key, activity.id);
+  transcript.push(activity);
+}
+
+function compactionEndedItem(event: Extract<SessionDriverEvent, { type: "compactionEnded" }>): TranscriptMessage {
+  const duration = `Took ${formatElapsedDuration(event.startedAt, event.endedAt)}`;
+  if (event.outcome === "cancelled") {
+    return makeActivityItem("Compaction cancelled", { metadata: duration });
+  }
+  if (event.outcome === "failed") {
+    return makeActivityItem("Compaction failed", { tone: "error", detail: event.error, metadata: duration });
+  }
+  const tokens =
+    event.tokensBefore !== undefined && event.estimatedTokensAfter !== undefined
+      ? `${event.tokensBefore.toLocaleString()} → ~${event.estimatedTokensAfter.toLocaleString()} tokens`
+      : undefined;
+  return makeActivityItem("Compacted conversation", {
+    metadata: tokens ? `${duration} · ${tokens}` : duration,
+  });
+}
+
+function compactionReasonLabel(reason: string): string {
+  return reason === "manual" ? "manual" : reason === "unknown" ? "in progress" : "automatic";
 }
 
 function toolLabel(toolName: string, input: unknown): string {

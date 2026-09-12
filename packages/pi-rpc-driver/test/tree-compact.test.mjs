@@ -42,23 +42,33 @@ async function openDriver(responder) {
   return { driver, snapshot, sent };
 }
 
-test('compactSession sends compact with a timeout longer than the 30s default', async () => {
+test('compactSession sends compact with no acknowledgement deadline', async () => {
+  const { NO_RPC_DEADLINE } = await import('../dist/index.js');
   const { driver, snapshot, sent } = await openDriver(() => ({ type: 'response', success: true }));
   await driver.compactSession(snapshot.ref, 'keep the API notes');
 
   const compact = sent.find((entry) => entry.command.type === 'compact');
   assert.ok(compact, 'a compact command must be sent');
   assert.equal(compact.command.customInstructions, 'keep the API notes');
-  assert.ok(compact.timeoutMs > 30_000, `compact must outlive the default timeout, got ${compact.timeoutMs}`);
+  assert.equal(compact.timeoutMs, NO_RPC_DEADLINE, 'compaction legitimately outlives any fixed deadline');
 });
 
-test('compactSession surfaces a pi-side failure', async () => {
+test('compactSession surfaces a pi-side failure through events after acceptance', async () => {
   const { driver, snapshot } = await openDriver((command) =>
     command.type === 'compact'
       ? { type: 'response', success: false, error: 'nothing to compact' }
       : { type: 'response', success: true },
   );
-  await assert.rejects(() => driver.compactSession(snapshot.ref), /nothing to compact/);
+  const events = [];
+  driver.subscribe(snapshot.ref, (event) => events.push(event));
+  await driver.compactSession(snapshot.ref);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  const failed = events.find((event) => event.type === 'runFailed');
+  assert.ok(failed, 'a rejected compact with no compaction_end is reported once');
+  assert.match(failed.error.message, /nothing to compact/);
+  assert.equal(events.filter((event) => event.type === 'runFailed').length, 1);
+  assert.equal(events.filter((event) => 'snapshot' in event).at(-1).snapshot.status, 'idle');
 });
 
 test('getSessionTree maps pi entry kinds, labels and previews', async () => {

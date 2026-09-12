@@ -9,6 +9,7 @@ export function applySessionEventState(
   transcriptCache: Map<string, TranscriptMessage[]>,
   runningSinceBySession: Map<string, string>,
   lastViewedAtBySession: Map<string, string>,
+  compactingSinceBySession: Map<string, string>,
 ): DesktopAppState {
   const key = sessionKey(event.sessionRef);
   const transcript = (transcriptCache.get(key) ?? []).map(cloneTranscriptMessage);
@@ -29,6 +30,7 @@ export function applySessionEventState(
                     transcript,
                     preview,
                     runningSince: runningSinceBySession.get(key),
+                    compactingSince: compactingSinceBySession.get(key),
                     lastViewedAt,
                   })
                 : session,
@@ -50,6 +52,7 @@ export function updateSessionRecord(
     readonly transcript: readonly TranscriptMessage[];
     readonly preview: string | undefined;
     readonly runningSince: string | undefined;
+    readonly compactingSince?: string | undefined;
     readonly lastViewedAt: string | undefined;
   },
 ): SessionRecord {
@@ -64,6 +67,7 @@ export function updateSessionRecord(
     preview: options.preview ?? options.snapshot?.preview ?? session.preview,
     status: nextStatus,
     runningSince: options.runningSince,
+    compactingSince: options.compactingSince,
     hasUnseenUpdate: hasUnseenSessionUpdate(nextStatus, updatedAt, options.lastViewedAt, options.transcript),
     config: options.snapshot?.config ?? session.config,
   };

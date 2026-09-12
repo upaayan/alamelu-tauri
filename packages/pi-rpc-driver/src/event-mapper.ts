@@ -98,7 +98,9 @@ export function mapRpcEventToSessionDriverEvents(event: RpcEvent, context: Event
     ];
   }
 
-  if (event.type === "agent_end") {
+  // agent_end may still be followed by retry, compaction retry or queued continuations;
+  // only Pi's session-level agent_settled means the run is really over.
+  if (event.type === "agent_settled") {
     return [{ ...base, type: "runCompleted", snapshot: context.snapshot }];
   }
 

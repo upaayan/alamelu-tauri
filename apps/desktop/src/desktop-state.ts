@@ -64,6 +64,8 @@ export interface SessionRecord {
   readonly preview: string;
   readonly status: SessionStatus;
   readonly runningSince?: string;
+  /** Set while Pi is compacting this thread's conversation (automatic or manual). */
+  readonly compactingSince?: string;
   readonly hasUnseenUpdate: boolean;
   readonly config?: SessionConfig;
 }

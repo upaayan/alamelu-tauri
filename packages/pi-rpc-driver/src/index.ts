@@ -1,5 +1,6 @@
 export { JsonlDecoder } from "./jsonl-decoder.js";
 export {
+  NO_RPC_DEADLINE,
   RpcClient,
   buildPiRpcPathEnv,
   buildPiRpcSpawnSpec,
