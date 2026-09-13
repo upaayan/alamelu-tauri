@@ -1237,6 +1237,11 @@
   font-size: 15px;
   min-height: 24px;
   max-height: 220px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
 }
 
 .composer__bar {

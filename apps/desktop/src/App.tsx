@@ -50,10 +50,15 @@ import { isProviderLoginDialogVisible, isProviderLoginPending, ProviderLoginDial
 import { getEffectiveModelRuntime } from "./model-settings";
 import { isNoRepositoryWorkspace, isSystemWorkspace, resolveRepoWorkspaceId, workspaceDisplayName } from "./workspace-roots";
 import {
-  extractImageFilesFromClipboardData,
+  clipboardHasPlainText,
+  clipboardLooksLikeImage,
+  extractAttachableClipboardFiles,
   extractFilesFromDataTransfer,
+  hasFilesInDataTransfer,
   readComposerAttachmentsFromFiles,
 } from "./composer-attachments";
+import { fitComposerTextarea } from "./composer-height";
+import { NATIVE_ATTACHMENTS_EVENT, requestNativeClipboardFiles, requestNativeClipboardImage } from "./tauri-native-attachments";
 
 function useDesktopAppState() {
   const [snapshot, setSnapshot] = useState<DesktopAppState | null>(null);
@@ -1237,6 +1242,14 @@ export default function App() {
       resetNewThreadSurface();
     });
     const removeClipboardImageListener = window.piApp?.onClipboardImagePasted?.(handlePastedClipboardImage);
+    const handleNativeAttachments = (event: Event) => {
+      const attachments = (event as CustomEvent<ComposerAttachment[]>).detail ?? [];
+      if (attachments.length === 0) {
+        return;
+      }
+      handleNativeComposerAttachments(attachments);
+    };
+    window.addEventListener(NATIVE_ATTACHMENTS_EVENT, handleNativeAttachments);
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (isEventInsideTerminal(event)) {
         const command = getDesktopCommandFromShortcut({
@@ -1282,6 +1295,7 @@ export default function App() {
       removeCommandListener?.();
       removeWorkspacePickedListener?.();
       removeClipboardImageListener?.();
+      window.removeEventListener(NATIVE_ATTACHMENTS_EVENT, handleNativeAttachments);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [
@@ -1289,6 +1303,7 @@ export default function App() {
     selectedWorkspace?.rootWorkspaceId,
     threadSearch,
     api,
+    snapshot?.activeView,
     toggleDiffPanel,
     toggleTerminal,
     handleTogglePrimarySidebar,
@@ -1394,8 +1409,7 @@ export default function App() {
       ? isNearBottom(pane) || pinnedToBottomRef.current || preserveBottomOnNextPaneResizeRef.current
       : pinnedToBottomRef.current || preserveBottomOnNextPaneResizeRef.current;
 
-    composer.style.height = "0px";
-    composer.style.height = `${Math.min(composer.scrollHeight, 220)}px`;
+    fitComposerTextarea(composer, 220);
 
     const nextHeight = composer.getBoundingClientRect().height;
     if (Math.abs(nextHeight - previousHeight) >= 1 && shouldPreserveBottom) {
@@ -1674,13 +1688,34 @@ export default function App() {
     setNewThreadAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   };
 
-  const handleImagePaste = (event: ClipboardEvent<HTMLDivElement>, onFiles: (files: File[]) => void) => {
-    const files = extractImageFilesFromClipboardData(event.clipboardData);
-    if (files.length === 0) {
+  const handleImagePaste = (
+    event: ClipboardEvent<HTMLDivElement>,
+    onFiles: (files: File[]) => void,
+    onNativeAttachments?: (attachments: readonly ComposerAttachment[]) => void,
+  ) => {
+    if (hasFilesInDataTransfer(event.clipboardData)) {
+      event.preventDefault();
+      const captured = extractAttachableClipboardFiles(event.clipboardData);
+      void requestNativeClipboardFiles().then((nativeFiles) => {
+        if (nativeFiles.length > 0) {
+          onNativeAttachments?.(nativeFiles);
+          return;
+        }
+        if (captured.length > 0) {
+          onFiles(captured);
+        }
+      });
+      return;
+    }
+    if (!clipboardLooksLikeImage(event.clipboardData) || clipboardHasPlainText(event.clipboardData)) {
       return;
     }
     event.preventDefault();
-    onFiles(files);
+    void requestNativeClipboardImage().then((clipboardImage) => {
+      if (clipboardImage) {
+        onNativeAttachments?.([clipboardImage]);
+      }
+    });
   };
 
   const handleAttachmentDrop = (event: DragEvent<HTMLDivElement>, onFiles: (files: File[]) => void) => {
@@ -1693,13 +1728,24 @@ export default function App() {
   };
 
   const handleComposerPaste = (event: ClipboardEvent<HTMLDivElement>) => {
-    handleImagePaste(event, (files) => {
-      void addAttachmentsToSessionComposer(files);
-    });
+    handleImagePaste(
+      event,
+      (files) => {
+        void addAttachmentsToSessionComposer(files);
+      },
+      (attachments) => {
+        if (!api) {
+          return;
+        }
+        void updateSnapshot(api, setSnapshot, () => api.addComposerAttachments(attachments));
+      },
+    );
   };
 
   const handleNewThreadComposerPaste = (event: ClipboardEvent<HTMLDivElement>) => {
-    handleImagePaste(event, handleNewThreadAddAttachments);
+    handleImagePaste(event, handleNewThreadAddAttachments, (attachments) => {
+      setNewThreadAttachments((current) => [...current, ...attachments]);
+    });
   };
 
   const handleComposerDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -1740,6 +1786,18 @@ export default function App() {
     onImage(clipboardImage);
     return true;
   };
+
+  function handleNativeComposerAttachments(attachments: readonly ComposerAttachment[]) {
+    const activeElement = document.activeElement;
+    if (activeElement === newThreadComposerRef.current || snapshot?.activeView === "new-thread") {
+      setNewThreadAttachments((current) => [...current, ...attachments]);
+      return;
+    }
+    if (!api) {
+      return;
+    }
+    void updateSnapshot(api, setSnapshot, () => api.addComposerAttachments(attachments));
+  }
 
   function handlePastedClipboardImage(clipboardImage: ComposerImageAttachment) {
     const activeElement = document.activeElement;

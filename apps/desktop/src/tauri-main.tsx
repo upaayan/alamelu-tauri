@@ -4,10 +4,27 @@ import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
 import type { ComposerAttachment } from "./desktop-state";
 import { installTauriBridge } from "./tauri-bridge";
+import { dispatchNativeAttachments } from "./tauri-native-attachments";
 import "./styles.css";
+
+async function installNativeFileDrop(): Promise<void> {
+  const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+  await getCurrentWebview().onDragDropEvent(async (event) => {
+    if (event.payload.type !== "drop") {
+      return;
+    }
+    const paths = event.payload.paths ?? [];
+    if (paths.length === 0) {
+      return;
+    }
+    const attachments = await invoke<ComposerAttachment[]>("native_attachments_from_paths", { paths });
+    dispatchNativeAttachments(attachments);
+  });
+}
 
 async function main(): Promise<void> {
   await installTauriBridge();
+  await installNativeFileDrop();
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
       <App />
@@ -122,6 +139,24 @@ async function recordSmoke(): Promise<void> {
     await window.piApp?.removeComposerAttachment(pastedAttachment.id);
   }
 
+  const droppedPaths = nativeAttachment.kind === "file" && "fsPath" in nativeAttachment
+    ? [String(nativeAttachment.fsPath)]
+    : [];
+  const droppedAttachments = droppedPaths.length > 0
+    ? await invoke<ComposerAttachment[]>("native_attachments_from_paths", { paths: droppedPaths })
+    : [];
+  if (droppedAttachments[0]) {
+    await window.piApp?.addComposerAttachments(droppedAttachments);
+  }
+  const droppedState = await window.piApp?.getState();
+  const droppedFromPaths = Boolean(
+    droppedAttachments[0]
+    && droppedState?.composerAttachments.some((attachment) => attachment.id === droppedAttachments[0]?.id),
+  );
+  if (droppedAttachments[0]) {
+    await window.piApp?.removeComposerAttachment(droppedAttachments[0].id);
+  }
+
   const display = await inspectApprovedDisplay(nativeWorkspaceId);
   await invoke("native_record_smoke", {
     report: {
@@ -148,6 +183,7 @@ async function recordSmoke(): Promise<void> {
       nativeWorkspaceId,
       nativeAttachmentAdded,
       pastedImageAdded: Boolean(pastedAttachment),
+      droppedFromPaths,
       notificationPermission: await window.piApp?.getNotificationPermissionStatus(),
     },
   });
@@ -212,6 +248,9 @@ async function inspectApprovedDisplay(workspaceId: string) {
     othersLast: [...document.querySelectorAll(".workspace-row__name")].at(-1)?.textContent === "Others",
     noThreadsRows: ![...document.querySelectorAll(".sidebar button, .sidebar .section__head")].some((el) => el.textContent?.trim() === "Threads"),
     noBrandChevron: !brand().querySelector("svg"),
+    noFolderTile: !document.querySelector(".workspace-row__icon-folder"),
+    brandListGapPx: Number.parseFloat(getComputedStyle(document.querySelector(".sidebar__section")!).paddingTop),
+    attachTitle: document.querySelector(".composer__attach")?.getAttribute("title") === "Attach",
   };
 }
 

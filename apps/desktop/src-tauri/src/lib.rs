@@ -322,6 +322,77 @@ fn native_pick_attachments() -> Result<Vec<Value>, String> {
     paths.iter().map(attachment_from_path).collect()
 }
 
+#[tauri::command]
+fn native_attachments_from_paths(paths: Vec<String>) -> Result<Vec<Value>, String> {
+    paths
+        .iter()
+        .map(|path| attachment_from_path(&PathBuf::from(path)))
+        .collect()
+}
+
+const MAX_CLIPBOARD_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_CLIPBOARD_IMAGE_DIMENSION: u32 = 8_192;
+
+#[tauri::command]
+fn native_read_clipboard_image() -> Result<Option<Value>, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|error| error.to_string())?;
+    let image = match clipboard.get_image() {
+        Ok(image) => image,
+        Err(arboard::Error::ContentNotAvailable) => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    let width = u32::try_from(image.width).map_err(|error| error.to_string())?;
+    let height = u32::try_from(image.height).map_err(|error| error.to_string())?;
+    if width == 0
+        || height == 0
+        || width > MAX_CLIPBOARD_IMAGE_DIMENSION
+        || height > MAX_CLIPBOARD_IMAGE_DIMENSION
+    {
+        return Ok(None);
+    }
+    let png = encode_rgba_png(width, height, &image.bytes)?;
+    if png.is_empty() || png.len() as u64 > MAX_CLIPBOARD_IMAGE_BYTES {
+        return Ok(None);
+    }
+    Ok(Some(json!({
+        "id": Uuid::new_v4().to_string(),
+        "kind": "image",
+        "name": "pasted-image.png",
+        "mimeType": "image/png",
+        "data": base64::engine::general_purpose::STANDARD.encode(png)
+    })))
+}
+
+#[tauri::command]
+fn native_read_clipboard_files() -> Result<Vec<Value>, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|error| error.to_string())?;
+    let paths = match clipboard.get().file_list() {
+        Ok(paths) => paths,
+        Err(arboard::Error::ContentNotAvailable) => return Ok(Vec::new()),
+        Err(error) => return Err(error.to_string()),
+    };
+    let mut attachments = Vec::new();
+    for path in paths {
+        if path.is_file() {
+            attachments.push(attachment_from_path(&path)?);
+        }
+    }
+    Ok(attachments)
+}
+
+fn encode_rgba_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
+    let mut png = Vec::new();
+    let mut encoder = png::Encoder::new(&mut png, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().map_err(|error| error.to_string())?;
+    writer
+        .write_image_data(rgba)
+        .map_err(|error| error.to_string())?;
+    writer.finish().map_err(|error| error.to_string())?;
+    Ok(png)
+}
+
 fn attachment_from_path(path: &PathBuf) -> Result<Value, String> {
     let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
     if !metadata.is_file() {
@@ -1113,6 +1184,9 @@ pub fn run() {
             backend_invoke,
             native_pick_workspace,
             native_pick_attachments,
+            native_attachments_from_paths,
+            native_read_clipboard_image,
+            native_read_clipboard_files,
             native_toggle_maximize,
             native_set_transparency,
             native_open_external,
@@ -1238,5 +1312,25 @@ mod tests {
         assert_eq!(macos_permission_name(1).unwrap(), "denied");
         assert_eq!(macos_permission_name(2).unwrap(), "granted");
         assert!(macos_permission_name(99).is_err());
+    }
+
+    #[test]
+    fn encodes_clipboard_png_header() {
+        let png = encode_rgba_png(1, 1, &[255, 0, 0, 255]).unwrap();
+        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+    }
+
+    #[test]
+    fn native_attachment_reads_tiny_png() {
+        let png = encode_rgba_png(1, 1, &[255, 0, 0, 255]).unwrap();
+        let root = env::temp_dir().join(format!("alamelu-tauri-png-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let file = root.join("tiny.png");
+        fs::write(&file, png).unwrap();
+        let attachment = attachment_from_path(&file).unwrap();
+        assert_eq!(attachment["kind"], "image");
+        assert_eq!(attachment["name"], "tiny.png");
+        assert_eq!(attachment["mimeType"], "image/png");
+        fs::remove_dir_all(root).unwrap();
     }
 }

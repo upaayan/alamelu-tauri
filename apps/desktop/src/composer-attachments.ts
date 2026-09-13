@@ -86,6 +86,23 @@ export function extractImageFilesFromClipboardData(clipboardData: DataTransfer |
   return dedupeFiles([...itemFiles, ...clipboardFiles]);
 }
 
+export function extractAttachableClipboardFiles(clipboardData: DataTransfer | null | undefined): File[] {
+  return dedupeFiles([
+    ...extractImageFilesFromClipboardData(clipboardData),
+    ...extractFilesFromDataTransfer(clipboardData),
+  ]);
+}
+
+export function clipboardLooksLikeImage(clipboardData: DataTransfer | null | undefined): boolean {
+  return Array.from(clipboardData?.types ?? []).some((type) =>
+    /image|png|tiff|jpeg|jpg|webp|gif/i.test(type),
+  );
+}
+
+export function clipboardHasPlainText(clipboardData: DataTransfer | null | undefined): boolean {
+  return Array.from(clipboardData?.types ?? []).includes("text/plain");
+}
+
 export function extractFilesFromDataTransfer(dataTransfer: DataTransfer | null | undefined): File[] {
   if (!dataTransfer) {
     return [];

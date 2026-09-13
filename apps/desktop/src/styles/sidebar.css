@@ -162,7 +162,8 @@
 
 .sidebar__section {
   overflow: auto;
-  padding-top: 0;
+  /* Brand row already has 14px bottom padding; 28px here is more than double. */
+  padding-top: 28px;
 }
 
 .section__head {
@@ -324,33 +325,9 @@
   height: 18px;
 }
 
-/* Expanded: always show chevron, hide folder */
 .workspace-row__icon-chevron {
   display: grid;
   place-items: center;
-}
-
-.workspace-row__icon-folder {
-  display: none;
-}
-
-/* Collapsed: show folder, hide chevron */
-.workspace-row__icon[data-collapsed] .workspace-row__icon-folder {
-  display: grid;
-  place-items: center;
-}
-
-.workspace-row__icon[data-collapsed] .workspace-row__icon-chevron {
-  display: none;
-}
-
-/* Collapsed + hover on workspace row: swap folder → chevron */
-.workspace-row:hover .workspace-row__icon[data-collapsed] .workspace-row__icon-chevron {
-  display: grid;
-}
-
-.workspace-row:hover .workspace-row__icon[data-collapsed] .workspace-row__icon-folder {
-  display: none;
 }
 
 .workspace-row__name,

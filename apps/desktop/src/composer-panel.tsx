@@ -194,6 +194,7 @@ export function ComposerPanel({
                 <div className="composer__actions">
                   <button
                     aria-label="Attach files"
+                    title="Attach"
                     className="icon-button composer__attach"
                     type="button"
                     onClick={onPickAttachments}

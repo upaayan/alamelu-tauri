@@ -2,6 +2,8 @@ import { useEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEv
 import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type { ComposerAttachment, NewThreadEnvironment, WorkspaceRecord } from "./desktop-state";
 import { AlameluPiLogoMark, ArrowUpIcon, PlusIcon } from "./icons";
+import { fitComposerTextarea } from "./composer-height";
+import { dispatchNativeAttachments, requestNativePickedAttachments } from "./tauri-native-attachments";
 import {
   MODEL_OPTIONS_EMPTY_TITLE,
   type ComposerSlashCommand,
@@ -123,8 +125,7 @@ export function NewThreadView({
       return;
     }
 
-    composer.style.height = "0px";
-    composer.style.height = `${Math.min(composer.scrollHeight, 260)}px`;
+    fitComposerTextarea(composer, 260);
   }, [composerRef, prompt]);
 
   if (!workspace) {
@@ -330,9 +331,20 @@ function NewThreadComposerFooter({
             />
             <button
               aria-label="Attach files"
+              title="Attach"
               className="icon-button composer__attach"
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                void requestNativePickedAttachments().then((attachments) => {
+                  if (attachments === null) {
+                    fileInputRef.current?.click();
+                    return;
+                  }
+                  if (attachments.length > 0) {
+                    dispatchNativeAttachments(attachments);
+                  }
+                });
+              }}
             >
               <PlusIcon />
             </button>

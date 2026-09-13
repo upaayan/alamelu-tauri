@@ -54,6 +54,14 @@ jobs:
           pnpm --filter @alamelu-pi/session-driver run build
           pnpm --filter @alamelu-pi/pi-rpc-driver run build
           node --test --test-name-pattern="WSL|mapRpcEventToSessionDriverEvents" packages/pi-rpc-driver/test/rpc-client.test.mjs
+      - name: Build Tauri assets
+        working-directory: apps/desktop
+        run: pnpm run build:tauri:assets
+      - name: Tauri unit tests
+        working-directory: apps/desktop
+        run: pnpm run test:tauri:unit:ci
+      - name: Cargo tests
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
       - name: Build Apple Silicon app
         working-directory: apps/desktop
         run: pnpm exec tauri build --config src-tauri/tauri.conf.json --target aarch64-apple-darwin --bundles app
@@ -68,6 +76,12 @@ jobs:
           name: Alamelu-Pi-Tauri-macos-arm64
           path: apps/desktop/Alamelu-Pi-Tauri-macos-arm64.zip
           if-no-files-found: error
+      - name: Packaged smoke (best effort)
+        working-directory: apps/desktop
+        continue-on-error: true
+        env:
+          ALAMELU_TAURI_APP_PATH: src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Alamelu Pi Tauri.app
+        run: pnpm run smoke:tauri:packaged
 
   windows-amd64:
     if: ${{ github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'windows' }}
@@ -96,6 +110,14 @@ jobs:
           pnpm --filter @alamelu-pi/session-driver run build
           pnpm --filter @alamelu-pi/pi-rpc-driver run build
           node --test --test-name-pattern="WSL|mapRpcEventToSessionDriverEvents" packages/pi-rpc-driver/test/rpc-client.test.mjs
+      - name: Build Tauri assets
+        working-directory: apps/desktop
+        run: pnpm run build:tauri:assets
+      - name: Tauri unit tests
+        working-directory: apps/desktop
+        run: pnpm run test:tauri:unit:ci
+      - name: Cargo tests
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
       - name: Build Windows installer
         working-directory: apps/desktop
         run: pnpm exec tauri build --config src-tauri/tauri.conf.json --target x86_64-pc-windows-msvc --bundles nsis

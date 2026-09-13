@@ -6,15 +6,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const appPath = path.join(
-  desktopDir,
-  "src-tauri",
-  "target",
-  "release",
-  "bundle",
-  "macos",
-  "Alamelu Pi Tauri.app",
-);
+const appPath = process.env.ALAMELU_TAURI_APP_PATH
+  ? path.resolve(process.env.ALAMELU_TAURI_APP_PATH)
+  : path.join(
+    desktopDir,
+    "src-tauri",
+    "target",
+    "release",
+    "bundle",
+    "macos",
+    "Alamelu Pi Tauri.app",
+  );
 const executable = path.join(appPath, "Contents", "MacOS", "alamelu-pi-tauri");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "alamelu-tauri-packaged-"));
 const stateDir = path.join(root, "state");
@@ -82,6 +84,10 @@ try {
   assert.ok(report.nativeWorkspaceId);
   assert.equal(report.nativeAttachmentAdded, true);
   assert.equal(report.pastedImageAdded, true);
+  assert.equal(report.droppedFromPaths, true);
+  assert.equal(report.display.noFolderTile, true);
+  assert.ok(report.display.brandListGapPx >= 28, "brand-to-list gap");
+  assert.equal(report.display.attachTitle, true);
   assert.ok(["granted", "denied", "default", "unknown"].includes(report.notificationPermission));
   assert.match(report.bodyText, /New Thread/);
   assert.deepEqual(report.display.navigation, ["Skills", "Extensions", "Settings"]);
