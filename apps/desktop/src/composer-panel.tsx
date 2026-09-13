@@ -116,13 +116,15 @@ export function ComposerPanel({
   mentionOptions,
   selectedMentionIndex,
   onSelectMention,
-  extensionDock,
-  extensionDockExpanded,
-  onToggleExtensionDock,
+  extensionDock: _extensionDock,
+  extensionDockExpanded: _extensionDockExpanded,
+  onToggleExtensionDock: _onToggleExtensionDock,
 }: ComposerPanelProps) {
+  const isRunning = selectedSession.status === "running";
+  const elapsedLabel = isRunning ? runningLabel : "";
   const hasComposerInput = composerDraft.trim().length > 0 || attachments.length > 0;
-  const primaryActionIsStop = selectedSession.status === "running" && !hasComposerInput;
-  const steerVisible = selectedSession.status === "running" && hasComposerInput && !modelOnboarding.requiresModelSelection;
+  const primaryActionIsStop = isRunning && !hasComposerInput;
+  const steerVisible = isRunning && hasComposerInput && !modelOnboarding.requiresModelSelection;
 
   return (
     <footer className="composer">
@@ -167,29 +169,29 @@ export function ComposerPanel({
           textareaLabel="Composer"
           textareaTestId="composer"
           textareaPlaceholder="Ask pi to inspect the repo, run a fix, or continue the current thread..."
-          extensionDock={extensionDock}
-          extensionDockExpanded={extensionDockExpanded}
-          onToggleExtensionDock={onToggleExtensionDock}
           footer={(
             <div className="composer__footer">
               <div className="composer__footer-row">
-                <div className="composer__hint">
-                  {selectedSession.status === "running"
-                    ? `${runningLabel} · Enter to queue · Cmd+Enter to steer`
-                    : "Enter to send · Shift+Enter for newline"}
-                  {" · "}
-                  <ModelSelector
-                    runtime={runtime}
-                    provider={provider}
-                    modelId={modelId}
-                    thinkingLevel={thinkingLevel}
-                    disabled={selectedSession.status === "running"}
-                    unselectedModelLabel={modelOnboarding.unselectedModelLabel}
-                    emptyModelTitle={modelOnboarding.emptyModelTitle}
-                    busy={busy}
-                    onSetModel={onSetModel}
-                    onSetThinking={onSetThinking}
-                  />
+                <div className="composer__status">
+                  <span className="composer__hint">
+                    {isRunning
+                      ? "Enter to queue · Cmd+Enter to steer"
+                      : "Enter to send · Shift+Enter for newline"}
+                    {" · "}
+                    <ModelSelector
+                      runtime={runtime}
+                      provider={provider}
+                      modelId={modelId}
+                      thinkingLevel={thinkingLevel}
+                      disabled={isRunning}
+                      unselectedModelLabel={modelOnboarding.unselectedModelLabel}
+                      emptyModelTitle={modelOnboarding.emptyModelTitle}
+                      busy={busy}
+                      onSetModel={onSetModel}
+                      onSetThinking={onSetThinking}
+                    />
+                  </span>
+                  <span className="composer__elapsed" aria-live="off">{elapsedLabel}</span>
                 </div>
                 <div className="composer__actions">
                   <button

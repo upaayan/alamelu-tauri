@@ -7,7 +7,7 @@ import type {
   ComposerSlashOptionEmptyState,
 } from "./composer-commands";
 import { hasFilesInDataTransfer } from "./composer-attachments";
-import { ExtensionDock, type ExtensionDockModel } from "./extension-session-ui";
+import { type ExtensionDockModel } from "./extension-session-ui";
 import { FileIcon, ModelIcon, ReasoningIcon, SettingsIcon, SkillIcon, SparkIcon, StatusIcon } from "./icons";
 import { QueuedComposerMessages } from "./queued-composer-messages";
 
@@ -95,9 +95,6 @@ export function ComposerSurface({
   textareaTestId,
   textareaPlaceholder,
   textareaClassName,
-  extensionDock,
-  extensionDockExpanded = false,
-  onToggleExtensionDock,
   footer,
 }: ComposerSurfaceProps) {
   const [isDragActive, setIsDragActive] = useState(false);
@@ -215,9 +212,6 @@ export function ComposerSurface({
             </div>
           ))}
         </div>
-      ) : null}
-      {extensionDock && onToggleExtensionDock ? (
-        <ExtensionDock dock={extensionDock} expanded={extensionDockExpanded} onToggle={onToggleExtensionDock} />
       ) : null}
       {lastError ? (
         <div className="composer__error error-banner" data-testid="composer-error-banner">

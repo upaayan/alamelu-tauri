@@ -344,6 +344,7 @@
   scrollbar-gutter: stable;
   scroll-behavior: auto;
   overflow-anchor: none;
+  outline: none;
 }
 
 .timeline-pane--thread {
@@ -1237,11 +1238,15 @@
   font-size: 15px;
   min-height: 24px;
   max-height: 220px;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
   box-sizing: border-box;
   scrollbar-gutter: stable;
+}
+
+.composer:not(.new-thread__composer) textarea {
+  min-height: 72px;
 }
 
 .composer__bar {
@@ -1262,9 +1267,31 @@
   gap: 16px;
 }
 
+.composer__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.composer__elapsed {
+  flex: 0 0 36ch;
+  width: 36ch;
+  margin: 0 18px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+  overflow: hidden;
+  text-align: center;
+}
+
 .composer__hint {
   color: var(--muted-soft);
   font-size: 12px;
+  min-width: 0;
 }
 
 .model-onboarding-notice {

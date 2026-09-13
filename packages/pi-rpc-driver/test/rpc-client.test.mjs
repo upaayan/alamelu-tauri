@@ -1050,6 +1050,66 @@ test('PiRpcDriver internally reopens a successful Luna thread before its next pr
   assert.deepEqual(second.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['second successful turn']);
 });
 
+test('PiRpcDriver rotates and accepts Pi provider model and thinking from replacement get_state', async (t) => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-rpc-rotate-accept-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const workspace = path.join(tmp, 'workspace');
+  fs.mkdirSync(workspace, { recursive: true });
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    closed = false;
+    constructor(name, model) { this.name = name; this.model = model; }
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() { this.closed = true; }
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') return {
+        type: 'response', id, command: 'get_state', success: true,
+        data: { sessionId: 'accept-config-session', sessionName: 'Accept Config', model: this.model, thinkingLevel: this.model.thinking },
+      };
+      if (command.type === 'prompt') {
+        this.emit({ type: 'agent_start' });
+        this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: `${this.name}_OK` } });
+        this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const first = new FakeClient('FIRST', { provider: 'xai-i2o', id: 'grok-4.6', thinking: 'xhigh' });
+  const second = new FakeClient('SECOND', { provider: 'cursor', id: 'composer-2.5', thinking: 'high' });
+  const clients = [first, second];
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: path.join(tmp, 'agent'),
+    sessionDir: path.join(tmp, 'sessions'),
+    userDataDir: path.join(tmp, 'user-data'),
+    labWorkspace: path.join(tmp, 'workspace'),
+    expectedLabWorkspaceRoot: path.join(tmp, 'workspace'),
+    productionAgentDir: path.join(tmp, 'prod-agent'),
+    productionUserDataDir: path.join(tmp, 'prod-user-data'),
+    rpcClientFactory: () => clients.shift(),
+  });
+  const events = [];
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: workspace },
+    { initialModel: { provider: 'xai-i2o', modelId: 'grok-4.6' }, initialThinkingLevel: 'xhigh' },
+  );
+  driver.subscribe(snapshot.ref, (event) => events.push(event));
+
+  await driver.sendUserMessage(snapshot.ref, { text: 'first turn' });
+  await driver.sendUserMessage(snapshot.ref, { text: 'second turn' });
+
+  const lastConfig = events.filter((event) => event.type === 'sessionUpdated').at(-1)?.snapshot.config;
+  assert.equal(first.closed, true);
+  assert.deepEqual(second.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['second turn']);
+  assert.deepEqual(lastConfig, { provider: 'cursor', modelId: 'composer-2.5', thinkingLevel: 'high' });
+});
+
 test('PiRpcDriver lets Pi finish a Luna retry, then rotates the recovered child before the following prompt', async () => {
   const { createPiRpcDriver } = await import('../dist/index.js');
   class FakeClient {
@@ -1107,12 +1167,15 @@ test('PiRpcDriver lets Pi finish a Luna retry, then rotates the recovered child 
   assert.deepEqual(replacement.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['next turn uses fresh child']);
 });
 
-test('PiRpcDriver leaves Sol and Terra children running across successful idle prompts', async () => {
+test('PiRpcDriver rotates a Terra child before the second idle prompt', async (t) => {
   const { createPiRpcDriver } = await import('../dist/index.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-rpc-terra-rotate-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   class FakeClient {
     commands = [];
     listeners = new Set();
     closed = false;
+    constructor(name) { this.name = name; }
     onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
     close() { this.closed = true; }
     emit(event) { for (const listener of this.listeners) listener(event); }
@@ -1131,24 +1194,91 @@ test('PiRpcDriver leaves Sol and Terra children running across successful idle p
       return { type: 'response', id, command: command.type, success: true };
     }
   }
-  const client = new FakeClient();
-  let factoryCalls = 0;
+  const first = new FakeClient('FIRST');
+  const second = new FakeClient('SECOND');
+  const clients = [first, second];
+  const labWorkspace = path.join(tmp, 'workspace');
+  for (const dir of ['agent', 'sessions', 'user-data', 'workspace']) fs.mkdirSync(path.join(tmp, dir), { recursive: true });
   const driver = createPiRpcDriver({
-    piBin: '/usr/local/bin/pi', agentDir: '/tmp/alamelu-pi-rpc-agent', sessionDir: '/tmp/alamelu-pi-rpc-sessions', userDataDir: '/tmp/alamelu-pi-rpc-user-data',
-    labWorkspace: '/tmp/alamelu-pi-rpc-workspace', expectedLabWorkspaceRoot: '/tmp/alamelu-pi-rpc-workspace',
-    productionAgentDir: '/Users/example/.pi/agent', productionUserDataDir: '/Users/example/Library/Application Support/pi-gui',
-    rpcClientFactory: () => { factoryCalls += 1; return client; },
+    piBin: '/usr/local/bin/pi',
+    agentDir: path.join(tmp, 'agent'),
+    sessionDir: path.join(tmp, 'sessions'),
+    userDataDir: path.join(tmp, 'user-data'),
+    labWorkspace,
+    expectedLabWorkspaceRoot: labWorkspace,
+    productionAgentDir: path.join(tmp, 'prod-agent'),
+    productionUserDataDir: path.join(tmp, 'prod-user-data'),
+    rpcClientFactory: () => clients.shift(),
   });
   const snapshot = await driver.createSession(
-    { workspaceId: 'ws', path: '/tmp/alamelu-pi-rpc-workspace' },
+    { workspaceId: 'ws', path: labWorkspace },
     { initialModel: { provider: 'openai-codex', modelId: 'gpt-5.6-terra' }, initialThinkingLevel: 'xhigh' },
   );
   await driver.sendUserMessage(snapshot.ref, { text: 'Terra first' });
   await driver.sendUserMessage(snapshot.ref, { text: 'Terra second' });
 
-  assert.equal(factoryCalls, 1);
-  assert.equal(client.closed, false);
-  assert.deepEqual(client.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['Terra first', 'Terra second']);
+  assert.equal(first.closed, true);
+  assert.deepEqual(first.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['Terra first']);
+  assert.deepEqual(second.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['Terra second']);
+});
+
+test('PiRpcDriver rotates a dead-pipe idle child before the next prompt', async (t) => {
+  const { createPiRpcDriver } = await import('../dist/index.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-rpc-dead-pipe-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  class FakeClient {
+    commands = [];
+    listeners = new Set();
+    closed = false;
+    constructor(name) { this.name = name; }
+    onEvent(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    close() { this.closed = true; }
+    emit(event) { for (const listener of this.listeners) listener(event); }
+    async sendCommand(command, id) {
+      this.commands.push(command);
+      if (command.type === 'get_state') return {
+        type: 'response', id, command: 'get_state', success: true,
+        data: { sessionId: 'grok-dead-pipe', sessionName: 'Grok', model: { provider: 'xai', id: 'grok-4.5' }, thinkingLevel: 'high' },
+      };
+      if (command.type === 'prompt') {
+        if (this.name === 'DEAD' && this.commands.filter((entry) => entry.type === 'prompt').length > 1) {
+          throw new Error('RPC client is closed');
+        }
+        this.emit({ type: 'agent_start' });
+        this.emit({ type: 'agent_end', willRetry: false });
+        this.emit({ type: 'agent_settled' });
+        if (this.name === 'DEAD') this.emit({ type: 'rpc_transport_closed', reason: 'stdout_end' });
+        return { type: 'response', id, command: 'prompt', success: true };
+      }
+      return { type: 'response', id, command: command.type, success: true };
+    }
+  }
+  const dead = new FakeClient('DEAD');
+  const replacement = new FakeClient('FRESH');
+  const clients = [dead, replacement];
+  const labWorkspace = path.join(tmp, 'workspace');
+  for (const dir of ['agent', 'sessions', 'user-data', 'workspace']) fs.mkdirSync(path.join(tmp, dir), { recursive: true });
+  const driver = createPiRpcDriver({
+    piBin: '/usr/local/bin/pi',
+    agentDir: path.join(tmp, 'agent'),
+    sessionDir: path.join(tmp, 'sessions'),
+    userDataDir: path.join(tmp, 'user-data'),
+    labWorkspace,
+    expectedLabWorkspaceRoot: labWorkspace,
+    productionAgentDir: path.join(tmp, 'prod-agent'),
+    productionUserDataDir: path.join(tmp, 'prod-user-data'),
+    rpcClientFactory: () => clients.shift(),
+  });
+  const snapshot = await driver.createSession(
+    { workspaceId: 'ws', path: labWorkspace },
+    { initialModel: { provider: 'xai', modelId: 'grok-4.5' }, initialThinkingLevel: 'high' },
+  );
+  await driver.sendUserMessage(snapshot.ref, { text: 'Grok first' });
+  await driver.sendUserMessage(snapshot.ref, { text: 'Grok second' });
+
+  assert.equal(dead.closed, true);
+  assert.deepEqual(dead.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['Grok first']);
+  assert.deepEqual(replacement.commands.filter((command) => command.type === 'prompt').map((command) => command.message), ['Grok second']);
 });
 
 test('PiRpcDriver keeps the previous Luna child intact if its internal reopen fails', async () => {

@@ -7,6 +7,48 @@ const OVERSCAN_PX = 720;
 const ROW_GAP_PX = 14;
 export const VIRTUALIZATION_THRESHOLD = 80;
 
+function isOverflowScrollable(style: CSSStyleDeclaration, axis: "x" | "y"): boolean {
+  const value = axis === "y" ? style.overflowY : style.overflowX;
+  return value === "auto" || value === "scroll";
+}
+
+function hasRoomToScroll(element: Element, deltaX: number, deltaY: number): boolean {
+  const style = getComputedStyle(element);
+  if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+    if (!isOverflowScrollable(style, "y")) {
+      return false;
+    }
+    if (deltaY > 0) {
+      return element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+    }
+    if (deltaY < 0) {
+      return element.scrollTop > 0;
+    }
+    return false;
+  }
+  if (!isOverflowScrollable(style, "x")) {
+    return false;
+  }
+  if (deltaX > 0) {
+    return element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+  }
+  if (deltaX < 0) {
+    return element.scrollLeft > 0;
+  }
+  return false;
+}
+
+function nestedPaneScrollerKeepsWheel(pane: Element, target: Node, deltaX: number, deltaY: number): boolean {
+  let current: Element | null = target instanceof Element ? target : target.parentElement;
+  while (current && current !== pane) {
+    if (hasRoomToScroll(current, deltaX, deltaY)) {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
 interface ThreadSearchModel {
   readonly isOpen: boolean;
   readonly query: string;
@@ -138,11 +180,36 @@ export function ConversationTimeline({
     timelinePaneElementRef?.(node);
   }, [timelinePaneElementRef, timelinePaneRef]);
 
+  useLayoutEffect(() => {
+    const onWheel = (event: WheelEvent) => {
+      const pane = timelinePaneRef.current;
+      if (!pane) {
+        return;
+      }
+      const active = document.activeElement;
+      if (!(active instanceof HTMLTextAreaElement) || !active.closest("footer.composer")) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Node) || !pane.contains(target)) {
+        return;
+      }
+      if (nestedPaneScrollerKeepsWheel(pane, target, event.deltaX, event.deltaY)) {
+        return;
+      }
+      event.preventDefault();
+      pane.scrollTop += event.deltaY;
+    };
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => window.removeEventListener("wheel", onWheel, { capture: true });
+  }, [timelinePaneRef]);
+
   return (
     <div
       className="timeline-pane timeline-pane--thread"
       data-testid="timeline-pane"
       ref={assignTimelinePaneRef}
+      tabIndex={-1}
       onScroll={onTimelineScroll}
     >
       {threadSearch.isOpen ? (

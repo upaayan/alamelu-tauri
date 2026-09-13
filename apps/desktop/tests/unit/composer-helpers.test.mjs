@@ -33,10 +33,12 @@ test("fitComposerTextarea grows, wraps, and shrinks without collapsing to 0 firs
   const grow = { scrollHeight: 80, clientHeight: 24, style: { height: "24px" } };
   fitComposerTextarea(grow, 220);
   assert.equal(grow.style.height, "80px");
+  assert.equal(grow.style.overflowY, "hidden");
 
   const cap = { scrollHeight: 400, clientHeight: 24, style: { height: "24px" } };
   fitComposerTextarea(cap, 220);
   assert.equal(cap.style.height, "220px");
+  assert.equal(cap.style.overflowY, "auto");
 
   const shrink = { scrollHeight: 24, clientHeight: 80, style: {} };
   const heights = [];

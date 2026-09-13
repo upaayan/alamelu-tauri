@@ -78,7 +78,7 @@ interface SessionRecord {
    */
   releaseManualWait?: () => void;
   drainScheduled?: boolean;
-  lunaChildNeedsRotation?: boolean;
+  childNeedsRotation?: boolean;
   restartingClient?: Promise<void>;
   idleOperationTail?: Promise<void>;
   closed?: boolean;
@@ -238,7 +238,7 @@ export class PiRpcDriver implements SessionDriver {
     if (record.snapshot.status === "running" || record.snapshot.runningRunId) {
       throw new Error("RPC session is already running; re-entrant prompts are not supported by the prototype");
     }
-    await this.rotateLunaChildBeforePrompt(record);
+    await this.rotateChildBeforePrompt(record);
     record = this.requireSession(sessionRef);
     if (record.snapshot.status === "running" || record.snapshot.runningRunId) {
       throw new Error("RPC session became active while preparing a prompt");
@@ -408,7 +408,7 @@ export class PiRpcDriver implements SessionDriver {
   async setSessionModel(sessionRef: SessionRef, selection: SessionModelSelection): Promise<void> {
     const record = this.requireSession(sessionRef);
     return this.enqueueIdleOperation(record, async () => {
-      const current = await this.prepareIdleLunaClientForMutation(record);
+      const current = await this.prepareIdleClientForMutation(record);
       const response = await current.client.sendCommand({ type: "set_model", provider: selection.provider, modelId: selection.modelId }, `set-model-${randomUUID()}`);
       if (!response.success) throw new Error(response.error ?? "RPC set_model failed");
       current.snapshot = { ...current.snapshot, config: { ...current.snapshot.config, provider: selection.provider, modelId: selection.modelId }, updatedAt: this.now() };
@@ -419,7 +419,7 @@ export class PiRpcDriver implements SessionDriver {
   async setSessionThinkingLevel(sessionRef: SessionRef, thinkingLevel: string): Promise<void> {
     const record = this.requireSession(sessionRef);
     return this.enqueueIdleOperation(record, async () => {
-      const current = await this.prepareIdleLunaClientForMutation(record);
+      const current = await this.prepareIdleClientForMutation(record);
       const response = await current.client.sendCommand({ type: "set_thinking_level", level: thinkingLevel }, `set-thinking-${randomUUID()}`);
       if (!response.success) throw new Error(response.error ?? "RPC set_thinking_level failed");
       current.snapshot = { ...current.snapshot, config: { ...current.snapshot.config, thinkingLevel }, updatedAt: this.now() };
@@ -430,7 +430,7 @@ export class PiRpcDriver implements SessionDriver {
   async renameSession(sessionRef: SessionRef, title: string): Promise<void> {
     const record = this.requireSession(sessionRef);
     return this.enqueueIdleOperation(record, async () => {
-      const current = await this.prepareIdleLunaClientForMutation(record);
+      const current = await this.prepareIdleClientForMutation(record);
       const response = await current.client.sendCommand({ type: "set_session_name", name: title }, `set-name-${randomUUID()}`);
       if (!response.success) throw new Error(response.error ?? "RPC set_session_name failed");
       current.snapshot = { ...current.snapshot, title, updatedAt: this.now() };
@@ -455,7 +455,7 @@ export class PiRpcDriver implements SessionDriver {
           release = resolve;
         });
         try {
-          current = await this.prepareIdleLunaClientForMutation(record);
+          current = await this.prepareIdleClientForMutation(record);
           current.manualOperation = { token };
           current.releaseManualWait = release;
           current.snapshot = { ...current.snapshot, status: "running", updatedAt: this.now() };
@@ -493,7 +493,7 @@ export class PiRpcDriver implements SessionDriver {
   async reloadSession(sessionRef: SessionRef): Promise<void> {
     const record = this.requireSession(sessionRef);
     return this.enqueueIdleOperation(record, async () => {
-      const current = await this.prepareIdleLunaClientForMutation(record);
+      const current = await this.prepareIdleClientForMutation(record);
       const state = await current.client.sendCommand({ type: "get_state" }, `reload-${randomUUID()}`);
       if (!state.success) throw new Error(state.error ?? "RPC get_state failed");
       current.snapshot = { ...current.snapshot, updatedAt: this.now(), title: sessionNameFromState(state.data) ?? current.snapshot.title };
@@ -520,7 +520,7 @@ export class PiRpcDriver implements SessionDriver {
   ): Promise<NavigateSessionTreeResult> {
     const record = this.requireSession(sessionRef);
     return this.enqueueIdleOperation(record, async () => {
-      const current = await this.prepareIdleLunaClientForMutation(record);
+      const current = await this.prepareIdleClientForMutation(record);
       const response = await current.client.sendCommand({ type: "fork", entryId: targetId }, `fork-${randomUUID()}`);
       if (!response.success) throw new Error(response.error ?? "RPC fork failed");
       const data = response.data as { text?: unknown; cancelled?: unknown } | undefined;
@@ -643,9 +643,9 @@ export class PiRpcDriver implements SessionDriver {
     return this.requireSession(record.ref);
   }
 
-  private async prepareIdleLunaClientForMutation(record: SessionRecord): Promise<SessionRecord> {
+  private async prepareIdleClientForMutation(record: SessionRecord): Promise<SessionRecord> {
     if (!record.snapshot.runningRunId && record.snapshot.status !== "running") {
-      await this.rotateLunaChildBeforePrompt(record);
+      await this.rotateChildBeforePrompt(record);
     }
     const current = await this.waitForClientRestart(record);
     if (current.snapshot.runningRunId || current.snapshot.status === "running") {
@@ -654,8 +654,8 @@ export class PiRpcDriver implements SessionDriver {
     return current;
   }
 
-  private async rotateLunaChildBeforePrompt(record: SessionRecord): Promise<void> {
-    if (!record.lunaChildNeedsRotation || !isLunaSession(record.snapshot)) return;
+  private async rotateChildBeforePrompt(record: SessionRecord): Promise<void> {
+    if (!record.childNeedsRotation) return;
     if (!record.restartingClient) {
       const restart = this.replaceIdleClient(record);
       record.restartingClient = restart;
@@ -685,7 +685,6 @@ export class PiRpcDriver implements SessionDriver {
         throw new Error(`Replacement Pi RPC session mismatch: expected ${record.ref.sessionId}, got ${restoredSessionId ?? "none"}`);
       }
       const restoredConfig = sessionConfigFromState(state.data);
-      assertRestoredSessionConfig(record.snapshot.config, restoredConfig);
 
       if (this.sessions.get(this.key(record.ref)) !== record || record.closed) {
         throw new Error("RPC session closed while replacing its Pi child");
@@ -702,7 +701,7 @@ export class PiRpcDriver implements SessionDriver {
       record.unsubscribeClient = replacementUnsubscribe;
       record.clientGeneration = replacementGeneration;
       record.piQueueCounts = emptyQueueCounts();
-      delete record.lunaChildNeedsRotation;
+      delete record.childNeedsRotation;
       if (restoredConfig) {
         record.snapshot = { ...record.snapshot, config: { ...record.snapshot.config, ...restoredConfig }, updatedAt: this.now() };
       }
@@ -761,6 +760,7 @@ export class PiRpcDriver implements SessionDriver {
     if (streamFailure) {
       // Accepted manual work counts as active: a dead child can never send its compaction_end.
       if (!activeRunId && !record.manualOperation && isBenignInactiveStreamFailure(streamFailure)) {
+        record.childNeedsRotation = true;
         return;
       }
       this.failRun(record, activeRunId ?? randomUUID(), streamFailure);
@@ -783,7 +783,7 @@ export class PiRpcDriver implements SessionDriver {
       }
       const { runningRunId: _runningRunId, ...snapshotWithoutRunId } = record.snapshot;
       record.snapshot = { ...snapshotWithoutRunId, status: "idle", updatedAt: this.now() };
-      if (isLunaSession(record.snapshot)) record.lunaChildNeedsRotation = true;
+      record.childNeedsRotation = true;
     }
     const events = mapRpcEventToSessionDriverEvents(event, {
       sessionRef,
@@ -897,7 +897,7 @@ export class PiRpcDriver implements SessionDriver {
     record.piQueueCounts = emptyQueueCounts();
     record.suppressRunEvents = true;
     record.snapshot = { ...snapshotWithoutRunId, status: "idle", updatedAt: this.now() };
-    if (isLunaSession(record.snapshot)) record.lunaChildNeedsRotation = true;
+    record.childNeedsRotation = true;
     this.emit(record.ref, { type: "sessionUpdated", sessionRef: record.ref, timestamp: this.now(), snapshot: record.snapshot });
     this.emit(
       record.ref,
@@ -1331,22 +1331,6 @@ function sessionConfigFromState(data: unknown): SessionSnapshot["config"] | unde
     ...(modelId ? { modelId } : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),
   };
-}
-
-function isLunaSession(snapshot: SessionSnapshot): boolean {
-  return snapshot.config?.provider === "openai-codex" && snapshot.config.modelId === "gpt-5.6-luna";
-}
-
-function assertRestoredSessionConfig(expected: SessionSnapshot["config"], actual: SessionSnapshot["config"] | undefined): void {
-  if (expected?.provider && actual?.provider !== expected.provider) {
-    throw new Error(`Replacement Pi RPC provider mismatch: expected ${expected.provider}, got ${actual?.provider ?? "none"}`);
-  }
-  if (expected?.modelId && actual?.modelId !== expected.modelId) {
-    throw new Error(`Replacement Pi RPC model mismatch: expected ${expected.modelId}, got ${actual?.modelId ?? "none"}`);
-  }
-  if (expected?.thinkingLevel && actual?.thinkingLevel !== expected.thinkingLevel) {
-    throw new Error(`Replacement Pi RPC thinking mismatch: expected ${expected.thinkingLevel}, got ${actual?.thinkingLevel ?? "none"}`);
-  }
 }
 
 type SessionImageLike = Extract<SessionAttachment, { kind: "image" }>;

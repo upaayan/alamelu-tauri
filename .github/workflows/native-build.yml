@@ -53,7 +53,7 @@ jobs:
         run: |
           pnpm --filter @alamelu-pi/session-driver run build
           pnpm --filter @alamelu-pi/pi-rpc-driver run build
-          node --test --test-name-pattern="WSL|mapRpcEventToSessionDriverEvents" packages/pi-rpc-driver/test/rpc-client.test.mjs
+          node --test --test-name-pattern="WSL|mapRpcEventToSessionDriverEvents|reopen|rotat|dead-pipe|tainted Luna" packages/pi-rpc-driver/test/rpc-client.test.mjs
       - name: Build Tauri assets
         working-directory: apps/desktop
         run: pnpm run build:tauri:assets
@@ -109,7 +109,7 @@ jobs:
         run: |
           pnpm --filter @alamelu-pi/session-driver run build
           pnpm --filter @alamelu-pi/pi-rpc-driver run build
-          node --test --test-name-pattern="WSL|mapRpcEventToSessionDriverEvents" packages/pi-rpc-driver/test/rpc-client.test.mjs
+          node --test --test-name-pattern="WSL|mapRpcEventToSessionDriverEvents|reopen|rotat|dead-pipe|tainted Luna" packages/pi-rpc-driver/test/rpc-client.test.mjs
       - name: Build Tauri assets
         working-directory: apps/desktop
         run: pnpm run build:tauri:assets

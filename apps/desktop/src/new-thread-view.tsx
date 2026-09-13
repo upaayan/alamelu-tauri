@@ -125,7 +125,7 @@ export function NewThreadView({
       return;
     }
 
-    fitComposerTextarea(composer, 260);
+    fitComposerTextarea(composer, 220);
   }, [composerRef, prompt]);
 
   if (!workspace) {

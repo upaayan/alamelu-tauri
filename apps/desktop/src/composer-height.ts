@@ -1,9 +1,14 @@
 export function fitComposerTextarea(composer: HTMLTextAreaElement, maxHeight: number): void {
+  const applyHeight = (nextHeight: number): void => {
+    composer.style.height = `${nextHeight}px`;
+    composer.style.overflowY = nextHeight >= maxHeight ? "auto" : "hidden";
+  };
+
   if (composer.scrollHeight > composer.clientHeight + 1) {
-    composer.style.height = `${Math.min(composer.scrollHeight, maxHeight)}px`;
+    applyHeight(Math.min(composer.scrollHeight, maxHeight));
     return;
   }
 
   composer.style.height = "auto";
-  composer.style.height = `${Math.min(composer.scrollHeight, maxHeight)}px`;
+  applyHeight(Math.min(composer.scrollHeight, maxHeight));
 }
