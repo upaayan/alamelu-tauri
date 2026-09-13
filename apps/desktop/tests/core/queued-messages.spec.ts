@@ -1,3 +1,8 @@
+// DEPRECATED (2026-09-13): this spec launches the app without PI_GUI_DRIVER=rpc, i.e. the
+// removed SDK driver, so it cannot start Alamelu Pi in this checkout (main.ts constructs no
+// driver for that mode) and it exercises queue editing, which the RPC driver does not support.
+// The RPC-driven queue display is covered by tests/core/compaction-status.spec.ts and the
+// real-Pi check in tests/live/compaction-queue.spec.ts. Kept for history; not run.
 import { expect, test } from "@playwright/test";
 import type { SessionDriverEvent, SessionQueuedMessage, SessionRef, WorkspaceRef } from "@alamelu-pi/session-driver";
 import {
