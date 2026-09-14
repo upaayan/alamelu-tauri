@@ -17,7 +17,7 @@ test('Tauri packaging and backend rebuilds schedule the gate', () => {
   assert.equal(json('apps/desktop/src-tauri/tauri.conf.json').build.beforeBuildCommand, 'pnpm run build:tauri:assets');
   const workflow = read('.github/workflows/native-build.yml');
   for (const job of ['macos-apple-silicon', 'windows-amd64']) {
-    assert.match(workflow, new RegExp(`  ${job}:\\n    needs: compatibility`));
+    assert.match(workflow, new RegExp(`  ${job}:\\r?\\n    needs: compatibility`));
   }
   assert.match(workflow, /uses: \.\/\.github\/workflows\/upgrade-compatibility.yml/);
 });
