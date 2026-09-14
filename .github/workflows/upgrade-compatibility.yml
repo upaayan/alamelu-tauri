@@ -1,0 +1,35 @@
+name: Upgrade compatibility (no Rust)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.5.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      - name: Compaction, model-switch, and upgrade protection regressions
+        run: pnpm run verify:upgrade
+      - name: WSL launch adapter and message completion
+        run: node --test --test-name-pattern="WSL|mapRpcEventToSessionDriverEvents|reopen|rotat|dead-pipe|tainted Luna" packages/pi-rpc-driver/test/rpc-client.test.mjs

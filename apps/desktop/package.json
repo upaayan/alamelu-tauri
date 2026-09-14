@@ -13,7 +13,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "pnpm run build:deps && pnpm run build:notification-helper && electron-vite build",
     "build:tauri:renderer": "vite build --config vite.config.tauri.ts",
-    "build:tauri:backend": "pnpm run build:deps && node scripts/build-tauri-backend.mjs",
+    "build:tauri:backend": "pnpm --dir ../.. run verify:upgrade && pnpm run build:deps && node scripts/build-tauri-backend.mjs",
     "build:tauri:assets": "pnpm run build:tauri:renderer && pnpm run build:tauri:backend",
     "build:tauri": "pnpm run build:tauri:assets && cargo build --manifest-path src-tauri/Cargo.toml",
     "check:tauri": "pnpm run typecheck && pnpm run build:tauri:assets && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo check --manifest-path src-tauri/Cargo.toml && cargo test --manifest-path src-tauri/Cargo.toml",

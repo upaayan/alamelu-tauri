@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import ts from "typescript";
+import { pathToFileURL } from "node:url";
 
 const sourcePath = path.resolve("apps/desktop/electron/model-switch-preflight.ts");
 const transpiled = ts.transpileModule(readFileSync(sourcePath, "utf8"), {
@@ -23,7 +24,7 @@ after(() => {
   rmSync(tempModuleDir, { recursive: true, force: true });
 });
 
-const { evaluateModelSwitch } = await import(path.toNamespacedPath(tempModulePath));
+const { evaluateModelSwitch } = await import(pathToFileURL(tempModulePath).href);
 
 const NO_COLLISION = { estTokens: 1000, hasCollidingToolCallIds: false };
 const COLLIDING = {
@@ -120,7 +121,7 @@ test("lets a connected-but-expired provider through (run-time error explains it)
 
 /* ── readThreadStats: the JSONL feeder behind rule (b) ─────────────────── */
 
-const { readThreadStats } = await import(path.toNamespacedPath(tempModulePath));
+const { readThreadStats } = await import(pathToFileURL(tempModulePath).href);
 
 function writeSession(dir, sessionId, lines) {
   const file = path.join(dir, `2026-07-26T10-00-00-000Z_${sessionId}.jsonl`);
@@ -147,7 +148,7 @@ test("readThreadStats detects tool-call ids that collide after truncation", () =
   assert.equal(stats.hasCollidingToolCallIds, true);
   assert.equal(stats.historyProvider, "xai");
   assert.equal(stats.historyModelId, "grok-4.5");
-  assert.ok(stats.estTokens > 0);
+  assert.equal(stats.estTokens, undefined);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -183,7 +184,7 @@ test("readThreadStats skips malformed lines instead of throwing", () => {
 test("readThreadStats returns zeroed stats for a missing session", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-missing-"));
   const stats = readThreadStats(dir, "nope");
-  assert.equal(stats.estTokens, 0);
+  assert.equal(stats.estTokens, undefined);
   assert.equal(stats.hasCollidingToolCallIds, false);
   rmSync(dir, { recursive: true, force: true });
 });
@@ -191,6 +192,45 @@ test("readThreadStats returns zeroed stats for a missing session", () => {
 test("readThreadStats refuses a traversal-shaped session id", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-traversal-"));
   const stats = readThreadStats(dir, "../escape");
-  assert.equal(stats.estTokens, 0);
+  assert.equal(stats.estTokens, undefined);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("repeated compactions measure fresh Pi context, not the retained archive", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "thread-stats-compactions-"));
+  try {
+    writeSession(dir, "compacted", [
+      { type: "message", id: "old", message: { role: "user", content: "x".repeat(4_400_000) } },
+      { type: "compaction", id: "c1", summary: "First summary", firstKeptEntryId: "tail" },
+      { type: "message", id: "tail", message: { role: "user", content: "Retained turn" } },
+      { type: "compaction", id: "c2", summary: "Second summary", firstKeptEntryId: "tail2" },
+    ]);
+    const target = { providerId: "cursor", modelId: "small", contextWindow: 32768 };
+    for (const summary of ['First summary', 'Second summary']) {
+      const messages = [{ role: 'compactionSummary', summary }, { role: 'user', content: 'Retained turn' }];
+      const stats = readThreadStats(dir, 'compacted', messages);
+      assert.ok(stats.estTokens > 0 && stats.estTokens < 100);
+      assert.equal(evaluateModelSwitch(stats, target, false).verdict, 'ok');
+    }
+    const grown = readThreadStats(dir, 'compacted', [{ role: 'user', content: 'x'.repeat(160000) }]);
+    assert.equal(evaluateModelSwitch(grown, target, false).verdict, 'block');
+    const unknown = readThreadStats(dir, 'compacted');
+    assert.equal(evaluateModelSwitch(unknown, target, false).verdict, 'ok');
+  } finally { rmSync(dir, {recursive:true,force:true}); }
+});
+
+test('active estimate counts model content, excluding usage metadata and base64 size', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'thread-stats-content-'));
+  try {
+    writeSession(dir, 'content', []);
+    const messages = [
+      {role:'user',content:[{type:'text',text:'abcd'},{type:'image',data:'x'.repeat(500000)}]},
+      {role:'assistant',content:[{type:'thinking',thinking:'abcd'},{type:'toolCall',name:'read',arguments:{path:'a'}}], usage:{totalTokens:9999999}},
+      {role:'toolResult',content:[{type:'text',text:'abcd'}],details:{debug:'x'.repeat(100000)}},
+      {role:'custom',content:'abcd'}, {role:'branchSummary',summary:'abcd'},
+      {role:'bashExecution',command:'echo',output:'abcd'},
+    ];
+    const stats = readThreadStats(dir,'content',messages);
+    assert.ok(stats.estTokens > 1200 && stats.estTokens < 1300);
+  } finally { rmSync(dir,{recursive:true,force:true}); }
 });

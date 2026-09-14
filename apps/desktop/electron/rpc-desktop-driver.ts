@@ -107,6 +107,10 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
     return this.rpc.cancelCurrentRun(sessionRef);
   }
 
+  getSessionContextMessages(sessionRef: SessionRef): Promise<readonly unknown[] | undefined> {
+    return this.rpc.getSessionContextMessages(sessionRef);
+  }
+
   setSessionModel(sessionRef: SessionRef, selection: SessionModelSelection): Promise<void> {
     return this.rpc.setSessionModel(sessionRef, selection);
   }

@@ -125,13 +125,15 @@ function expandHomePath(value: string): string {
 
 async function importExternalSessionManager(): Promise<{
   SessionManager: {
-    create(cwd: string): {
+    create(cwd: string, sessionDir?: string): {
       appendMessage(message: Record<string, unknown>): string;
       appendModelChange(provider: string, modelId: string): string;
       appendSessionInfo(name: string): string;
       appendThinkingLevelChange(thinkingLevel: string): string;
+      appendCompaction(summary: string, firstKeptEntryId: string, tokensBefore: number, details?: unknown): string;
       branch(entryId: string): void;
       getSessionId(): string;
+      getSessionFile(): string | undefined;
     };
   };
 }> {
@@ -141,13 +143,15 @@ async function importExternalSessionManager(): Promise<{
   await access(sessionManagerPath);
   return (await import(pathToFileURL(sessionManagerPath).href)) as {
     SessionManager: {
-      create(cwd: string): {
+      create(cwd: string, sessionDir?: string): {
         appendMessage(message: Record<string, unknown>): string;
         appendModelChange(provider: string, modelId: string): string;
         appendSessionInfo(name: string): string;
         appendThinkingLevelChange(thinkingLevel: string): string;
+        appendCompaction(summary: string, firstKeptEntryId: string, tokensBefore: number, details?: unknown): string;
         branch(entryId: string): void;
         getSessionId(): string;
+        getSessionFile(): string | undefined;
       };
     };
   };
@@ -1621,4 +1625,27 @@ function ensureNativeClipboardImage(): string {
   writeFileSync(filePath, Buffer.from(TINY_PNG_BASE64, "base64"));
   nativeClipboardImagePathCache = filePath;
   return filePath;
+}
+
+/** Large retained archive, but only a small summary/tail remains active in Pi. */
+export async function seedCompactedModelSwitchSessionFixture(agentDir: string, workspacePath: string): Promise<void> {
+  const { SessionManager } = await importExternalSessionManager();
+  await withAgentDirEnv(agentDir, async () => {
+    const session = SessionManager.create(workspacePath, join(dirname(agentDir), "sessions"));
+    session.appendModelChange("openai", "gpt-5");
+    session.appendMessage({role:"user", content:"Old task", timestamp:Date.now()});
+    session.appendMessage({role:"assistant", content:[{type:"text",text:"Old answer"}], timestamp:Date.now()});
+    const first = session.appendMessage({role:"user",content:"First retained turn",timestamp:Date.now()});
+    session.appendCompaction("First summary",first,600000,{archivedFixture:"x".repeat(2200000)});
+    const second = session.appendMessage({role:"user",content:"Second retained turn",timestamp:Date.now()});
+    session.appendCompaction("Second summary",second,600000,{archivedFixture:"x".repeat(2200000)});
+    session.appendSessionInfo("Compacted model switch fixture");
+    const { JsonCatalogStore } = await import("@alamelu-pi/catalogs");
+    const catalogs = new JsonCatalogStore({catalogFilePath:join(dirname(agentDir), "catalogs.json")});
+    const workspaceId = await realpath(workspacePath);
+    const sessionRef = {workspaceId,sessionId:session.getSessionId()};
+    await catalogs.workspaces.upsertWorkspace({workspaceId,path:workspaceId,displayName:basename(workspaceId),lastOpenedAt:new Date().toISOString(),sortOrder:0});
+    await catalogs.sessions.upsertSession({sessionRef,workspaceId,title:"Compacted model switch fixture",updatedAt:new Date().toISOString(),status:"idle"});
+    await catalogs.setSessionFile(sessionRef,session.getSessionFile()!);
+  });
 }

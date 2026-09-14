@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 export interface ThreadStats {
-  /** Rough size of the thread: bytes/4. Only ever used with a safety factor. */
-  readonly estTokens: number;
+  /** Active Pi context content chars/4; absent when unavailable. Used with a safety factor. */
+  readonly estTokens?: number;
   /** True when replaying this history would produce duplicate 40-char tool-call ids. */
   readonly hasCollidingToolCallIds: boolean;
   readonly historyProvider?: string;
@@ -49,7 +49,7 @@ export function evaluateModelSwitch(
 
   if (target.contextWindow !== undefined && target.contextWindow > 0) {
     const limit = Math.floor(target.contextWindow * CONTEXT_SAFETY_FACTOR);
-    if (stats.estTokens > limit) {
+    if (stats.estTokens !== undefined && stats.estTokens > limit) {
       return {
         verdict: "block",
         reason: `This thread is about ${stats.estTokens.toLocaleString()} tokens — too long for ${target.modelId} (${target.contextWindow.toLocaleString()}). Pick a larger-context model or start a new thread.`,
@@ -74,11 +74,12 @@ function legacyNormalizedId(id: string): string | undefined {
 }
 
 /**
- * Reads a session's JSONL to estimate its size and detect tool-call ids that would
- * collide after truncation. Returns zeroed stats when the file cannot be read.
+ * Estimates current Pi messages and reads the archive only for existing tool-ID checks.
+ * Never estimates active context from the archive, which retains compacted history.
  */
-export function readThreadStats(sessionDir: string, sessionId: string): ThreadStats {
-  const empty: ThreadStats = { estTokens: 0, hasCollidingToolCallIds: false };
+export function readThreadStats(sessionDir: string, sessionId: string, activeMessages?: readonly unknown[]): ThreadStats {
+  const estTokens = estimateActiveContextTokens(activeMessages);
+  const empty: ThreadStats = { ...(estTokens !== undefined ? { estTokens } : {}), hasCollidingToolCallIds: false };
   if (!sessionDir || !/^[A-Za-z0-9._-]+$/.test(sessionId) || sessionId.includes("..")) return empty;
 
   let filePath: string;
@@ -133,11 +134,42 @@ export function readThreadStats(sessionDir: string, sessionId: string): ThreadSt
   }
 
   return {
-    estTokens: Math.round(raw.length / 4),
+    ...(estTokens !== undefined ? { estTokens } : {}),
     hasCollidingToolCallIds,
     ...(historyProvider ? { historyProvider } : {}),
     ...(historyModelId ? { historyModelId } : {}),
   };
+}
+
+/** Pi's content-only chars/4 heuristic, applied to its resolved get_messages snapshot. */
+function estimateActiveContextTokens(messages: readonly unknown[] | undefined): number | undefined {
+  if (!messages) return undefined;
+  const textLength = (value: unknown) => typeof value === "string" ? value.length : 0;
+  let tokens = 0;
+  for (const value of messages) {
+    if (!value || typeof value !== "object") continue;
+    const message = value as Record<string, unknown>;
+    let chars = 0;
+    if (message.role === "compactionSummary" || message.role === "branchSummary") {
+      chars = textLength(message.summary);
+    } else if (message.role === "bashExecution") {
+      if (message.excludeFromContext) continue;
+      chars = textLength(message.command) + textLength(message.output);
+    } else if (typeof message.content === "string") {
+      chars = message.content.length;
+    } else if (Array.isArray(message.content)) {
+      for (const value of message.content) {
+        if (!value || typeof value !== "object") continue;
+        const block = value as Record<string, unknown>;
+        if (block.type === "text") chars += textLength(block.text);
+        else if (block.type === "thinking") chars += textLength(block.thinking);
+        else if (block.type === "image") chars += 4800;
+        else if (block.type === "toolCall") chars += textLength(block.name) + (JSON.stringify(block.arguments) ?? "").length;
+      }
+    }
+    tokens += Math.ceil(chars / 4);
+  }
+  return tokens;
 }
 
 const PATCH_MARKER = "alpi-patch:toolcallid-v1";

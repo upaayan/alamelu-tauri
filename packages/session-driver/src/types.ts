@@ -354,6 +354,8 @@ export interface SessionDriver {
   sendUserMessage(sessionRef: SessionRef, input: SessionMessageInput): Promise<void>;
   replaceQueuedMessages(sessionRef: SessionRef, messages: readonly SessionQueuedMessage[]): Promise<void>;
   cancelCurrentRun(sessionRef: SessionRef): Promise<void>;
+  /** Current Pi context, already resolved across branches and compactions; absent when unavailable. */
+  getSessionContextMessages?(sessionRef: SessionRef): Promise<readonly unknown[] | undefined>;
   setSessionModel(sessionRef: SessionRef, selection: SessionModelSelection): Promise<void>;
   setSessionThinkingLevel(sessionRef: SessionRef, thinkingLevel: string): Promise<void>;
   renameSession(sessionRef: SessionRef, title: string): Promise<void>;

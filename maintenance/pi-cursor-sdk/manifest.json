@@ -1,0 +1,60 @@
+{
+  "0.1.60": {
+    "entry": "src/index.ts",
+    "files": {
+      "src/cursor-context-tools.ts": {
+        "before": "a42294b195f982de5972c67256fc770720c2a7973f2ce13b72aeccdda886714d",
+        "after": "e2bfca7676ab81b5ecb3487d1fa082fb9ac738d00cfd287f808428399d17c96d"
+      },
+      "src/cursor-session-agent.ts": {
+        "before": "1589d8be45642639ec089ddbbd65e9385db6ba770441b343aeb7ecaa11b5868e",
+        "after": "40d8835090698399a7d7951f1e443069b8621192285b4331bfde3bea1b807ff9"
+      },
+      "src/cursor-provider-turn-prepare.ts": {
+        "before": "349b771277b1676603a9804121e2ea07d48d8bddf702cfd412208a5282aa31b8",
+        "after": "4f900d672dda38530efbf1a320ac461100ac0c893a12d003b714b2290a511e3f"
+      }
+    },
+    "assets": {
+      "0.1.60/compaction.patch": "ef6ff30a0e8c046d64a8dfebac30f7a1f1190d4aec44d55d8a7a6eb6168727e6",
+      "0.1.60/test/cursor-compaction-prepare.test.ts": "af3041d447a4c9bdaba412804968ada9487df5507df8c36f824ec1114e593318",
+      "0.1.60/test/auth-recreate-fixtures.ts": "22235901bb4c34d0a24d5a6ae23b7124f9de19ad2672abbad545c08140251201",
+      "0.1.60/test/cursor-compaction.test.ts": "7a6dea2677cabc3f3bcf2c6ba9e5d4e3d2a5d85a32bce7f7615c51425290a152"
+    }
+  },
+  "0.3.6": {
+    "entry": "dist/index.js",
+    "files": {
+      "src/cursor-context-tools.ts": {
+        "before": "dec80167a0a852433b2d0148a3633b5a40d3f90aa76214c01a56c047ad39ba3f",
+        "after": "cb51b968da6f3f4f005b4107c03373e84dfc302054fa6d561bff91dc3d52d15e"
+      },
+      "src/cursor-provider-turn-prepare.ts": {
+        "before": "a2bd7bca102c1426a9a5932325bd012e44d0a8d836eb49210e2ab3105c73f023",
+        "after": "e6b1162d09414f7a8ad3eb21bc3629d85ca3f78ca5ef503a5e3f9fffd6b563e9"
+      },
+      "src/cursor-session-agent.ts": {
+        "before": "a31c9dfa038219e53b822b1bcd472d16593f313da559a4c6f7f60b136f285ae7",
+        "after": "d41922bbee193bf8d51e759d00cfc2c2d082d5e21d26d4cef543f6141bab6fa2"
+      },
+      "dist/cursor-context-tools.js": {
+        "before": "92bb44389531505c1d90ecc6e0aef71d5f1c31b25855cfb62292d521ea29a81b",
+        "after": "7298509469a892642eef86953dfadb88096fd5c39decad4ab0083dcb6b9f2bd8"
+      },
+      "dist/cursor-provider-turn-prepare.js": {
+        "before": "43aa9baf6b175b1535c7b4621c7e333e31a77066334a7194e44f43af637e0a3a",
+        "after": "e71ec05263068186a0f72385ef76eacf076063790c6e2216b21e54088b9579ca"
+      },
+      "dist/cursor-session-agent.js": {
+        "before": "5e2e3330cb0c17e1914bcf1ad77d0d80a154191355f8f8f229c35abddb105f9c",
+        "after": "fef5196b9d569ee0cd8ae369a42602a5f36f7508f54c9af451f89c5c56eeeb76"
+      }
+    },
+    "assets": {
+      "0.3.6/compaction.patch": "01e99a701b0f9f63788f16ec3f09042bee2646e33980b04cae9439ed6cef04fb",
+      "0.3.6/test/cursor-compaction-prepare.test.ts": "0ff0a3dd8dbac31384bcbdc764aa818f5ed2f8cab7c9a4b0a9e227edb9fd525a",
+      "0.3.6/test/auth-recreate-fixtures.ts": "22235901bb4c34d0a24d5a6ae23b7124f9de19ad2672abbad545c08140251201",
+      "0.3.6/test/cursor-compaction.test.ts": "7a6dea2677cabc3f3bcf2c6ba9e5d4e3d2a5d85a32bce7f7615c51425290a152"
+    }
+  }
+}

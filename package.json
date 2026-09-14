@@ -16,6 +16,7 @@
     "check:tauri": "pnpm --filter @alamelu-pi/desktop run check:tauri",
     "package:tauri": "pnpm --filter @alamelu-pi/desktop run package:tauri",
     "verify:external-runtime": "pnpm --filter @alamelu-pi/desktop run verify:external-runtime",
-    "verify:packaged-runtime-deps": "pnpm --filter @alamelu-pi/desktop run verify:packaged-runtime-deps"
+    "verify:packaged-runtime-deps": "pnpm --filter @alamelu-pi/desktop run verify:packaged-runtime-deps",
+    "verify:upgrade": "node scripts/verify-upgrade.mjs"
   }
 }

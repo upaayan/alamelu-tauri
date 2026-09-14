@@ -28,3 +28,8 @@ These rules apply for the full session.
 ## Source Of Truth
 - Root `AGENTS.md` is the repo instruction source of truth.
 - Root `CLAUDE.md` should remain a symlink to `AGENTS.md`.
+
+## Rebuild and external Pi upgrades
+
+Before rebuilding/releasing Alamelu Pi Tauri or upgrading Pi/Cursor packages, follow
+[documents/REBUILD-PROTECTION.md](documents/REBUILD-PROTECTION.md). Run `pnpm run verify:upgrade` before Rust; preserve the external runtime patches and complete the Mac and native Windows/WSL release gates. Do not equate a source-only adapter test with the manifest-loaded runtime.

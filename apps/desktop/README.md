@@ -179,3 +179,7 @@ That spec launches the app in development mode, edits isolated probe modules for
 - `tests/production`: opt-in higher-fidelity smokes kept out of the default lane globs
 
 Future agents should start by reading this file, `apps/desktop/tests/AGENTS.md`, and the scripts in `apps/desktop/package.json`.
+
+## Tauri rebuild and Pi upgrade protection
+
+Use [the rebuild checklist](../../documents/REBUILD-PROTECTION.md) before packaging or replacing external Pi packages. Both Mac and native Windows/WSL are deployed. `pnpm run verify:upgrade` from the repository root is the fast pre-Rust gate; installed runtime and live checks are separate required release gates. The Tauri package carries a maintenance kit; external copies survive installer replacement.

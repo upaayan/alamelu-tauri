@@ -42,7 +42,13 @@
     "resources": {
       "../out/tauri-backend/main.cjs": "backend/main.cjs",
       "../out/tauri-backend/node_modules": "backend/node_modules",
-      "../resources/alpi-luna-websocket-recovery.ts": "extensions/alpi-luna-websocket-recovery.ts"
+      "../resources/alpi-luna-websocket-recovery.ts": "extensions/alpi-luna-websocket-recovery.ts",
+      "../../../maintenance/pi-cursor-sdk/": "maintenance-kit/maintenance/pi-cursor-sdk/",
+      "../../../documents/REBUILD-PROTECTION.md": "maintenance-kit/documents/REBUILD-PROTECTION.md",
+      "../../../documents/PI-UPGRADE-WINDOWS.md": "maintenance-kit/documents/PI-UPGRADE-WINDOWS.md",
+      "../../../scripts/check-cursor-compaction.py": "maintenance-kit/scripts/check-cursor-compaction.py",
+      "../../../scripts/check-pi-app-extension.py": "maintenance-kit/scripts/check-pi-app-extension.py",
+      "../../../scripts/test-upgrade-protection.py": "maintenance-kit/scripts/test-upgrade-protection.py"
     },
     "macOS": {
       "minimumSystemVersion": "12.0"

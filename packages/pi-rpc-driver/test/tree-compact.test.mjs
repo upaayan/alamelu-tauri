@@ -165,3 +165,28 @@ test('navigateSessionTree reports a cancelled fork without claiming success', as
   assert.equal(result.cancelled, true);
   assert.equal(result.editorText, undefined);
 });
+
+test('context preflight fetches current Pi messages again after each compaction', async () => {
+  let generation = 0;
+  const { driver, snapshot, sent } = await openDriver((command) => {
+    if(command.type === 'compact') generation++;
+    return {type:'response',success:true,data:{messages:[{role:'compactionSummary',summary:`Summary ${generation}`},{role:'user',content:'Recent turn'}]}};
+  });
+  for (let i=1;i<=2;i++) {
+    await driver.compactSession(snapshot.ref);
+    await new Promise(resolve=>setImmediate(resolve));
+    const messages=await driver.getSessionContextMessages(snapshot.ref);
+    assert.equal(messages[0].summary,`Summary ${i}`);
+  }
+  assert.equal(sent.filter(x=>x.command.type==='get_messages').length,2);
+});
+
+test('unavailable RPC context is unknown rather than archive-size fallback',async()=>{
+  const {driver,snapshot}=await openDriver(()=>({type:'response',success:false,error:'unsupported'}));
+  assert.equal(await driver.getSessionContextMessages(snapshot.ref),undefined);
+});
+
+test('context transport errors defer size enforcement to Pi',async()=>{
+  const {driver,snapshot}=await openDriver(()=>{throw new Error('transport closed');});
+  assert.equal(await driver.getSessionContextMessages(snapshot.ref),undefined);
+});

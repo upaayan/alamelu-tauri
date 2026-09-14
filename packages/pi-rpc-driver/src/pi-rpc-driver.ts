@@ -575,6 +575,18 @@ export class PiRpcDriver implements SessionDriver {
     this.emit(sessionRef, { type: "sessionClosed", sessionRef, timestamp: this.now(), reason: "manual" });
   }
 
+  async getSessionContextMessages(sessionRef: SessionRef): Promise<readonly unknown[] | undefined> {
+    try {
+      const record = await this.waitForClientRestart(this.requireSession(sessionRef));
+      const response = await record.client.sendCommand({ type: "get_messages" }, `context-${randomUUID()}`);
+      const data = response.data as { messages?: unknown } | undefined;
+      return response.success && Array.isArray(data?.messages) ? data.messages : undefined;
+    } catch {
+      // Missing context must not turn a speculative size check into a failed switch.
+      return undefined;
+    }
+  }
+
   async getTranscript(sessionRef: SessionRef): Promise<readonly SessionTranscriptItem[]> {
     const localTranscript = transcriptFromLocalSessionFile(this.paths.sessionDir, sessionRef.sessionId);
     if (localTranscript.length > 0) return localTranscript;

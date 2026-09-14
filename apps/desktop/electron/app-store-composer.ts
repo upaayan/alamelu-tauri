@@ -430,7 +430,7 @@ export async function setSessionModel(
     // missing RPC session.
     await store.ensureSessionReady(sessionRef);
 
-    const decision = preflightModelSwitch(store, sessionRef, provider, modelId);
+    const decision = await preflightModelSwitch(store, sessionRef, provider, modelId);
     if (decision.verdict === "block") {
       return store.withError(new Error(decision.reason ?? "This model can't be used for this thread."));
     }
@@ -488,17 +488,18 @@ export async function cancelCurrentRun(store: AppStoreInternals): Promise<Deskto
  * Checks a model switch against the thread before sending it, so a switch that
  * would certainly fail on the next prompt is refused with a readable reason.
  */
-function preflightModelSwitch(
+async function preflightModelSwitch(
   store: AppStoreInternals,
   sessionRef: SessionRef,
   provider: string,
   modelId: string,
-): PreflightDecision {
+): Promise<PreflightDecision> {
   if (!store.sessionDir) return { verdict: "ok" };
   const runtime = store.state.runtimeByWorkspace[sessionRef.workspaceId];
   const record = runtime?.models.find((model) => model.providerId === provider && model.modelId === modelId);
   const providerRecord = runtime?.providers.find((entry) => entry.id === provider);
-  const stats = readThreadStats(store.sessionDir, sessionRef.sessionId);
+  const activeMessages = await store.driver.getSessionContextMessages?.(sessionRef);
+  const stats = readThreadStats(store.sessionDir, sessionRef.sessionId, activeMessages);
   return evaluateModelSwitch(
     stats,
     {

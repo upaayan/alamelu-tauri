@@ -1,0 +1,90 @@
+--- a/src/cursor-context-tools.ts
++++ b/src/cursor-context-tools.ts
+@@ -1,6 +1,6 @@
+ import type { Context } from "@earendil-works/pi-ai";
+ 
+ /** Tool names from the provider context snapshot at stream start (not live pi.getActiveTools()). */
+-export function getActiveContextToolNames(context: Context): ReadonlySet<string> | undefined {
+-	return context.tools ? new Set(context.tools.map((tool) => tool.name)) : undefined;
++export function getActiveContextToolNames(context: Context): ReadonlySet<string> {
++	return new Set(context.tools?.map((tool) => tool.name) ?? []);
+ }
+--- a/src/cursor-provider-turn-prepare.ts
++++ b/src/cursor-provider-turn-prepare.ts
+@@ -266,7 +266,9 @@
+ 		const queuedBridgeRequestsBeforeLiveRun: CursorPiBridgeToolRequest[] = [];
+ 		let liveRunForBridgeQueue: CursorLiveRun | undefined;
+ 
++		const activeToolNames = getActiveContextToolNames(context);
+ 		const sessionAgentAcquireParams = {
++			disablePiToolBridge: activeToolNames.size === 0,
+ 			apiKey: resolvedApiKey,
+ 			agentMode,
+ 			cwd,
+@@ -337,7 +339,6 @@
+ 		const sessionBridgeRun = bridgeRun;
+ 		const promptInputTokens = estimateCursorPromptTokens(prompt, promptOptions);
+ 		const useNativeToolReplay = isCursorNativeToolDisplayRuntimeEnabled();
+-		const activeToolNames = getActiveContextToolNames(context);
+ 		sdkEventDebug?.recordProviderMeta({
+ 			model: {
+ 				id: model.id,
+--- a/src/cursor-session-agent.ts
++++ b/src/cursor-session-agent.ts
+@@ -121,6 +121,8 @@
+ }
+ 
+ interface SessionCursorAgentCreateParams {
++	/** A tool-less provider call must not inherit live Pi extension tools. */
++	disablePiToolBridge?: boolean;
+ 	apiKey: string;
+ 	agentMode: AgentModeOption;
+ 	cwd: string;
+@@ -446,7 +448,7 @@
+ 	let sessionStore: OpenCursorSessionStore | undefined;
+ 	try {
+ 		const registeredBridge = getRegisteredCursorPiToolBridge();
+-		if (registeredBridge) {
++		if (registeredBridge && !params.disablePiToolBridge) {
+ 			bridgeRun = await registeredBridge.createRun({
+ 				onToolRequest: params.onBridgeToolRequest,
+ 				debugRecorder: params.debugRecorder,
+--- a/dist/cursor-session-agent.js
++++ b/dist/cursor-session-agent.js
+@@ -280,7 +280,7 @@
+     let sessionStore;
+     try {
+         const registeredBridge = getRegisteredCursorPiToolBridge();
+-        if (registeredBridge) {
++        if (registeredBridge && !params.disablePiToolBridge) {
+             bridgeRun = await registeredBridge.createRun({
+                 onToolRequest: params.onBridgeToolRequest,
+                 debugRecorder: params.debugRecorder,
+--- a/dist/cursor-provider-turn-prepare.js
++++ b/dist/cursor-provider-turn-prepare.js
+@@ -184,7 +184,9 @@
+         const settingSources = getEffectiveCursorSettingSources();
+         const queuedBridgeRequestsBeforeLiveRun = [];
+         let liveRunForBridgeQueue;
++        const activeToolNames = getActiveContextToolNames(context);
+         const sessionAgentAcquireParams = {
++            disablePiToolBridge: activeToolNames.size === 0,
+             apiKey: resolvedApiKey,
+             agentMode,
+             cwd,
+@@ -254,7 +256,6 @@
+         const sessionBridgeRun = bridgeRun;
+         const promptInputTokens = estimateCursorPromptTokens(prompt, promptOptions);
+         const useNativeToolReplay = isCursorNativeToolDisplayRuntimeEnabled();
+-        const activeToolNames = getActiveContextToolNames(context);
+         sdkEventDebug?.recordProviderMeta({
+             model: {
+                 id: model.id,
+--- a/dist/cursor-context-tools.js
++++ b/dist/cursor-context-tools.js
+@@ -1,4 +1,4 @@
+ /** Tool names from the provider context snapshot at stream start (not live pi.getActiveTools()). */
+ export function getActiveContextToolNames(context) {
+-    return context.tools ? new Set(context.tools.map((tool) => tool.name)) : undefined;
++    return new Set(context.tools?.map((tool) => tool.name) ?? []);
+ }
