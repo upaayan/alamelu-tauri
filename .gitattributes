@@ -1,2 +1,4 @@
 # Recovery asset hashes must be identical on Windows and Mac checkouts.
 /maintenance/pi-cursor-sdk/** text eol=lf
+# Unified diff context has significant leading spaces and blank context lines.
+/maintenance/pi-cursor-sdk/**/*.patch -whitespace
