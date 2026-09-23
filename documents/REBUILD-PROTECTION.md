@@ -1,7 +1,8 @@
 # Preserve the Alamelu Pi fixes when rebuilding or upgrading
 
 Canonical checklist for Mac and native Windows + WSL. Last verified release:
-2026-09-14, Pi 0.85.1. The app uses external Pi; rebuilding Tauri does not preserve
+Mac 2026-09-23, Pi 0.87.1 + pi-cursor-sdk 0.3.10. Windows/WSL is **pending**: still
+Pi 0.85.1 + adapter 0.3.6; its upgrade was deferred by the owner on 2026-09-23. The app uses external Pi; rebuilding Tauri does not preserve
 or repair an npm-installed extension. Keep this document, the maintenance assets,
 and the app source fixes in the same Git checkout used by GitHub Actions.
 
@@ -12,8 +13,8 @@ and the app source fixes in the same Git checkout used by GitHub Actions.
 | Tauri/backend rebuild from older source | Fresh Pi `get_messages` supplies model-switch size; no JSONL archive-size fallback | `pnpm run verify:upgrade` |
 | Repeated compactions | Count current message content, not archived history, usage metadata or base64 | 19 preflight and 9 RPC tree/compaction regressions in that gate |
 | Losing the composer/driver integration | Await current messages and pass them to the estimator | Integration wiring checks in that gate |
-| `npm install -g` of Pi | For 0.85.1 retain working unbundled `dist/cli.js` launcher | Actual launcher + installed Luna extension RPC check |
-| `pi update` / reinstall of `pi-cursor-sdk` | Omitted/empty tools mean no Pi tool bridge or escaped tool call during summaries | Version-specific patch, hash check, 14 adapter tests and live checks |
+| `npm install -g` of Pi | For 0.85.1 and 0.87.1 retain the unbundled `dist/cli.js` launcher (npm resets it to `dist/bundle/cli.js`) | Actual launcher + installed Luna extension RPC check |
+| `pi update` / reinstall of `pi-cursor-sdk` | Omitted/empty tools mean no Pi tool bridge or escaped tool call during summaries | Version-specific patch, hash check, adapter tests (14 on 0.1.60/0.3.6, 49 on 0.3.10) and live checks |
 | Windows source-only adapter patch | 0.3.6 loads `dist/index.js`; patch all three source AND three compiled files | Manifest loader and all six hashes checked |
 | Installer replacement | Build these fixes from tracked source; preserve external Pi config and platform dependencies | Both-platform release record, installed checks |
 
@@ -55,9 +56,14 @@ Durable files are in `maintenance/pi-cursor-sdk/` (not the ignored
 - `manifest.json`: reviewed before/after hashes and Pi loader entry for each version.
 - `0.1.60/compaction.patch`: Mac's three source changes.
 - `0.3.6/compaction.patch`: WSL's three source and three compiled changes.
-- Each version's `test/`: two compaction test files and their fixture helper.
+- `0.3.10/mac-local-fixes.patch`: the Mac's local fixes ported to 0.3.10 — compaction (omitted/empty
+  tools → no Pi bridge and inactive native replay), stale-auth recovery, model variants/effort mapping —
+  ten source and ten compiled files.
+- Each version's `test/`: two compaction test files and their fixture helper; 0.3.10 also keeps four
+  stale-auth test files and a model-variant test.
 
-Mac 0.1.60 loads `src/index.ts`; WSL 0.3.6 loads `dist/index.js`. Preserve these
+Mac runs 0.3.10 (since 2026-09-23), which loads `dist/index.js`; the earlier Mac 0.1.60 loaded
+`src/index.ts`. WSL 0.3.6 loads `dist/index.js`. Preserve these
 separate versions and their other customizations. Do not copy the whole Mac
 package onto WSL. First inspect `settings.json` → `packages` to identify the
 package Pi actually loads; an editable checkout alone is not the runtime.
@@ -84,7 +90,7 @@ patch -d "$candidate" -p1 -i "$kit/maintenance/pi-cursor-sdk/0.3.6/compaction.pa
 python3 "$kit/scripts/check-cursor-compaction.py" --package "$candidate"
 ```
 
-Use `0.1.60` instead on that version. Execute each step only after the previous
+Use `0.1.60` instead on that version; on 0.3.10 use `0.3.10/mac-local-fixes.patch`. Execute each step only after the previous
 one succeeds. Never use patch fuzz/force to work around a failed baseline check.
 For a new version, review whether upstream fixed the behavior; port only missing
 changes, test its real manifest-loaded runtime, and deliberately update the
@@ -97,11 +103,14 @@ existing Vitest runner:
 ```bash
 cd "$candidate"
 ./node_modules/.bin/vitest run test/cursor-compaction.test.ts test/cursor-compaction-prepare.test.ts
+# 0.3.10 also: test/cursor-live-run-auth-recreate.test.ts test/cursor-provider-auth-recreate.test.ts
+#   test/cursor-provider-run-finalizer-auth-recreate.test.ts test/cursor-provider-turn-runner-auth-recreate.test.ts
+#   test/cursor-model-variants.test.ts
 ```
 
 Install the candidate's own locked development dependencies if its packaged copy
-has no test runner. Do not upgrade dependency versions to obtain one. Both versions
-have 14 focused tests. WSL 0.3.6 needs its own session-store test stub; do not copy
+has no test runner. Do not upgrade dependency versions to obtain one. 0.1.60 and 0.3.6
+have 14 focused tests; 0.3.10 has 49 (16 compaction, 29 stale-auth, 4 model-variant). WSL 0.3.6 needs its own session-store test stub; do not copy
 Mac auth-recreation tests onto it. Tests prove omitted/empty-tool summaries stay
 text-only and normal explicit-tool requests still use the bridge after success,
 failure and cancellation. Preserve the package's existing broader tests too.
@@ -149,6 +158,17 @@ An empty newly created session is a false model-switch proof. The September WSL
 model advertised 256k, so a 33k auto-compaction fixture needed private reserve250000
 and keepRecent1000; assert the event actually happened. Never change production
 compaction settings merely to make the test pass.
+
+## Mac release 2026-09-23 — Pi 0.87.1 + pi-cursor-sdk 0.3.10
+
+Pi 0.86+ passes providers messages-only context, so adapters before 0.3.7 lose Pi's system prompt and
+tool bridge silently. The Mac moved to 0.3.10 with its local fixes ported (above). The installed
+launcher still needs the unbundled `dist/cli.js`; the Luna check, manifest checker, A/B read/system-prompt
+probe, 288-ID Cursor model parity, `compacted-model-switch.spec.ts` and the packaged smoke passed on the
+installed runtime; private manual and automatic Cursor compactions passed on the candidate. Mock and backup
+run stock 0.3.10 on Pi 0.87.1. Plan, audit and evidence: `documents/plan-audit-implementation/`
+`pi087_cursor_0310_upgrade_{plan,audit,implementation}.md` and `documents/release-evidence/pi087-mac-20260923/`.
+Do not move WSL to Pi 0.86+ before its adapter is upgraded.
 
 ## Connection, copies and cleanup
 

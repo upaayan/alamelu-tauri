@@ -1,0 +1,1428 @@
+--- a/src/cursor-context-tools.ts
++++ b/src/cursor-context-tools.ts
+@@ -2,7 +2,8 @@
+ import { resolveCursorPiContext } from "./cursor-pi-context.js";
+ 
+ /** Tool names from the provider context snapshot at stream start (not live pi.getActiveTools()). */
+-export function getActiveContextToolNames(context: Context): ReadonlySet<string> | undefined {
++export function getActiveContextToolNames(context: Context): ReadonlySet<string> {
+ 	const { tools } = resolveCursorPiContext(context);
+-	return tools === undefined ? undefined : new Set(tools.map((tool) => tool.name));
++	// Alamelu Mac local fix (a): omitted tools are an empty set, so tool-less summaries never replay native tools.
++	return new Set(tools?.map((tool) => tool.name) ?? []);
+ }
+--- a/dist/cursor-context-tools.js
++++ b/dist/cursor-context-tools.js
+@@ -2,5 +2,6 @@
+ /** Tool names from the provider context snapshot at stream start (not live pi.getActiveTools()). */
+ export function getActiveContextToolNames(context) {
+     const { tools } = resolveCursorPiContext(context);
+-    return tools === undefined ? undefined : new Set(tools.map((tool) => tool.name));
++    // Alamelu Mac local fix (a): omitted tools are an empty set, so tool-less summaries never replay native tools.
++    return new Set(tools?.map((tool) => tool.name) ?? []);
+ }
+--- a/src/cursor-live-run-coordinator.ts
++++ b/src/cursor-live-run-coordinator.ts
+@@ -57,6 +57,7 @@
+ 	disposed: boolean;
+ 	errorMessage?: string;
+ 	abortMessage?: string;
++	authRecreate?: boolean;
+ 	chainUserInputAfterCompletion: boolean;
+ 	debugRecorder?: CursorSdkEventDebugRecorder;
+ }
+@@ -85,6 +86,7 @@
+ 	markFinished(run: CursorLiveRun, finalText: string): void;
+ 	markCancelled(run: CursorLiveRun, abortMessage?: string): void;
+ 	markError(run: CursorLiveRun, errorMessage: string): void;
++	markAuthRecreate(run: CursorLiveRun): void;
+ 	recordSdkTurnEnded(run: CursorLiveRun, usage?: CursorSdkTurnUsage): void;
+ 	ignoreFutureSdkTurnUsage(run: CursorLiveRun): void;
+ 	hasSdkTurnEnded(run: CursorLiveRun): boolean;
+@@ -344,6 +346,12 @@
+ 			run.done = true;
+ 			notifyProgress(run);
+ 			coordinator.requestIdleDispose(run);
++		},
++
++		markAuthRecreate(run): void {
++			if (run.disposed) return;
++			run.authRecreate = true;
++			notifyProgress(run);
+ 		},
+ 
+ 		recordSdkTurnEnded(run, usage): void {
+@@ -448,7 +456,14 @@
+ 		},
+ 
+ 		isReady(run): boolean {
+-			return run.disposed || run.pendingEvents.length > 0 || run.done || run.cancelled || run.errorMessage !== undefined;
++			return (
++				run.disposed ||
++				run.pendingEvents.length > 0 ||
++				run.done ||
++				run.cancelled ||
++				run.errorMessage !== undefined ||
++				run.authRecreate === true
++			);
+ 		},
+ 
+ 		async waitForProgress(run, signal): Promise<void> {
+--- a/dist/cursor-live-run-coordinator.js
++++ b/dist/cursor-live-run-coordinator.js
+@@ -204,6 +204,12 @@
+             run.done = true;
+             notifyProgress(run);
+             coordinator.requestIdleDispose(run);
++        },
++        markAuthRecreate(run) {
++            if (run.disposed)
++                return;
++            run.authRecreate = true;
++            notifyProgress(run);
+         },
+         recordSdkTurnEnded(run, usage) {
+             if (run.disposed)
+@@ -299,7 +305,12 @@
+             return getUndisposed(pendingRunIdsByScopeKey.get(scopeKey));
+         },
+         isReady(run) {
+-            return run.disposed || run.pendingEvents.length > 0 || run.done || run.cancelled || run.errorMessage !== undefined;
++            return (run.disposed ||
++                run.pendingEvents.length > 0 ||
++                run.done ||
++                run.cancelled ||
++                run.errorMessage !== undefined ||
++                run.authRecreate === true);
+         },
+         async waitForProgress(run, signal) {
+             if (signal?.aborted)
+--- a/src/cursor-provider-errors.ts
++++ b/src/cursor-provider-errors.ts
+@@ -5,16 +5,24 @@
+ 
+ export const MISSING_CURSOR_API_KEY_MESSAGE =
+ 	"Cursor SDK runs require a Cursor SDK API key. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, set CURSOR_API_KEY before starting pi, or restart pi with --api-key.";
+-const GENERIC_CURSOR_SDK_ERROR_MESSAGE =
++export const GENERIC_CURSOR_SDK_ERROR_MESSAGE =
+ 	"Cursor SDK request failed. The Cursor SDK API key may be missing, invalid, or unauthorized. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, verify CURSOR_API_KEY, or pass --api-key, then retry.";
+-const AUTH_CURSOR_SDK_ERROR_MESSAGE =
++export const AUTH_CURSOR_SDK_ERROR_MESSAGE =
+ 	"Cursor SDK request failed because the Cursor SDK API key may be invalid or unauthorized. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, verify CURSOR_API_KEY, or pass --api-key, then retry.";
+ const CLOUD_AUTH_CURSOR_SDK_ERROR_MESSAGE =
+ 	"Cursor Cloud Agents request failed because Cloud API authentication rejected the API key. Use a user API key from Cursor Dashboard -> API Keys or a service account API key from Team settings; Team Admin API keys are not supported as Cursor Cloud Agents credentials. Configure the key with /login -> Use an API key -> Cursor, CURSOR_API_KEY, or --api-key, then retry.";
+ // Keep "Network error" aligned with pi's agent-level retry classifier.
+-const NETWORK_CURSOR_SDK_ERROR_MESSAGE =
++export const NETWORK_CURSOR_SDK_ERROR_MESSAGE =
+ 	"Network error: Cursor SDK request failed during network or service I/O. Check your connection; pi will retry automatically when auto-retry is enabled.";
+ 
++const RETRYABLE_CURSOR_IN_BAND_AUTH_CODES = [
++	"ERROR_NOT_LOGGED_IN",
++	"ERROR_AGENT_REQUIRES_LOGIN",
++	"ERROR_BAD_API_KEY",
++	"ERROR_BAD_USER_API_KEY",
++	"ERROR_INVALID_AUTH_ID",
++] as const;
++
+ // Keep this phrase aligned with pi's agent-level retry classifier (`provider.?returned.?error`).
+ const RETRYABLE_CURSOR_RUN_FAILURE_PREFIX = "Provider returned error: Cursor SDK run failed";
+ 
+@@ -262,6 +270,39 @@
+ 	return classifyCursorConnectError(error)?.kind === "unauthenticated";
+ }
+ 
++function textFromErrorOrMessage(errorOrMessage: unknown): string {
++	if (typeof errorOrMessage === "string") return errorOrMessage;
++	if (errorOrMessage instanceof Error) return errorOrMessage.message;
++	const record = asRecord(errorOrMessage);
++	return getErrorStringField(record, "message") ?? getErrorStringField(record, "rawMessage") ?? "";
++}
++
++function isAbortOrCancelledFailure(errorOrMessage: unknown, message: string): boolean {
++	if (classifyCursorConnectError(errorOrMessage)?.kind === "abort") return true;
++	const normalized = message.trim();
++	if (!normalized) return false;
++	if (/^cancelled:/i.test(normalized)) return true;
++	if (/^(?:aborted|cancelled|canceled)$/i.test(normalized)) return true;
++	return false;
++}
++
++function hasRetryableInBandAuthCode(message: string): boolean {
++	return RETRYABLE_CURSOR_IN_BAND_AUTH_CODES.some((code) => message.includes(code));
++}
++
++export function isRetryableStaleCursorAuthFailure(errorOrMessage: unknown): boolean {
++	const message = textFromErrorOrMessage(errorOrMessage);
++	if (message === MISSING_CURSOR_API_KEY_MESSAGE) return false;
++	if (message === NETWORK_CURSOR_SDK_ERROR_MESSAGE) return false;
++	if (isAbortOrCancelledFailure(errorOrMessage, message)) return false;
++	if (isUnauthenticatedConnectError(errorOrMessage)) return true;
++	if (isLikelyAuthError(message)) return true;
++	if (message === AUTH_CURSOR_SDK_ERROR_MESSAGE) return true;
++	if (message === GENERIC_CURSOR_SDK_ERROR_MESSAGE) return true;
++	if (hasRetryableInBandAuthCode(message)) return true;
++	return false;
++}
++
+ function isLikelyNetworkTimeout(message: string): boolean {
+ 	return (
+ 		/\b(ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENETUNREACH|EAI_AGAIN|NGHTTP2_ENHANCE_YOUR_CALM|ERR_HTTP2_STREAM_ERROR|ERR_HTTP2_SESSION_ERROR)\b/i.test(
+--- a/dist/cursor-provider-errors.js
++++ b/dist/cursor-provider-errors.js
+@@ -1,11 +1,18 @@
+ import { asRecord } from "./cursor-record-utils.js";
+ import { scrubSensitiveText } from "./cursor-sensitive-text.js";
+ export const MISSING_CURSOR_API_KEY_MESSAGE = "Cursor SDK runs require a Cursor SDK API key. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, set CURSOR_API_KEY before starting pi, or restart pi with --api-key.";
+-const GENERIC_CURSOR_SDK_ERROR_MESSAGE = "Cursor SDK request failed. The Cursor SDK API key may be missing, invalid, or unauthorized. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, verify CURSOR_API_KEY, or pass --api-key, then retry.";
+-const AUTH_CURSOR_SDK_ERROR_MESSAGE = "Cursor SDK request failed because the Cursor SDK API key may be invalid or unauthorized. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, verify CURSOR_API_KEY, or pass --api-key, then retry.";
++export const GENERIC_CURSOR_SDK_ERROR_MESSAGE = "Cursor SDK request failed. The Cursor SDK API key may be missing, invalid, or unauthorized. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, verify CURSOR_API_KEY, or pass --api-key, then retry.";
++export const AUTH_CURSOR_SDK_ERROR_MESSAGE = "Cursor SDK request failed because the Cursor SDK API key may be invalid or unauthorized. Cursor Agent CLI/Desktop login is not reused. Run /login -> Use an API key -> Cursor, verify CURSOR_API_KEY, or pass --api-key, then retry.";
+ const CLOUD_AUTH_CURSOR_SDK_ERROR_MESSAGE = "Cursor Cloud Agents request failed because Cloud API authentication rejected the API key. Use a user API key from Cursor Dashboard -> API Keys or a service account API key from Team settings; Team Admin API keys are not supported as Cursor Cloud Agents credentials. Configure the key with /login -> Use an API key -> Cursor, CURSOR_API_KEY, or --api-key, then retry.";
+ // Keep "Network error" aligned with pi's agent-level retry classifier.
+-const NETWORK_CURSOR_SDK_ERROR_MESSAGE = "Network error: Cursor SDK request failed during network or service I/O. Check your connection; pi will retry automatically when auto-retry is enabled.";
++export const NETWORK_CURSOR_SDK_ERROR_MESSAGE = "Network error: Cursor SDK request failed during network or service I/O. Check your connection; pi will retry automatically when auto-retry is enabled.";
++const RETRYABLE_CURSOR_IN_BAND_AUTH_CODES = [
++    "ERROR_NOT_LOGGED_IN",
++    "ERROR_AGENT_REQUIRES_LOGIN",
++    "ERROR_BAD_API_KEY",
++    "ERROR_BAD_USER_API_KEY",
++    "ERROR_INVALID_AUTH_ID",
++];
+ // Keep this phrase aligned with pi's agent-level retry classifier (`provider.?returned.?error`).
+ const RETRYABLE_CURSOR_RUN_FAILURE_PREFIX = "Provider returned error: Cursor SDK run failed";
+ function isGenericErrorMessage(message) {
+@@ -212,7 +219,50 @@
+ }
+ export function isUnauthenticatedConnectError(error) {
+     return classifyCursorConnectError(error)?.kind === "unauthenticated";
++}
++function textFromErrorOrMessage(errorOrMessage) {
++    if (typeof errorOrMessage === "string")
++        return errorOrMessage;
++    if (errorOrMessage instanceof Error)
++        return errorOrMessage.message;
++    const record = asRecord(errorOrMessage);
++    return getErrorStringField(record, "message") ?? getErrorStringField(record, "rawMessage") ?? "";
++}
++function isAbortOrCancelledFailure(errorOrMessage, message) {
++    if (classifyCursorConnectError(errorOrMessage)?.kind === "abort")
++        return true;
++    const normalized = message.trim();
++    if (!normalized)
++        return false;
++    if (/^cancelled:/i.test(normalized))
++        return true;
++    if (/^(?:aborted|cancelled|canceled)$/i.test(normalized))
++        return true;
++    return false;
+ }
++function hasRetryableInBandAuthCode(message) {
++    return RETRYABLE_CURSOR_IN_BAND_AUTH_CODES.some((code) => message.includes(code));
++}
++export function isRetryableStaleCursorAuthFailure(errorOrMessage) {
++    const message = textFromErrorOrMessage(errorOrMessage);
++    if (message === MISSING_CURSOR_API_KEY_MESSAGE)
++        return false;
++    if (message === NETWORK_CURSOR_SDK_ERROR_MESSAGE)
++        return false;
++    if (isAbortOrCancelledFailure(errorOrMessage, message))
++        return false;
++    if (isUnauthenticatedConnectError(errorOrMessage))
++        return true;
++    if (isLikelyAuthError(message))
++        return true;
++    if (message === AUTH_CURSOR_SDK_ERROR_MESSAGE)
++        return true;
++    if (message === GENERIC_CURSOR_SDK_ERROR_MESSAGE)
++        return true;
++    if (hasRetryableInBandAuthCode(message))
++        return true;
++    return false;
++}
+ function isLikelyNetworkTimeout(message) {
+     return (/\b(ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENETUNREACH|EAI_AGAIN|NGHTTP2_ENHANCE_YOUR_CALM|ERR_HTTP2_STREAM_ERROR|ERR_HTTP2_SESSION_ERROR)\b/i.test(message) ||
+         /\bConnectError\b.*\b(unavailable|deadline|timeout|timed out)\b/i.test(message) ||
+--- a/src/cursor-provider-live-run-drain.ts
++++ b/src/cursor-provider-live-run-drain.ts
+@@ -19,15 +19,20 @@
+ 	type CursorNativeToolDisplayItem,
+ } from "./cursor-native-tool-display-state.js";
+ import { type CursorPiBridgeToolRequest } from "./cursor-pi-tool-bridge.js";
+-import { resetSessionCursorAgent } from "./cursor-session-agent.js";
++import { invalidateSessionAgent, resetSessionCursorAgent } from "./cursor-session-agent.js";
+ import { applyCursorUsage } from "./cursor-usage-accounting.js";
+ import { CURSOR_TEXT_MESSAGE_SEPARATOR, CursorPartialContentEmitter } from "./cursor-partial-content-emitter.js";
+ import { emitDisplayOnlyTraceBlock } from "./cursor-display-only-trace.js";
+ import { trimCurrentTurnAlreadyEmittedCursorText } from "./cursor-run-final-text.js";
+-import { formatCursorSdkAbortMessage, resolveCursorSdkAbortCause } from "./cursor-provider-errors.js";
++import {
++	formatCursorSdkAbortMessage,
++	isRetryableStaleCursorAuthFailure,
++	resolveCursorSdkAbortCause,
++} from "./cursor-provider-errors.js";
+ import { formatInactiveCursorReplayTrace } from "./cursor-native-replay-trace.js";
+ import { partitionNativeToolsByActiveContext } from "./cursor-native-replay-routing.js";
+ import type { CursorSdkEventDebugRecorder } from "./cursor-sdk-event-debug.js";
++import type { CursorProviderTurnPrepareResult, CursorProviderTurnSendResult } from "./cursor-provider-turn-types.js";
+ 
+ export const DEFAULT_CURSOR_NATIVE_REPLAY_IDLE_DISPOSE_MS = 5 * 60 * 1000;
+ const CURSOR_NATIVE_REPLAY_TOOL_ID_PATTERN = /^(cursor-replay-\d+-\d+)-tool-\d+$/;
+@@ -39,7 +44,13 @@
+ let cursorNativeReplayIdleDisposeMs = DEFAULT_CURSOR_NATIVE_REPLAY_IDLE_DISPOSE_MS;
+ 
+ type CursorLiveRunDrainMode = "emit" | "chain_user_input";
+-type CursorLiveRunDrainOutcome = "tool_use" | "stop" | "error" | "aborted" | "chain_user_input";
++export type CursorLiveRunDrainOutcome =
++	| "tool_use"
++	| "stop"
++	| "error"
++	| "aborted"
++	| "chain_user_input"
++	| "auth_recreate";
+ type LiveRunPreSendOutcome = "stream_ended" | "continue_send";
+ 
+ let cursorNativeReplayCounter = 0;
+@@ -327,6 +338,11 @@
+ 				return outcome;
+ 			}
+ 
++			if (run.authRecreate) {
++				outcome = "auth_recreate";
++				return outcome;
++			}
++
+ 			while (cursorLiveRuns.peekEvent(run)) {
+ 				const toolUse = await emitCursorLiveRunPendingToolUseTurn(
+ 					turn,
+@@ -463,6 +479,16 @@
+ 					signal,
+ 					debugRecorder: turnDebugRecorder,
+ 				});
++				if (drainOutcome === "auth_recreate") {
++					await cursorLiveRuns.release(run);
++					turnDebugRecorder?.recordDrainEvent("pre_send_iteration", {
++						runId: run.id,
++						drainOutcome,
++						outcome: "continue_send",
++						shouldChainUserInput,
++					});
++					return "continue_send" as const;
++				}
+ 				const mapped = drainOutcome === "chain_user_input" ? "continue_send" : "stream_ended";
+ 				turnDebugRecorder?.recordDrainEvent("pre_send_iteration", {
+ 					runId: run.id,
+@@ -508,3 +534,50 @@
+ }
+ 
+ export { hasTrailingUserMessagesAfterToolResults };
++
++// Alamelu Mac local fix (b): stale-auth recovery helpers. On the Mac 0.1.60 build these lived in
++// cursor-provider-auth-recreate.ts; they are kept here so every patched module exists in stock 0.3.10.
++export function hasEmittedProgress(partial: AssistantMessage, liveRun?: CursorLiveRun): boolean {
++	// Initial pi partials start as stopReason "stop" with empty content. Treat only a
++	// this-turn terminal (error / aborted / toolUse / length) as emitted progress.
++	const stopReasonIndicatesProgress =
++		partial.stopReason !== undefined && partial.stopReason !== "stop";
++	return (
++		stopReasonIndicatesProgress ||
++		(partial.content?.length ?? 0) > 0 ||
++		Boolean(liveRun?.emittedText) ||
++		(liveRun?.recordedToolDisplayIds?.length ?? 0) > 0
++	);
++}
++
++export function shouldAttemptAuthRecreate(params: {
++	local: boolean;
++	retried: boolean;
++	aborted: boolean;
++	errorOrMessage: unknown;
++	partial: AssistantMessage;
++	liveRun?: CursorLiveRun;
++}): boolean {
++	if (!params.local || params.retried || params.aborted) return false;
++	if (hasEmittedProgress(params.partial, params.liveRun)) return false;
++	return isRetryableStaleCursorAuthFailure(params.errorOrMessage);
++}
++
++export async function teardownFailedAuthAttempt(
++	prepared: CursorProviderTurnPrepareResult | undefined,
++	sendResult: CursorProviderTurnSendResult | undefined,
++	scopeKey: string,
++): Promise<void> {
++	prepared?.restoreCursorSdkOutputFilter();
++	const abortRegistration = sendResult?.abortRegistration;
++	if (abortRegistration) {
++		abortRegistration.signal.removeEventListener("abort", abortRegistration.listener);
++	}
++	invalidateSessionAgent(scopeKey, { deadTransport: true });
++	const liveRun = prepared?.runtime.kind === "live" ? prepared.runtime.liveRun : undefined;
++	if (liveRun && !liveRun.disposed) {
++		liveRun.done = true;
++		await cursorLiveRuns.release(liveRun);
++	}
++	await resetSessionCursorAgent(scopeKey);
++}
+--- a/dist/cursor-provider-live-run-drain.js
++++ b/dist/cursor-provider-live-run-drain.js
+@@ -1,12 +1,12 @@
+ import { scheduler } from "node:timers/promises";
+ import { CursorLiveRunAbortError, createCursorLiveRunCoordinator, hasTrailingUserMessagesAfterToolResults, } from "./cursor-live-run-coordinator.js";
+ import { deleteCursorNativeToolDisplay, recordCursorNativeToolDisplay, } from "./cursor-native-tool-display-state.js";
+-import { resetSessionCursorAgent } from "./cursor-session-agent.js";
++import { invalidateSessionAgent, resetSessionCursorAgent } from "./cursor-session-agent.js";
+ import { applyCursorUsage } from "./cursor-usage-accounting.js";
+ import { CURSOR_TEXT_MESSAGE_SEPARATOR, CursorPartialContentEmitter } from "./cursor-partial-content-emitter.js";
+ import { emitDisplayOnlyTraceBlock } from "./cursor-display-only-trace.js";
+ import { trimCurrentTurnAlreadyEmittedCursorText } from "./cursor-run-final-text.js";
+-import { formatCursorSdkAbortMessage, resolveCursorSdkAbortCause } from "./cursor-provider-errors.js";
++import { formatCursorSdkAbortMessage, isRetryableStaleCursorAuthFailure, resolveCursorSdkAbortCause, } from "./cursor-provider-errors.js";
+ import { formatInactiveCursorReplayTrace } from "./cursor-native-replay-trace.js";
+ import { partitionNativeToolsByActiveContext } from "./cursor-native-replay-routing.js";
+ export const DEFAULT_CURSOR_NATIVE_REPLAY_IDLE_DISPOSE_MS = 5 * 60 * 1000;
+@@ -250,6 +250,10 @@
+             if (options.mode === "chain_user_input" && cursorLiveRuns.isReady(run)) {
+                 await cursorLiveRuns.release(run);
+                 outcome = "chain_user_input";
++                return outcome;
++            }
++            if (run.authRecreate) {
++                outcome = "auth_recreate";
+                 return outcome;
+             }
+             while (cursorLiveRuns.peekEvent(run)) {
+@@ -376,6 +380,16 @@
+                     signal,
+                     debugRecorder: turnDebugRecorder,
+                 });
++                if (drainOutcome === "auth_recreate") {
++                    await cursorLiveRuns.release(run);
++                    turnDebugRecorder?.recordDrainEvent("pre_send_iteration", {
++                        runId: run.id,
++                        drainOutcome,
++                        outcome: "continue_send",
++                        shouldChainUserInput,
++                    });
++                    return "continue_send";
++                }
+                 const mapped = drainOutcome === "chain_user_input" ? "continue_send" : "stream_ended";
+                 turnDebugRecorder?.recordDrainEvent("pre_send_iteration", {
+                     runId: run.id,
+@@ -421,3 +435,35 @@
+     }
+ }
+ export { hasTrailingUserMessagesAfterToolResults };
++// Alamelu Mac local fix (b): stale-auth recovery helpers. On the Mac 0.1.60 build these lived in
++// cursor-provider-auth-recreate.ts; they are kept here so every patched module exists in stock 0.3.10.
++export function hasEmittedProgress(partial, liveRun) {
++    // Initial pi partials start as stopReason "stop" with empty content. Treat only a
++    // this-turn terminal (error / aborted / toolUse / length) as emitted progress.
++    const stopReasonIndicatesProgress = partial.stopReason !== undefined && partial.stopReason !== "stop";
++    return (stopReasonIndicatesProgress ||
++        (partial.content?.length ?? 0) > 0 ||
++        Boolean(liveRun?.emittedText) ||
++        (liveRun?.recordedToolDisplayIds?.length ?? 0) > 0);
++}
++export function shouldAttemptAuthRecreate(params) {
++    if (!params.local || params.retried || params.aborted)
++        return false;
++    if (hasEmittedProgress(params.partial, params.liveRun))
++        return false;
++    return isRetryableStaleCursorAuthFailure(params.errorOrMessage);
++}
++export async function teardownFailedAuthAttempt(prepared, sendResult, scopeKey) {
++    prepared?.restoreCursorSdkOutputFilter();
++    const abortRegistration = sendResult?.abortRegistration;
++    if (abortRegistration) {
++        abortRegistration.signal.removeEventListener("abort", abortRegistration.listener);
++    }
++    invalidateSessionAgent(scopeKey, { deadTransport: true });
++    const liveRun = prepared?.runtime.kind === "live" ? prepared.runtime.liveRun : undefined;
++    if (liveRun && !liveRun.disposed) {
++        liveRun.done = true;
++        await cursorLiveRuns.release(liveRun);
++    }
++    await resetSessionCursorAgent(scopeKey);
++}
+--- a/src/cursor-provider-run-finalizer.ts
++++ b/src/cursor-provider-run-finalizer.ts
+@@ -7,6 +7,7 @@
+ } from "./cursor-provider-run-outcome.js";
+ import {
+ 	formatCursorSdkAbortMessage,
++	isRetryableStaleCursorAuthFailure,
+ 	resolveCursorSdkAbortCause,
+ 	sanitizeCursorProviderError,
+ } from "./cursor-provider-errors.js";
+@@ -43,6 +44,7 @@
+ 	outcome: CursorRunOutcome,
+ 	prepared: LocalCursorProviderTurnPrepareResult & { runtime: LiveCursorProviderTurnRuntime },
+ 	context: CursorProviderTurnRunnerParams["context"],
++	recreate: { allowAuthRecreate: boolean; hasEmittedProgress: () => boolean },
+ ): void {
+ 	if (prepared.runtime.liveRun.disposed) return;
+ 	const { liveRun } = prepared.runtime;
+@@ -55,9 +57,19 @@
+ 		case "cancelled":
+ 			cursorLiveRuns.markCancelled(liveRun, getCursorRunAbortMessage(outcome));
+ 			break;
+-		case "failed":
+-			cursorLiveRuns.markError(liveRun, outcome.kind === "error" ? outcome.errorMessage : "Cursor SDK run failed.");
++		case "failed": {
++			const errorMessage = outcome.kind === "error" ? outcome.errorMessage : "Cursor SDK run failed.";
++			if (
++				recreate.allowAuthRecreate &&
++				!recreate.hasEmittedProgress() &&
++				isRetryableStaleCursorAuthFailure(errorMessage)
++			) {
++				cursorLiveRuns.markAuthRecreate(liveRun);
++				break;
++			}
++			cursorLiveRuns.markError(liveRun, errorMessage);
+ 			break;
++		}
+ 	}
+ }
+ 
+@@ -79,6 +91,8 @@
+ 	prepared: LocalCursorProviderTurnPrepareResult & { runtime: LiveCursorProviderTurnRuntime };
+ 	modelId: string;
+ 	discardIncompleteTools: (outcome: IncompleteCursorToolRunOutcomeInput) => void;
++	allowAuthRecreate?: boolean;
++	hasEmittedProgress: () => boolean;
+ }
+ 
+ export class CursorRunFinalizer {
+@@ -90,6 +104,7 @@
+ 		const { runnerParams } = this.params;
+ 		const sdkEventDebug = this.params.sdkEventDebug();
+ 		const { send, prepared, modelId, discardIncompleteTools } = startParams;
++		const allowAuthRecreate = startParams.allowAuthRecreate === true;
+ 		const { run, cursorAgentMessageOffset } = send;
+ 		const { liveRun } = prepared.runtime;
+ 		const waitCompletion = awaitFinalizeCursorRunOutcome({
+@@ -107,15 +122,26 @@
+ 			contextWindowAgentId: liveRun.agent.agentId,
+ 		})
+ 			.then(async (finalized) => {
+-				applyLiveRunOutcome(finalized.outcome, prepared, runnerParams.context);
++				applyLiveRunOutcome(finalized.outcome, prepared, runnerParams.context, {
++					allowAuthRecreate,
++					hasEmittedProgress: startParams.hasEmittedProgress,
++				});
+ 			})
+ 			.catch((error: unknown) => {
+ 				this.safeCleanup(() => discardIncompleteTools({ status: "error" }));
+ 				if (!liveRun.disposed) {
+-					cursorLiveRuns.markError(
+-						liveRun,
+-						sanitizeCursorProviderError(error, this.params.resolvedApiKey() ?? runnerParams.options?.apiKey, "local"),
+-					);
++					const allowRecreate =
++						allowAuthRecreate &&
++						!startParams.hasEmittedProgress() &&
++						isRetryableStaleCursorAuthFailure(error);
++					if (allowRecreate) {
++						cursorLiveRuns.markAuthRecreate(liveRun);
++					} else {
++						cursorLiveRuns.markError(
++							liveRun,
++							sanitizeCursorProviderError(error, this.params.resolvedApiKey() ?? runnerParams.options?.apiKey, "local"),
++						);
++					}
+ 				}
+ 				this.safeCleanup(() => sdkEventDebug?.recordWaitResult({ status: "error", error: String(error) }));
+ 				this.safeCleanup(() => sdkEventDebug?.recordError("run_wait", error));
+--- a/dist/cursor-provider-run-finalizer.js
++++ b/dist/cursor-provider-run-finalizer.js
+@@ -1,13 +1,13 @@
+ import { cursorLiveRuns } from "./cursor-provider-live-run-drain.js";
+ import { classifyCursorRunEmission, getCursorRunAbortMessage, } from "./cursor-provider-run-outcome.js";
+-import { formatCursorSdkAbortMessage, resolveCursorSdkAbortCause, sanitizeCursorProviderError, } from "./cursor-provider-errors.js";
++import { formatCursorSdkAbortMessage, isRetryableStaleCursorAuthFailure, resolveCursorSdkAbortCause, sanitizeCursorProviderError, } from "./cursor-provider-errors.js";
+ import { CursorLiveRunAbortError } from "./cursor-live-run-coordinator.js";
+ import { buildIncompleteCursorToolRunOutcome, } from "./cursor-incomplete-tool-visibility.js";
+ import { awaitFinalizeCursorRunOutcome } from "./cursor-provider-turn-finalize.js";
+ import { applyCursorUsage } from "./cursor-usage-accounting.js";
+ import { hasUsableText } from "./cursor-record-utils.js";
+ import { emitDisplayOnlyTraceBlock } from "./cursor-display-only-trace.js";
+-function applyLiveRunOutcome(outcome, prepared, context) {
++function applyLiveRunOutcome(outcome, prepared, context, recreate) {
+     if (prepared.runtime.liveRun.disposed)
+         return;
+     const { liveRun } = prepared.runtime;
+@@ -21,9 +21,17 @@
+         case "cancelled":
+             cursorLiveRuns.markCancelled(liveRun, getCursorRunAbortMessage(outcome));
+             break;
+-        case "failed":
+-            cursorLiveRuns.markError(liveRun, outcome.kind === "error" ? outcome.errorMessage : "Cursor SDK run failed.");
++        case "failed": {
++            const errorMessage = outcome.kind === "error" ? outcome.errorMessage : "Cursor SDK run failed.";
++            if (recreate.allowAuthRecreate &&
++                !recreate.hasEmittedProgress() &&
++                isRetryableStaleCursorAuthFailure(errorMessage)) {
++                cursorLiveRuns.markAuthRecreate(liveRun);
++                break;
++            }
++            cursorLiveRuns.markError(liveRun, errorMessage);
+             break;
++        }
+     }
+ }
+ export class CursorRunFinalizer {
+@@ -36,6 +44,7 @@
+         const { runnerParams } = this.params;
+         const sdkEventDebug = this.params.sdkEventDebug();
+         const { send, prepared, modelId, discardIncompleteTools } = startParams;
++        const allowAuthRecreate = startParams.allowAuthRecreate === true;
+         const { run, cursorAgentMessageOffset } = send;
+         const { liveRun } = prepared.runtime;
+         const waitCompletion = awaitFinalizeCursorRunOutcome({
+@@ -53,12 +62,23 @@
+             contextWindowAgentId: liveRun.agent.agentId,
+         })
+             .then(async (finalized) => {
+-            applyLiveRunOutcome(finalized.outcome, prepared, runnerParams.context);
++            applyLiveRunOutcome(finalized.outcome, prepared, runnerParams.context, {
++                allowAuthRecreate,
++                hasEmittedProgress: startParams.hasEmittedProgress,
++            });
+         })
+             .catch((error) => {
+             this.safeCleanup(() => discardIncompleteTools({ status: "error" }));
+             if (!liveRun.disposed) {
+-                cursorLiveRuns.markError(liveRun, sanitizeCursorProviderError(error, this.params.resolvedApiKey() ?? runnerParams.options?.apiKey, "local"));
++                const allowRecreate = allowAuthRecreate &&
++                    !startParams.hasEmittedProgress() &&
++                    isRetryableStaleCursorAuthFailure(error);
++                if (allowRecreate) {
++                    cursorLiveRuns.markAuthRecreate(liveRun);
++                }
++                else {
++                    cursorLiveRuns.markError(liveRun, sanitizeCursorProviderError(error, this.params.resolvedApiKey() ?? runnerParams.options?.apiKey, "local"));
++                }
+             }
+             this.safeCleanup(() => sdkEventDebug?.recordWaitResult({ status: "error", error: String(error) }));
+             this.safeCleanup(() => sdkEventDebug?.recordError("run_wait", error));
+--- a/src/cursor-provider-turn-emit.ts
++++ b/src/cursor-provider-turn-emit.ts
+@@ -5,6 +5,7 @@
+ 	drainCursorLiveRunTurn,
+ 	flushPendingCursorLiveRunTraceEventsToStream,
+ 	settleCursorLiveToolBatch,
++	type CursorLiveRunDrainOutcome,
+ } from "./cursor-provider-live-run-drain.js";
+ import {
+ 	buildIncompleteCursorToolRunOutcome,
+@@ -23,7 +24,7 @@
+ 	discardIncompleteTools: (outcome: IncompleteCursorToolRunOutcomeInput) => void;
+ }
+ 
+-export async function emitCursorLiveTurn(emitParams: EmitCursorLiveTurnParams): Promise<void> {
++export async function emitCursorLiveTurn(emitParams: EmitCursorLiveTurnParams): Promise<CursorLiveRunDrainOutcome> {
+ 	const { params, prepared, sdkEventDebug, discardIncompleteTools } = emitParams;
+ 	if (prepared.runtime.kind !== "live") throw new Error("emitCursorLiveTurn requires a live run");
+ 	const { liveRun, turnCoordinator } = prepared.runtime;
+@@ -33,11 +34,11 @@
+ 	// and deferred message boundary together; a new Pi turn still gets a new emitter.
+ 	const emitter = new CursorPartialContentEmitter(params.stream, params.partial, -1, true);
+ 	try {
+-		await cursorLiveRuns.withRunLease(liveRun, options?.signal, async () => {
++		return await cursorLiveRuns.withRunLease(liveRun, options?.signal, async () => {
+ 			await cursorLiveRuns.waitForProgress(liveRun, options?.signal);
+ 			await settleCursorLiveToolBatch(liveRun);
+ 			turnCoordinator.closeTraceBlock();
+-			await drainCursorLiveRunTurn(params.stream, params.partial, model, params.context, liveRun, 0, {
++			return await drainCursorLiveRunTurn(params.stream, params.partial, model, params.context, liveRun, 0, {
+ 				mode: "emit",
+ 				emitter,
+ 				signal: options?.signal,
+--- a/dist/cursor-provider-turn-emit.js
++++ b/dist/cursor-provider-turn-emit.js
+@@ -12,11 +12,11 @@
+     // and deferred message boundary together; a new Pi turn still gets a new emitter.
+     const emitter = new CursorPartialContentEmitter(params.stream, params.partial, -1, true);
+     try {
+-        await cursorLiveRuns.withRunLease(liveRun, options?.signal, async () => {
++        return await cursorLiveRuns.withRunLease(liveRun, options?.signal, async () => {
+             await cursorLiveRuns.waitForProgress(liveRun, options?.signal);
+             await settleCursorLiveToolBatch(liveRun);
+             turnCoordinator.closeTraceBlock();
+-            await drainCursorLiveRunTurn(params.stream, params.partial, model, params.context, liveRun, 0, {
++            return await drainCursorLiveRunTurn(params.stream, params.partial, model, params.context, liveRun, 0, {
+                 mode: "emit",
+                 emitter,
+                 signal: options?.signal,
+--- a/src/cursor-provider-turn-prepare.ts
++++ b/src/cursor-provider-turn-prepare.ts
+@@ -71,6 +71,8 @@
+ 	throwIfAborted: () => void;
+ 	/** Snapshot resolved once by the runner before draining; reused unchanged through prepare. */
+ 	resolvedConfig: CursorResolvedSdkConfig;
++	/** When true, the primary local acquire skips resume on a new create. Default false. */
++	forceCreate?: boolean;
+ }
+ 
+ interface PrepareCursorProviderTurnContext extends PrepareCursorProviderTurnParams {
+@@ -271,7 +273,9 @@
+ 		const queuedBridgeRequestsBeforeLiveRun: CursorPiBridgeToolRequest[] = [];
+ 		let liveRunForBridgeQueue: CursorLiveRun | undefined;
+ 
++		const activeToolNames = getActiveContextToolNames(context);
+ 		const sessionAgentAcquireParams = {
++			disablePiToolBridge: activeToolNames.size === 0,
+ 			apiKey: resolvedApiKey,
+ 			agentMode,
+ 			cwd,
+@@ -291,7 +295,10 @@
+ 			createAgent: (createOptions: Parameters<typeof Agent.create>[0]) =>
+ 				suppressCursorSdkOutput(() => Agent.create(createOptions)),
+ 		};
+-		let sessionAgentLease = await acquireSessionCursorAgent(sessionAgentAcquireParams);
++		let sessionAgentLease = await acquireSessionCursorAgent({
++			...sessionAgentAcquireParams,
++			forceCreate: prepareParams.forceCreate === true,
++		});
+ 		sessionAgentScopeKey = sessionAgentLease.scopeKey;
+ 		throwIfAborted();
+ 
+@@ -342,7 +349,6 @@
+ 		const sessionBridgeRun = bridgeRun;
+ 		const promptInputTokens = estimateCursorPromptTokens(prompt, promptOptions);
+ 		const useNativeToolReplay = isCursorNativeToolDisplayRuntimeEnabled();
+-		const activeToolNames = getActiveContextToolNames(context);
+ 		sdkEventDebug?.recordProviderMeta({
+ 			model: {
+ 				id: model.id,
+--- a/dist/cursor-provider-turn-prepare.js
++++ b/dist/cursor-provider-turn-prepare.js
+@@ -189,7 +189,9 @@
+         const settingSources = getEffectiveCursorSettingSources();
+         const queuedBridgeRequestsBeforeLiveRun = [];
+         let liveRunForBridgeQueue;
++        const activeToolNames = getActiveContextToolNames(context);
+         const sessionAgentAcquireParams = {
++            disablePiToolBridge: activeToolNames.size === 0,
+             apiKey: resolvedApiKey,
+             agentMode,
+             cwd,
+@@ -209,7 +211,10 @@
+             },
+             createAgent: (createOptions) => suppressCursorSdkOutput(() => Agent.create(createOptions)),
+         };
+-        let sessionAgentLease = await acquireSessionCursorAgent(sessionAgentAcquireParams);
++        let sessionAgentLease = await acquireSessionCursorAgent({
++            ...sessionAgentAcquireParams,
++            forceCreate: prepareParams.forceCreate === true,
++        });
+         sessionAgentScopeKey = sessionAgentLease.scopeKey;
+         throwIfAborted();
+         let bridgeToolNames = new Set(sessionAgentLease.bridgeRun?.snapshot.tools.map((tool) => tool.mcpToolName) ?? []);
+@@ -259,7 +264,6 @@
+         const sessionBridgeRun = bridgeRun;
+         const promptInputTokens = estimateCursorPromptTokens(prompt, promptOptions);
+         const useNativeToolReplay = isCursorNativeToolDisplayRuntimeEnabled();
+-        const activeToolNames = getActiveContextToolNames(context);
+         sdkEventDebug?.recordProviderMeta({
+             model: {
+                 id: model.id,
+--- a/src/cursor-provider-turn-runner.ts
++++ b/src/cursor-provider-turn-runner.ts
+@@ -1,5 +1,10 @@
+ import { CursorLiveRunAbortError } from "./cursor-live-run-coordinator.js";
+-import { drainExistingCursorLiveRunBeforeSend } from "./cursor-provider-live-run-drain.js";
++import {
++	drainExistingCursorLiveRunBeforeSend,
++	hasEmittedProgress,
++	shouldAttemptAuthRecreate,
++	teardownFailedAuthAttempt,
++} from "./cursor-provider-live-run-drain.js";
+ import { invalidateSessionAgent } from "./cursor-session-agent.js";
+ import { getCursorSessionCwd, getCursorSessionScopeKey } from "./cursor-session-scope.js";
+ import { installCursorSdkProcessErrorGuard } from "./cursor-sdk-process-error-guard.js";
+@@ -36,6 +41,11 @@
+ 	return prepared as LocalLivePreparedTurn;
+ }
+ 
++function localScopeKey(prepared: CursorProviderTurnPrepareResult | undefined): string {
++	if (prepared?.runtimeTarget === "local") return prepared.sessionAgentScopeKey;
++	return getCursorSessionScopeKey();
++}
++
+ export class CursorProviderTurnRunner {
+ 	private sdkEventDebug: CursorSdkEventDebugSink | undefined;
+ 	private resolvedApiKey: string | undefined;
+@@ -51,11 +61,16 @@
+ 		if (this.options?.signal?.aborted) throw new CursorLiveRunAbortError();
+ 	}
+ 
++	private isAborted(error?: unknown): boolean {
++		return this.options?.signal?.aborted === true || error instanceof CursorLiveRunAbortError;
++	}
++
+ 	async run(sdkProcessErrorGuard: ReturnType<typeof installCursorSdkProcessErrorGuard>): Promise<void> {
+ 		const { stream, partial, model, context, options, sdkEventDebugRef } = this.params;
+ 		let prepared: CursorProviderTurnPrepareResult | undefined;
+ 		let sendResult: CursorProviderTurnSendResult | undefined;
+ 		let liveCompletion: CursorLiveRunCompletion | undefined;
++		let retried = false;
+ 		const runFinalizer = new CursorRunFinalizer({
+ 			runnerParams: this.params,
+ 			sdkEventDebug: () => this.sdkEventDebug,
+@@ -78,14 +93,15 @@
+ 			// prepare dispatch below always act on the same config snapshot.
+ 			const resolvedConfig = resolveCursorProviderTurnConfig(cwd);
+ 			this.runtimeTarget = resolvedConfig.runtime.value;
+-			if (resolvedConfig.runtime.value === "local") {
++			const isLocal = resolvedConfig.runtime.value === "local";
++			if (isLocal) {
+ 				// The observed local-executor closed-pipe EPIPE is contained only from this
+ 				// turn's pre-send live-run drain through run completion; for live runs the
+ 				// finalizer holds the guard until run.wait() settles. A hit marks
+ 				// this scope's pooled agent transport dead so the next acquire recreates it.
+-				const localScopeKey = getCursorSessionScopeKey();
++				const preSendScopeKey = getCursorSessionScopeKey();
+ 				sdkProcessErrorGuard.containLocalTransportClosedPipe(() =>
+-					invalidateSessionAgent(localScopeKey, { deadTransport: true }),
++					invalidateSessionAgent(preSendScopeKey, { deadTransport: true }),
+ 				);
+ 				if (
+ 					(await drainExistingCursorLiveRunBeforeSend(stream, partial, model, context, options?.signal, this.sdkEventDebug)) ===
+@@ -97,63 +113,164 @@
+ 			this.throwIfAborted();
+ 
+ 			this.resolvedApiKey = requireCursorApiKey(options);
+-			prepared = await prepareCursorProviderTurn({
+-				params: this.params,
+-				cwd,
+-				resolvedApiKey: this.resolvedApiKey,
+-				sdkEventDebug: this.sdkEventDebug,
+-				throwIfAborted: () => this.throwIfAborted(),
+-				resolvedConfig,
+-			});
+ 
+-			sendResult = await sendCursorProviderTurn({
+-				params: this.params,
+-				prepared,
+-				sdkEventDebug: this.sdkEventDebug,
+-				sdkProcessErrorGuard,
+-				throwIfAborted: () => this.throwIfAborted(),
+-				resolvedApiKey: this.resolvedApiKey,
+-			});
+-			const { send } = sendResult;
+-
+-			if (prepared.runtime.kind === "live") {
+-				const livePrepared = requireLocalLivePreparedTurn(prepared);
+-				liveCompletion = runFinalizer.startLiveRunCompletion({
+-					send,
+-					prepared: livePrepared,
+-					modelId: model.id,
+-					discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++			if (!isLocal) {
++				prepared = await prepareCursorProviderTurn({
++					params: this.params,
++					cwd,
++					resolvedApiKey: this.resolvedApiKey,
++					sdkEventDebug: this.sdkEventDebug,
++					throwIfAborted: () => this.throwIfAborted(),
++					resolvedConfig,
+ 				});
+-				await emitCursorLiveTurn({
++
++				sendResult = await sendCursorProviderTurn({
+ 					params: this.params,
+-					prepared: livePrepared,
++					prepared,
+ 					sdkEventDebug: this.sdkEventDebug,
+-					discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++					sdkProcessErrorGuard,
++					throwIfAborted: () => this.throwIfAborted(),
++					resolvedApiKey: this.resolvedApiKey,
+ 				});
++				const { send } = sendResult;
++				const outcomePromise = awaitFinalizeCursorRunOutcome({
++					run: send.run,
++					prepared,
++					cursorAgentMessageOffset: send.cursorAgentMessageOffset,
++					modelId: model.id,
++					signal: options?.signal,
++					runResultFallback: send.run.result,
++					runErrorFallback: send.run.error,
++					resolvedApiKey: this.resolvedApiKey,
++					optionsApiKey: options?.apiKey,
++					sdkEventDebug: this.sdkEventDebug,
++					contextWindowAgentId: prepared.contextWindowAgentId,
++				});
++				prepared.lifecycle.trackRunCompletion(outcomePromise);
++				const finalized = await outcomePromise;
++				await runFinalizer.applyTerminalEvent({
++					kind: "direct",
++					prepared,
++					outcome: finalized.outcome,
++					displayOnlyTraceBlock: finalized.displayOnlyTraceBlock,
++				});
+ 				return;
+ 			}
+ 
+-			const outcomePromise = awaitFinalizeCursorRunOutcome({
+-				run: send.run,
+-				prepared,
+-				cursorAgentMessageOffset: send.cursorAgentMessageOffset,
+-				modelId: model.id,
+-				signal: options?.signal,
+-				runResultFallback: send.run.result,
+-				runErrorFallback: send.run.error,
+-				resolvedApiKey: this.resolvedApiKey,
+-				optionsApiKey: options?.apiKey,
+-				sdkEventDebug: this.sdkEventDebug,
+-				contextWindowAgentId: prepared.contextWindowAgentId,
+-			});
+-			prepared.lifecycle.trackRunCompletion(outcomePromise);
+-			const finalized = await outcomePromise;
+-			await runFinalizer.applyTerminalEvent({
+-				kind: "direct",
+-				prepared,
+-				outcome: finalized.outcome,
+-				displayOnlyTraceBlock: finalized.displayOnlyTraceBlock,
+-			});
++			while (true) {
++				try {
++					prepared = await prepareCursorProviderTurn({
++						params: this.params,
++						cwd,
++						resolvedApiKey: this.resolvedApiKey,
++						sdkEventDebug: this.sdkEventDebug,
++						throwIfAborted: () => this.throwIfAborted(),
++						resolvedConfig,
++						forceCreate: retried,
++					});
++
++					sendResult = await sendCursorProviderTurn({
++						params: this.params,
++						prepared,
++						sdkEventDebug: this.sdkEventDebug,
++						sdkProcessErrorGuard,
++						throwIfAborted: () => this.throwIfAborted(),
++						resolvedApiKey: this.resolvedApiKey,
++					});
++					const { send } = sendResult;
++
++					if (prepared.runtime.kind === "live") {
++						const livePrepared = requireLocalLivePreparedTurn(prepared);
++						liveCompletion = runFinalizer.startLiveRunCompletion({
++							send,
++							prepared: livePrepared,
++							modelId: model.id,
++							discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++							allowAuthRecreate: !retried,
++							hasEmittedProgress: () => hasEmittedProgress(partial, livePrepared.runtime.liveRun),
++						});
++						const drainOutcome = await emitCursorLiveTurn({
++							params: this.params,
++							prepared: livePrepared,
++							sdkEventDebug: this.sdkEventDebug,
++							discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++						});
++						if (drainOutcome === "auth_recreate" && !retried && !this.isAborted()) {
++							await teardownFailedAuthAttempt(prepared, sendResult, livePrepared.sessionAgentScopeKey);
++							retried = true;
++							prepared = undefined;
++							sendResult = undefined;
++							liveCompletion = undefined;
++							continue;
++						}
++						if (drainOutcome === "auth_recreate") {
++							this.throwIfAborted();
++						}
++						return;
++					}
++
++					const outcomePromise = awaitFinalizeCursorRunOutcome({
++						run: send.run,
++						prepared,
++						cursorAgentMessageOffset: send.cursorAgentMessageOffset,
++						modelId: model.id,
++						signal: options?.signal,
++						runResultFallback: send.run.result,
++						runErrorFallback: send.run.error,
++						resolvedApiKey: this.resolvedApiKey,
++						optionsApiKey: options?.apiKey,
++						sdkEventDebug: this.sdkEventDebug,
++						contextWindowAgentId: prepared.contextWindowAgentId,
++					});
++					prepared.lifecycle.trackRunCompletion(outcomePromise);
++					const finalized = await outcomePromise;
++					if (
++						finalized.outcome.kind === "error" &&
++						shouldAttemptAuthRecreate({
++							local: true,
++							retried,
++							aborted: this.isAborted(),
++							errorOrMessage: finalized.outcome.errorMessage,
++							partial,
++						})
++					) {
++						await teardownFailedAuthAttempt(prepared, sendResult, localScopeKey(prepared));
++						retried = true;
++						prepared = undefined;
++						sendResult = undefined;
++						liveCompletion = undefined;
++						continue;
++					}
++					await runFinalizer.applyTerminalEvent({
++						kind: "direct",
++						prepared,
++						outcome: finalized.outcome,
++						displayOnlyTraceBlock: finalized.displayOnlyTraceBlock,
++					});
++					return;
++				} catch (error) {
++					const liveRun = prepared?.runtime.kind === "live" ? prepared.runtime.liveRun : undefined;
++					if (
++						shouldAttemptAuthRecreate({
++							local: true,
++							retried,
++							aborted: this.isAborted(error),
++							errorOrMessage: error,
++							partial,
++							liveRun,
++						})
++					) {
++						await teardownFailedAuthAttempt(prepared, sendResult, localScopeKey(prepared));
++						retried = true;
++						prepared = undefined;
++						sendResult = undefined;
++						liveCompletion = undefined;
++						continue;
++					}
++					await runFinalizer.applyTerminalEvent({ kind: "error", prepared, error });
++					return;
++				}
++			}
+ 		} catch (error) {
+ 			await runFinalizer.applyTerminalEvent({ kind: "error", prepared, error });
+ 		} finally {
+--- a/dist/cursor-provider-turn-runner.js
++++ b/dist/cursor-provider-turn-runner.js
+@@ -1,5 +1,5 @@
+ import { CursorLiveRunAbortError } from "./cursor-live-run-coordinator.js";
+-import { drainExistingCursorLiveRunBeforeSend } from "./cursor-provider-live-run-drain.js";
++import { drainExistingCursorLiveRunBeforeSend, hasEmittedProgress, shouldAttemptAuthRecreate, teardownFailedAuthAttempt, } from "./cursor-provider-live-run-drain.js";
+ import { invalidateSessionAgent } from "./cursor-session-agent.js";
+ import { getCursorSessionCwd, getCursorSessionScopeKey } from "./cursor-session-scope.js";
+ import { installCursorSdkProcessErrorGuard } from "./cursor-sdk-process-error-guard.js";
+@@ -15,6 +15,11 @@
+     }
+     return prepared;
+ }
++function localScopeKey(prepared) {
++    if (prepared?.runtimeTarget === "local")
++        return prepared.sessionAgentScopeKey;
++    return getCursorSessionScopeKey();
++}
+ export class CursorProviderTurnRunner {
+     params;
+     sdkEventDebug;
+@@ -30,11 +35,15 @@
+         if (this.options?.signal?.aborted)
+             throw new CursorLiveRunAbortError();
+     }
++    isAborted(error) {
++        return this.options?.signal?.aborted === true || error instanceof CursorLiveRunAbortError;
++    }
+     async run(sdkProcessErrorGuard) {
+         const { stream, partial, model, context, options, sdkEventDebugRef } = this.params;
+         let prepared;
+         let sendResult;
+         let liveCompletion;
++        let retried = false;
+         const runFinalizer = new CursorRunFinalizer({
+             runnerParams: this.params,
+             sdkEventDebug: () => this.sdkEventDebug,
+@@ -56,13 +65,14 @@
+             // prepare dispatch below always act on the same config snapshot.
+             const resolvedConfig = resolveCursorProviderTurnConfig(cwd);
+             this.runtimeTarget = resolvedConfig.runtime.value;
+-            if (resolvedConfig.runtime.value === "local") {
++            const isLocal = resolvedConfig.runtime.value === "local";
++            if (isLocal) {
+                 // The observed local-executor closed-pipe EPIPE is contained only from this
+                 // turn's pre-send live-run drain through run completion; for live runs the
+                 // finalizer holds the guard until run.wait() settles. A hit marks
+                 // this scope's pooled agent transport dead so the next acquire recreates it.
+-                const localScopeKey = getCursorSessionScopeKey();
+-                sdkProcessErrorGuard.containLocalTransportClosedPipe(() => invalidateSessionAgent(localScopeKey, { deadTransport: true }));
++                const preSendScopeKey = getCursorSessionScopeKey();
++                sdkProcessErrorGuard.containLocalTransportClosedPipe(() => invalidateSessionAgent(preSendScopeKey, { deadTransport: true }));
+                 if ((await drainExistingCursorLiveRunBeforeSend(stream, partial, model, context, options?.signal, this.sdkEventDebug)) ===
+                     "stream_ended") {
+                     return;
+@@ -70,60 +80,155 @@
+             }
+             this.throwIfAborted();
+             this.resolvedApiKey = requireCursorApiKey(options);
+-            prepared = await prepareCursorProviderTurn({
+-                params: this.params,
+-                cwd,
+-                resolvedApiKey: this.resolvedApiKey,
+-                sdkEventDebug: this.sdkEventDebug,
+-                throwIfAborted: () => this.throwIfAborted(),
+-                resolvedConfig,
+-            });
+-            sendResult = await sendCursorProviderTurn({
+-                params: this.params,
+-                prepared,
+-                sdkEventDebug: this.sdkEventDebug,
+-                sdkProcessErrorGuard,
+-                throwIfAborted: () => this.throwIfAborted(),
+-                resolvedApiKey: this.resolvedApiKey,
+-            });
+-            const { send } = sendResult;
+-            if (prepared.runtime.kind === "live") {
+-                const livePrepared = requireLocalLivePreparedTurn(prepared);
+-                liveCompletion = runFinalizer.startLiveRunCompletion({
+-                    send,
+-                    prepared: livePrepared,
+-                    modelId: model.id,
+-                    discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++            if (!isLocal) {
++                prepared = await prepareCursorProviderTurn({
++                    params: this.params,
++                    cwd,
++                    resolvedApiKey: this.resolvedApiKey,
++                    sdkEventDebug: this.sdkEventDebug,
++                    throwIfAborted: () => this.throwIfAborted(),
++                    resolvedConfig,
+                 });
+-                await emitCursorLiveTurn({
++                sendResult = await sendCursorProviderTurn({
+                     params: this.params,
+-                    prepared: livePrepared,
++                    prepared,
+                     sdkEventDebug: this.sdkEventDebug,
+-                    discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++                    sdkProcessErrorGuard,
++                    throwIfAborted: () => this.throwIfAborted(),
++                    resolvedApiKey: this.resolvedApiKey,
+                 });
++                const { send } = sendResult;
++                const outcomePromise = awaitFinalizeCursorRunOutcome({
++                    run: send.run,
++                    prepared,
++                    cursorAgentMessageOffset: send.cursorAgentMessageOffset,
++                    modelId: model.id,
++                    signal: options?.signal,
++                    runResultFallback: send.run.result,
++                    runErrorFallback: send.run.error,
++                    resolvedApiKey: this.resolvedApiKey,
++                    optionsApiKey: options?.apiKey,
++                    sdkEventDebug: this.sdkEventDebug,
++                    contextWindowAgentId: prepared.contextWindowAgentId,
++                });
++                prepared.lifecycle.trackRunCompletion(outcomePromise);
++                const finalized = await outcomePromise;
++                await runFinalizer.applyTerminalEvent({
++                    kind: "direct",
++                    prepared,
++                    outcome: finalized.outcome,
++                    displayOnlyTraceBlock: finalized.displayOnlyTraceBlock,
++                });
+                 return;
+             }
+-            const outcomePromise = awaitFinalizeCursorRunOutcome({
+-                run: send.run,
+-                prepared,
+-                cursorAgentMessageOffset: send.cursorAgentMessageOffset,
+-                modelId: model.id,
+-                signal: options?.signal,
+-                runResultFallback: send.run.result,
+-                runErrorFallback: send.run.error,
+-                resolvedApiKey: this.resolvedApiKey,
+-                optionsApiKey: options?.apiKey,
+-                sdkEventDebug: this.sdkEventDebug,
+-                contextWindowAgentId: prepared.contextWindowAgentId,
+-            });
+-            prepared.lifecycle.trackRunCompletion(outcomePromise);
+-            const finalized = await outcomePromise;
+-            await runFinalizer.applyTerminalEvent({
+-                kind: "direct",
+-                prepared,
+-                outcome: finalized.outcome,
+-                displayOnlyTraceBlock: finalized.displayOnlyTraceBlock,
+-            });
++            while (true) {
++                try {
++                    prepared = await prepareCursorProviderTurn({
++                        params: this.params,
++                        cwd,
++                        resolvedApiKey: this.resolvedApiKey,
++                        sdkEventDebug: this.sdkEventDebug,
++                        throwIfAborted: () => this.throwIfAborted(),
++                        resolvedConfig,
++                        forceCreate: retried,
++                    });
++                    sendResult = await sendCursorProviderTurn({
++                        params: this.params,
++                        prepared,
++                        sdkEventDebug: this.sdkEventDebug,
++                        sdkProcessErrorGuard,
++                        throwIfAborted: () => this.throwIfAborted(),
++                        resolvedApiKey: this.resolvedApiKey,
++                    });
++                    const { send } = sendResult;
++                    if (prepared.runtime.kind === "live") {
++                        const livePrepared = requireLocalLivePreparedTurn(prepared);
++                        liveCompletion = runFinalizer.startLiveRunCompletion({
++                            send,
++                            prepared: livePrepared,
++                            modelId: model.id,
++                            discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++                            allowAuthRecreate: !retried,
++                            hasEmittedProgress: () => hasEmittedProgress(partial, livePrepared.runtime.liveRun),
++                        });
++                        const drainOutcome = await emitCursorLiveTurn({
++                            params: this.params,
++                            prepared: livePrepared,
++                            sdkEventDebug: this.sdkEventDebug,
++                            discardIncompleteTools: (outcome) => discardIncompleteToolsFromPrepared(livePrepared, outcome),
++                        });
++                        if (drainOutcome === "auth_recreate" && !retried && !this.isAborted()) {
++                            await teardownFailedAuthAttempt(prepared, sendResult, livePrepared.sessionAgentScopeKey);
++                            retried = true;
++                            prepared = undefined;
++                            sendResult = undefined;
++                            liveCompletion = undefined;
++                            continue;
++                        }
++                        if (drainOutcome === "auth_recreate") {
++                            this.throwIfAborted();
++                        }
++                        return;
++                    }
++                    const outcomePromise = awaitFinalizeCursorRunOutcome({
++                        run: send.run,
++                        prepared,
++                        cursorAgentMessageOffset: send.cursorAgentMessageOffset,
++                        modelId: model.id,
++                        signal: options?.signal,
++                        runResultFallback: send.run.result,
++                        runErrorFallback: send.run.error,
++                        resolvedApiKey: this.resolvedApiKey,
++                        optionsApiKey: options?.apiKey,
++                        sdkEventDebug: this.sdkEventDebug,
++                        contextWindowAgentId: prepared.contextWindowAgentId,
++                    });
++                    prepared.lifecycle.trackRunCompletion(outcomePromise);
++                    const finalized = await outcomePromise;
++                    if (finalized.outcome.kind === "error" &&
++                        shouldAttemptAuthRecreate({
++                            local: true,
++                            retried,
++                            aborted: this.isAborted(),
++                            errorOrMessage: finalized.outcome.errorMessage,
++                            partial,
++                        })) {
++                        await teardownFailedAuthAttempt(prepared, sendResult, localScopeKey(prepared));
++                        retried = true;
++                        prepared = undefined;
++                        sendResult = undefined;
++                        liveCompletion = undefined;
++                        continue;
++                    }
++                    await runFinalizer.applyTerminalEvent({
++                        kind: "direct",
++                        prepared,
++                        outcome: finalized.outcome,
++                        displayOnlyTraceBlock: finalized.displayOnlyTraceBlock,
++                    });
++                    return;
++                }
++                catch (error) {
++                    const liveRun = prepared?.runtime.kind === "live" ? prepared.runtime.liveRun : undefined;
++                    if (shouldAttemptAuthRecreate({
++                        local: true,
++                        retried,
++                        aborted: this.isAborted(error),
++                        errorOrMessage: error,
++                        partial,
++                        liveRun,
++                    })) {
++                        await teardownFailedAuthAttempt(prepared, sendResult, localScopeKey(prepared));
++                        retried = true;
++                        prepared = undefined;
++                        sendResult = undefined;
++                        liveCompletion = undefined;
++                        continue;
++                    }
++                    await runFinalizer.applyTerminalEvent({ kind: "error", prepared, error });
++                    return;
++                }
++            }
+         }
+         catch (error) {
+             await runFinalizer.applyTerminalEvent({ kind: "error", prepared, error });
+--- a/src/cursor-session-agent.ts
++++ b/src/cursor-session-agent.ts
+@@ -121,6 +121,8 @@
+ }
+ 
+ interface SessionCursorAgentCreateParams {
++	/** A tool-less provider call must not inherit live Pi extension tools. */
++	disablePiToolBridge?: boolean;
+ 	apiKey: string;
+ 	agentMode: AgentModeOption;
+ 	cwd: string;
+@@ -446,7 +448,7 @@
+ 	let sessionStore: OpenCursorSessionStore | undefined;
+ 	try {
+ 		const registeredBridge = getRegisteredCursorPiToolBridge();
+-		if (registeredBridge) {
++		if (registeredBridge && !params.disablePiToolBridge) {
+ 			bridgeRun = await registeredBridge.createRun({
+ 				onToolRequest: params.onBridgeToolRequest,
+ 				debugRecorder: params.debugRecorder,
+--- a/dist/cursor-session-agent.js
++++ b/dist/cursor-session-agent.js
+@@ -280,7 +280,7 @@
+     let sessionStore;
+     try {
+         const registeredBridge = getRegisteredCursorPiToolBridge();
+-        if (registeredBridge) {
++        if (registeredBridge && !params.disablePiToolBridge) {
+             bridgeRun = await registeredBridge.createRun({
+                 onToolRequest: params.onBridgeToolRequest,
+                 debugRecorder: params.debugRecorder,
+--- a/src/model-discovery.ts
++++ b/src/model-discovery.ts
+@@ -112,7 +112,7 @@
+ 
+ function getThinkingLevelMap(item: ModelListItem): ThinkingLevelMap | undefined {
+ 	const reasoningParameter = getParameter(item, "reasoning");
+-	const effortParameter = getParameter(item, "effort");
++	const effortParameter = getParameter(item, "effort") ?? getParameter(item, "reasoning_effort");
+ 	const thinkingParameter = getParameter(item, "thinking");
+ 	const valueParameter = effortParameter ?? reasoningParameter ?? thinkingParameter;
+ 	if (!valueParameter) return undefined;
+@@ -233,7 +233,7 @@
+ 		parameterIds: {
+ 			context: getParameter(item, "context") !== undefined,
+ 			reasoning: getParameter(item, "reasoning") !== undefined,
+-			effort: getParameter(item, "effort") !== undefined,
++			effort: getParameter(item, "effort") !== undefined || getParameter(item, "reasoning_effort") !== undefined,
+ 			thinking: getParameter(item, "thinking") !== undefined,
+ 			fast: getParameter(item, "fast") !== undefined,
+ 		},
+@@ -256,7 +256,9 @@
+ function registerModelItems(items: ModelListItem[]): ProviderModelConfig[] {
+ 	metadataByPiModelId.clear();
+ 	const contextWindowCache = loadContextWindowCache();
+-	return getCursorModelSelectionIdentities(items).map(({ model: item, selectionModelId, context, fastOverride, piModelId, contextWindowKey, baseContextWindowKey }) => {
++	const identities = getCursorModelSelectionIdentities(items);
++	const usedPiModelIds = new Set(identities.map(({ piModelId }) => piModelId));
++	return identities.flatMap(({ model: item, selectionModelId, context, fastOverride, piModelId, contextWindowKey, baseContextWindowKey }, index) => {
+ 		const defaultParams = getDefaultParams(item);
+ 		const contextParams = context ? replaceParam(defaultParams, "context", context) : defaultParams;
+ 		const params = fastOverride === undefined ? contextParams : replaceParam(contextParams, "fast", fastOverride ? "true" : "false");
+@@ -272,7 +274,21 @@
+ 		);
+ 		metadataByPiModelId.set(piModelId, metadata);
+ 		const alias = selectionModelId === item.id ? undefined : selectionModelId;
+-		return toModelConfig(metadata, getModelName(item, context, alias, fastOverride));
++		const configs = [toModelConfig(metadata, getModelName(item, context, alias, fastOverride))];
++		// Alamelu Mac local fix (c): after a context-variant selection's qualified IDs, also register
++		// its unqualified ID at the standard 256k context (else the first offered context).
++		const next = identities[index + 1];
++		const contextValues = getParameter(item, "context")?.values?.map(({ value }) => value) ?? [];
++		const lastOfSelection = next?.model !== item || next.selectionModelId !== selectionModelId;
++		if (contextValues.length > 0 && lastOfSelection && !usedPiModelIds.has(selectionModelId)) {
++			usedPiModelIds.add(selectionModelId);
++			const standardContext = contextValues.find((value) => value.toLowerCase() === "256k") ?? contextValues[0];
++			const unqualifiedParams = replaceParam(defaultParams, "context", standardContext);
++			const unqualified = toMetadata(item, selectionModelId, selectionModelId, unqualifiedParams, undefined, contextWindowCache, [selectionModelId]);
++			metadataByPiModelId.set(selectionModelId, unqualified);
++			configs.push(toModelConfig(unqualified, getModelName(item, undefined, alias, undefined)));
++		}
++		return configs;
+ 	});
+ }
+ 
+@@ -325,7 +341,12 @@
+ 
+ 	if (metadata.parameterIds.effort) {
+ 		if (metadata.parameterIds.thinking) setParam(params, "thinking", "true");
+-		setParam(params, "effort", mapped);
++		const effortId =
++			params.some((param) => param.id === "reasoning_effort") ||
++			metadata.defaultParams.some((param) => param.id === "reasoning_effort")
++				? "reasoning_effort"
++				: "effort";
++		setParam(params, effortId, mapped);
+ 		return;
+ 	}
+ 
+--- a/dist/model-discovery.js
++++ b/dist/model-discovery.js
+@@ -44,7 +44,7 @@
+ }
+ function getThinkingLevelMap(item) {
+     const reasoningParameter = getParameter(item, "reasoning");
+-    const effortParameter = getParameter(item, "effort");
++    const effortParameter = getParameter(item, "effort") ?? getParameter(item, "reasoning_effort");
+     const thinkingParameter = getParameter(item, "thinking");
+     const valueParameter = effortParameter ?? reasoningParameter ?? thinkingParameter;
+     if (!valueParameter)
+@@ -145,7 +145,7 @@
+         parameterIds: {
+             context: getParameter(item, "context") !== undefined,
+             reasoning: getParameter(item, "reasoning") !== undefined,
+-            effort: getParameter(item, "effort") !== undefined,
++            effort: getParameter(item, "effort") !== undefined || getParameter(item, "reasoning_effort") !== undefined,
+             thinking: getParameter(item, "thinking") !== undefined,
+             fast: getParameter(item, "fast") !== undefined,
+         },
+@@ -166,14 +166,30 @@
+ function registerModelItems(items) {
+     metadataByPiModelId.clear();
+     const contextWindowCache = loadContextWindowCache();
+-    return getCursorModelSelectionIdentities(items).map(({ model: item, selectionModelId, context, fastOverride, piModelId, contextWindowKey, baseContextWindowKey }) => {
++    const identities = getCursorModelSelectionIdentities(items);
++    const usedPiModelIds = new Set(identities.map(({ piModelId }) => piModelId));
++    return identities.flatMap(({ model: item, selectionModelId, context, fastOverride, piModelId, contextWindowKey, baseContextWindowKey }, index) => {
+         const defaultParams = getDefaultParams(item);
+         const contextParams = context ? replaceParam(defaultParams, "context", context) : defaultParams;
+         const params = fastOverride === undefined ? contextParams : replaceParam(contextParams, "fast", fastOverride ? "true" : "false");
+         const metadata = toMetadata(item, piModelId, selectionModelId, params, context, contextWindowCache, [piModelId, contextWindowKey, baseContextWindowKey], fastOverride);
+         metadataByPiModelId.set(piModelId, metadata);
+         const alias = selectionModelId === item.id ? undefined : selectionModelId;
+-        return toModelConfig(metadata, getModelName(item, context, alias, fastOverride));
++        const configs = [toModelConfig(metadata, getModelName(item, context, alias, fastOverride))];
++        // Alamelu Mac local fix (c): after a context-variant selection's qualified IDs, also register
++        // its unqualified ID at the standard 256k context (else the first offered context).
++        const next = identities[index + 1];
++        const contextValues = getParameter(item, "context")?.values?.map(({ value }) => value) ?? [];
++        const lastOfSelection = next?.model !== item || next.selectionModelId !== selectionModelId;
++        if (contextValues.length > 0 && lastOfSelection && !usedPiModelIds.has(selectionModelId)) {
++            usedPiModelIds.add(selectionModelId);
++            const standardContext = contextValues.find((value) => value.toLowerCase() === "256k") ?? contextValues[0];
++            const unqualifiedParams = replaceParam(defaultParams, "context", standardContext);
++            const unqualified = toMetadata(item, selectionModelId, selectionModelId, unqualifiedParams, undefined, contextWindowCache, [selectionModelId]);
++            metadataByPiModelId.set(selectionModelId, unqualified);
++            configs.push(toModelConfig(unqualified, getModelName(item, undefined, alias, undefined)));
++        }
++        return configs;
+     });
+ }
+ export function getCursorModelMetadata(modelId) {
+@@ -219,7 +235,11 @@
+     if (metadata.parameterIds.effort) {
+         if (metadata.parameterIds.thinking)
+             setParam(params, "thinking", "true");
+-        setParam(params, "effort", mapped);
++        const effortId = params.some((param) => param.id === "reasoning_effort") ||
++            metadata.defaultParams.some((param) => param.id === "reasoning_effort")
++            ? "reasoning_effort"
++            : "effort";
++        setParam(params, effortId, mapped);
+         return;
+     }
+     if (metadata.parameterIds.reasoning) {
