@@ -204,16 +204,18 @@ change**: installed Pi, adapter, settings and the app are untouched.
   owner's call).
 - Repo-memory: corrected note `mem_1acba792a055` (global scope, like the note it replaces) active; stale
   `mem_84d3a82c0b0d` ("Mac 0.1.60 loads src") and the interim project-scoped `mem_4ff83f86f2e3` retracted (audit I3-01).
-- Private cursor-only `auth.json` copies deleted (5). Retained for owner approval before any deletion: `/private/tmp/`
-  `pi-0.87.1-stage`, `pcs-0.3.10`, `pcs-investigate`, `pi-cursor-ab`, `pi087-critic.*`, `pi087-impl-critic.*`; in the task
-  workspace `dev/`, `e2e-export/`, `runtime/`, `diag-bridge/`, `probe/`; the three probe session files; servers'
-  `/tmp/pi087-*`, `/tmp/ab-probe.sh`, `/tmp/parse.py`. Rollbacks and evidence are kept.
-- Not done here, needs the owner: commit of this task's alamelu-tauri files; WSL (deferred).
+- Private cursor-only `auth.json` copies deleted (5). With owner approval, the temporary artifacts were moved (not
+  deleted) to `~/.Trash/pi087-cleanup-20260923` on the laptop (2.7 GB: the `/private/tmp` staging copies, adapter copies,
+  test folders and critic runs; the task workspace's `dev/`, `e2e-export/`, `runtime/`, `diag-bridge/`, `probe/`; the three
+  probe session files) and to `~/.local/share/Trash/files/pi087-cleanup-20260923` on each server (`/tmp/pi087-*`, probe
+  scripts). The A/B probe, parser, live-compaction harness and observer are kept in `evidence/harness/`; evidence and
+  rollbacks are kept in the task workspace.
+- Committed with owner authorization: alamelu-tauri `3c93dde` (this task's documents, 0.3.10 recovery assets, manifest,
+  `REBUILD-PROTECTION.md`). Not pushed. WSL remains deferred.
 
 Implementation Audit Round 3 (final): PASS, 0 high / 0 medium / 1 low (I3-01, fixed as above).
 
 ## Done-criteria status
 
 1 PASS (3.3) · 2 PASS (3.4) · 3 PASS (3.5) · 4 PASS (red→green tests, 288/288 parity) · 5 PASS (Phase 2 r2, candidate
-identical to the installed patch) · 6 PASS (3.6) · 7 PASS (Phase 4) · 8 PASS except the commit awaiting owner
-authorization.
+identical to the installed patch) · 6 PASS (3.6) · 7 PASS (Phase 4) · 8 PASS (committed as `3c93dde`).
