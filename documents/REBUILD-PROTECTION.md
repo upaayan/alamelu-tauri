@@ -1,7 +1,7 @@
 # Preserve the Alamelu Pi fixes when rebuilding or upgrading
 
 Canonical checklist for Mac and native Windows + WSL. Last verified release:
-Mac 2026-09-23, Pi 0.87.1 + pi-cursor-sdk 0.3.10. Windows/WSL is **pending**: still
+Mac 2026-10-11, Pi 1.1.0 + pi-cursor-sdk 0.5.3. Windows/WSL is **pending**: still
 Pi 0.85.1 + adapter 0.3.6; its upgrade was deferred by the owner on 2026-09-23. The app uses external Pi; rebuilding Tauri does not preserve
 or repair an npm-installed extension. Keep this document, the maintenance assets,
 and the app source fixes in the same Git checkout used by GitHub Actions.
@@ -13,8 +13,8 @@ and the app source fixes in the same Git checkout used by GitHub Actions.
 | Tauri/backend rebuild from older source | Fresh Pi `get_messages` supplies model-switch size; no JSONL archive-size fallback | `pnpm run verify:upgrade` |
 | Repeated compactions | Count current message content, not archived history, usage metadata or base64 | 19 preflight and 9 RPC tree/compaction regressions in that gate |
 | Losing the composer/driver integration | Await current messages and pass them to the estimator | Integration wiring checks in that gate |
-| `npm install -g` of Pi | For 0.85.1 and 0.87.1 retain the unbundled `dist/cli.js` launcher (npm resets it to `dist/bundle/cli.js`) | Actual launcher + installed Luna extension RPC check |
-| `pi update` / reinstall of `pi-cursor-sdk` | Omitted/empty tools mean no Pi tool bridge or escaped tool call during summaries | Version-specific patch, hash check, adapter tests (14 on 0.1.60/0.3.6, 49 on 0.3.10) and live checks |
+| `npm install -g` of Pi | For 0.85.1, 0.87.1 and 1.1.0 retain the unbundled `dist/cli.js` launcher (npm resets it to `dist/bundle/cli.js`) | Actual launcher + installed Luna extension RPC check |
+| `pi update` / reinstall of `pi-cursor-sdk` | No Pi tool bridge or escaped tool call during summaries (0.5.x: upstream runs compaction/tree summaries in a tool-less summary agent; earlier: omitted/empty tools mean no bridge) | Version-specific patch, hash check, adapter tests (14 on 0.1.60/0.3.6, 49 on 0.3.10, 47 on 0.5.3) and live checks |
 | Windows source-only adapter patch | 0.3.6 loads `dist/index.js`; patch all three source AND three compiled files | Manifest loader and all six hashes checked |
 | Installer replacement | Build these fixes from tracked source; preserve external Pi config and platform dependencies | Both-platform release record, installed checks |
 
@@ -59,11 +59,15 @@ Durable files are in `maintenance/pi-cursor-sdk/` (not the ignored
 - `0.3.10/mac-local-fixes.patch`: the Mac's local fixes ported to 0.3.10 — compaction (omitted/empty
   tools → no Pi bridge and inactive native replay), stale-auth recovery, model variants/effort mapping —
   ten source and ten compiled files.
-- Each version's `test/`: two compaction test files and their fixture helper; 0.3.10 also keeps four
-  stale-auth test files and a model-variant test.
+- `0.5.3/mac-local-fixes.patch`: the fixes 0.5.3 still lacks — stale-auth recovery and the unqualified
+  context-variant model IDs — eight source and eight compiled files. Compaction isolation and the
+  `reasoning_effort` mapping are upstream in 0.5.x and are not patched (owner ruling 2026-10-11).
+- Each version's `test/`: two compaction test files and their fixture helper; 0.3.10 and 0.5.3 also keep
+  four stale-auth test files and a model-variant test.
 
-Mac runs 0.3.10 (since 2026-09-23), which loads `dist/index.js`; the earlier Mac 0.1.60 loaded
-`src/index.ts`. WSL 0.3.6 loads `dist/index.js`. Preserve these
+Mac runs 0.5.3 (since 2026-10-11), which loads `dist/index.js`; before that 0.3.10 (also `dist/index.js`,
+2026-09-23 to 2026-10-11) and 0.1.60 (`src/index.ts`). pi-cursor-sdk 0.4.0+ requires Node 24.
+WSL 0.3.6 loads `dist/index.js`. Preserve these
 separate versions and their other customizations. Do not copy the whole Mac
 package onto WSL. First inspect `settings.json` → `packages` to identify the
 package Pi actually loads; an editable checkout alone is not the runtime.
@@ -90,7 +94,8 @@ patch -d "$candidate" -p1 -i "$kit/maintenance/pi-cursor-sdk/0.3.6/compaction.pa
 python3 "$kit/scripts/check-cursor-compaction.py" --package "$candidate"
 ```
 
-Use `0.1.60` instead on that version; on 0.3.10 use `0.3.10/mac-local-fixes.patch`. Execute each step only after the previous
+Use `0.1.60` instead on that version; on 0.3.10 use `0.3.10/mac-local-fixes.patch`; on 0.5.3 use
+`0.5.3/mac-local-fixes.patch`. Execute each step only after the previous
 one succeeds. Never use patch fuzz/force to work around a failed baseline check.
 For a new version, review whether upstream fixed the behavior; port only missing
 changes, test its real manifest-loaded runtime, and deliberately update the
@@ -103,17 +108,20 @@ existing Vitest runner:
 ```bash
 cd "$candidate"
 ./node_modules/.bin/vitest run test/cursor-compaction.test.ts test/cursor-compaction-prepare.test.ts
-# 0.3.10 also: test/cursor-live-run-auth-recreate.test.ts test/cursor-provider-auth-recreate.test.ts
+# 0.3.10 and 0.5.3 also: test/cursor-live-run-auth-recreate.test.ts test/cursor-provider-auth-recreate.test.ts
 #   test/cursor-provider-run-finalizer-auth-recreate.test.ts test/cursor-provider-turn-runner-auth-recreate.test.ts
 #   test/cursor-model-variants.test.ts
 ```
 
 Install the candidate's own locked development dependencies if its packaged copy
 has no test runner. Do not upgrade dependency versions to obtain one. 0.1.60 and 0.3.6
-have 14 focused tests; 0.3.10 has 49 (16 compaction, 29 stale-auth, 4 model-variant). WSL 0.3.6 needs its own session-store test stub; do not copy
+have 14 focused tests; 0.3.10 has 49 (16 compaction, 29 stale-auth, 4 model-variant); 0.5.3 has 47 (14 compaction,
+29 stale-auth, 4 model-variant). WSL 0.3.6 needs its own session-store test stub; do not copy
 Mac auth-recreation tests onto it. Tests prove omitted/empty-tool summaries stay
 text-only and normal explicit-tool requests still use the bridge after success,
-failure and cancellation. Preserve the package's existing broader tests too.
+failure and cancellation. On 0.5.3 the summary requests carry Pi's compaction purpose,
+which is how Pi 1.x calls them (`ALPI_SUMMARY_PURPOSE=normal` shows the bridge returns
+without it). Preserve the package's existing broader tests too.
 
 For 0.3.6, regenerate the three compiled files if porting a change. The verified
 compiler emission was TypeScript `transpileModule`, ES2022 target, ESNext module;
@@ -169,6 +177,23 @@ installed runtime; private manual and automatic Cursor compactions passed on the
 run stock 0.3.10 on Pi 0.87.1. Plan, audit and evidence: `documents/plan-audit-implementation/`
 `pi087_cursor_0310_upgrade_{plan,audit,implementation}.md` and `documents/release-evidence/pi087-mac-20260923/`.
 Do not move WSL to Pi 0.86+ before its adapter is upgraded.
+
+## Mac release 2026-10-11 — Pi 1.1.0 + pi-cursor-sdk 0.5.3
+
+The Mac moved from Pi 0.87.1 to 1.1.0 and from adapter 0.3.10 to 0.5.3. Only stale-auth recovery and the
+unqualified context-variant model IDs are patched (`0.5.3/mac-local-fixes.patch`); 0.5.x isolates compaction
+and branch summaries itself (Pi tags them; the adapter sends them to a tool-less, bridge-less summary agent)
+and maps `reasoning_effort`, so those fixes were dropped with the owner's approval. Pi 1.1.0's npm `bin` still
+points at `dist/bundle/cli.js`; re-point nvm `bin/pi` to `dist/cli.js` after every `npm install -g`. Stage
+candidates with `npm install -g --prefix <dir>`: the Luna extension finds pi-ai only in the global (nested)
+layout. Passed: Luna check through `~/.local/bin/pi`, manifest checker, A/B read/system-prompt probe, Cursor
+model parity 294/294 with identical context windows, the four provider probes, `compacted-model-switch.spec.ts`,
+the packaged smoke (49 providers, 838 models) and the reopened app; private manual and automatic Cursor
+compactions passed on the candidate. Mock and backup run Pi 1.1.0 with stock adapter 0.3.10 on their Node
+22.22.3 (0.4.0+ needs Node 24; 0.3.10 was tested under Pi 1.1.0 first). Plan, audit and evidence:
+`documents/plan-audit-implementation/pi110_cursor_053_upgrade_{plan,audit,implementation}.md` and
+`documents/release-evidence/pi110-mac-20261011/`. WSL is unchanged: do not move it to Pi 0.86+ before its
+adapter is upgraded, and an adapter 0.4.0+ there needs Node 24.
 
 ## Connection, copies and cleanup
 

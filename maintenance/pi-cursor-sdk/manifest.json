@@ -152,5 +152,85 @@
       "0.3.10/test/cursor-provider-run-finalizer-auth-recreate.test.ts": "803a161a64a88c19c7866e8c210868ca601122ec2edeebcdbcc381265547444c",
       "0.3.10/test/cursor-provider-turn-runner-auth-recreate.test.ts": "9ab12ac481dd0316cb42113e9b7023ec392eedd71ade57a0caf2c57dd1a912b2"
     }
+  },
+  "0.5.3": {
+    "entry": "dist/index.js",
+    "files": {
+      "src/cursor-live-run-coordinator.ts": {
+        "before": "502e9e0050251740e856284db769a805b5796751577a462fdedb314de0b68591",
+        "after": "1d341eb46b2dfc4c73ee2f1fdf04a0a752a5327fb08d19645c368efb3518c6ff"
+      },
+      "dist/cursor-live-run-coordinator.js": {
+        "before": "3deb2c2425d2dce0eba07c1eb421af4b0b84a32e9ddb804e1f45f7cf4c580b49",
+        "after": "08fa207ef29bbdfa2809bab598c763fd1f2d9fce331144df3bbc793ad7f194ae"
+      },
+      "src/cursor-provider-errors.ts": {
+        "before": "bde828609b1141bb5f31f5317ac2662d4a4fc355b7a23969d3edb68d395613c3",
+        "after": "fc644d62292d0f68514317c4d8ccc1635a01ef39b2b4bbfa30fb23f8883bee97"
+      },
+      "dist/cursor-provider-errors.js": {
+        "before": "a38930ab5222469267687a8cf6244590d81dc1cebc4a9ea9e91be345d710c47e",
+        "after": "819274ae05d5abaa4beaa6968ec3fd9677f33ef002bddd98587e81dd00900863"
+      },
+      "src/cursor-provider-live-run-drain.ts": {
+        "before": "4804a80c0e25cc7527dd1493ec4efd7ab488020488775c245e13a118d56c87cb",
+        "after": "dd9879de70e4db228ef2a6fa7dc5eb873012855260c682f1e06ef587b1496482"
+      },
+      "dist/cursor-provider-live-run-drain.js": {
+        "before": "dd51bca22e7e3403406e6e3b640d55bafe16abd5343a68e74e5b55276793d19a",
+        "after": "f28a9c088fa3adb14c098f87915180e75789c1d268e50e08b58f427364c0c6f8"
+      },
+      "src/cursor-provider-run-finalizer.ts": {
+        "before": "c54822cad17f1194c492e9e1285057470bb4ad2feb7871062baec5b027dbf073",
+        "after": "b4d5787fe507d0da4ac55ce2402d6f1e64e93b798d18d5c01f82877edd4c0e2f"
+      },
+      "dist/cursor-provider-run-finalizer.js": {
+        "before": "7367202a820243589895070d83b5c07f762a9427a12df06e67cfd43130129e52",
+        "after": "c5dd7be07b57e6e3b428ced6874172ae1da7e21d6431af0cf3b5c5e5c21afdce"
+      },
+      "src/cursor-provider-turn-emit.ts": {
+        "before": "e52ccb71a3a9eda74a769b2105e6ef172cb941fee8b99f1273db04de9caedcb9",
+        "after": "87a6cc386f02687e62e9c721d3f749535b8a41c14e6e4ad3e743d38b54fde5de"
+      },
+      "dist/cursor-provider-turn-emit.js": {
+        "before": "f1e53e6314be470ff2240a673844fe92d589f91d4dfd847e4b65f659441ac537",
+        "after": "ce6d6e53679e2087c178de87abc1a1b8f9b513ecd8115b7eb8b58fed403967fc"
+      },
+      "src/cursor-provider-turn-prepare.ts": {
+        "before": "54716661bc69c3c564dc25b6b573e339444669fdc0425f0db0404e1ea9590e8f",
+        "after": "aa5ff62fcd26cf736105a9c8a4837effc889aec0abbdc8058be1efaba2960d78"
+      },
+      "dist/cursor-provider-turn-prepare.js": {
+        "before": "307f7b2cc5ab8832dedc1d9b3bdc5f63f127d2a1c9147b057f935e12946ebfaa",
+        "after": "f4dac7a73e8fddd2c483982d569346c1cd1a239e7d431a73132353539613b5d1"
+      },
+      "src/cursor-provider-turn-runner.ts": {
+        "before": "f2ef2c4825f047879ba039e4f05bd1359da819f6d490f7da4bec9c983127a24d",
+        "after": "969eb9e1e9e1c4c321ea6c1bc73c339712b643069bfcc375bf6c2423c897487d"
+      },
+      "dist/cursor-provider-turn-runner.js": {
+        "before": "b824fd952ed4d410c8ac6b7b514288fd9f86abe41045412f2b1f40a11fb44f0a",
+        "after": "de673ba3d9842f1102f97a3b350873031614f2f3e1c76325d95d0702e6aae663"
+      },
+      "src/model-discovery.ts": {
+        "before": "84ceabdb749982d9a2406f1ffd89d5e62fd94f088a02e7b45cdbe92c410d6c50",
+        "after": "5d83b97062ab5890d3cbed11b2da87193d48ebaa09c3df295f8803e1902359a6"
+      },
+      "dist/model-discovery.js": {
+        "before": "c6f70d96d552fd168bb721f95e936ba1fc8351bfd67366cb963ea571b584e953",
+        "after": "9f1b7c3373634b0e5eee042006d7ef1bfa421e06bb4d64fd6d93a739d2ea38a6"
+      }
+    },
+    "assets": {
+      "0.5.3/mac-local-fixes.patch": "e53d924ead7d29e67ff6fbc41537252e5628f32b694cda4fd2753c492192e99d",
+      "0.5.3/test/auth-recreate-fixtures.ts": "a95d55221e0ac0156fa3cc961936af164f20f9085d911a6339d4d18b3a6d5eff",
+      "0.5.3/test/cursor-compaction-prepare.test.ts": "6c627aa7f2653901842cbde0f1a8343b434701b37c8994e7e4b94a6a9d411f60",
+      "0.5.3/test/cursor-compaction.test.ts": "93b679d078b2487386672e306f07602bd35fe56138abf929f658fcd902a36c09",
+      "0.5.3/test/cursor-live-run-auth-recreate.test.ts": "7b8ddc584baa87911644027bae2ef219d310dcd1627558218b1767bd157a3f34",
+      "0.5.3/test/cursor-model-variants.test.ts": "9e76c761a852cc698a887b33c65bbf392b3d3d6017ab16258c0d2d8da209ae56",
+      "0.5.3/test/cursor-provider-auth-recreate.test.ts": "9244c96f865bdb11ea925be0e974fa027a02ae7ac44bed6c3f4583bb75852fee",
+      "0.5.3/test/cursor-provider-run-finalizer-auth-recreate.test.ts": "781cd1db3bffc6c99e0416eebdd4e35dc9acec173e9c896aa52d9ce539b977a9",
+      "0.5.3/test/cursor-provider-turn-runner-auth-recreate.test.ts": "843cd942f52607a1aac653a1e814df661194e8a41ac0a876451171042cb6cf87"
+    }
   }
 }
