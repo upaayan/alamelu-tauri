@@ -289,4 +289,8 @@ the owner).
 - Mock and backup: `/tmp/pi110-precheck`, `/tmp/pi110-post.*`, `/tmp/pi-ab-probe.*` and the probe folders under `~/.cursor/projects`
   moved to `~/.local/share/Trash/files/pi110-cleanup-20261011/` (mock 247 MB, backup 192 KB); no task dir left in `/tmp`.
   Rollbacks stay in `~/.pi/agent/backups/pi110-cursor-053-20261011/rollback/` on each server.
-- Final Implementation Audit: Round 2 PASS (0 high, 0 medium, 1 low I2-01, folded). Commits await the owner.
+- Final Implementation Audit: Round 2 PASS (0 high, 0 medium, 1 low I2-01, folded).
+- Commits, with the owner's authorization ("can you commit? yes to both"): alamelu-tauri `1f8cfef` (this task's 14 files only:
+  the three records, REBUILD-PROTECTION, the manifest and `0.5.3/`), pushed; alamelu `86695d8` (only this task's
+  `progress.md` entry; other sessions' uncommitted entries left unstaged), pushed, and mock fast-forwarded with
+  `git pull --ff-only` (tree `84fab838` on both sides; mock's own uncommitted files untouched).
