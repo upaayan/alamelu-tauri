@@ -1249,6 +1249,10 @@
   min-height: 72px;
 }
 
+.composer.new-thread__composer textarea {
+  min-height: 120px;
+}
+
 .composer__bar {
   margin-top: 8px;
   width: 100%;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
 import type { RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type { ComposerAttachment, NewThreadEnvironment, WorkspaceRecord } from "./desktop-state";
 import { AlameluPiLogoMark, ArrowUpIcon, PlusIcon } from "./icons";
@@ -119,7 +119,7 @@ export function NewThreadView({
     composerRef.current?.focus();
   }, [composerRef]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const composer = composerRef.current;
     if (!composer) {
       return;
