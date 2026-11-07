@@ -32,4 +32,4 @@ These rules apply for the full session.
 ## Rebuild and external Pi upgrades
 
 Before rebuilding/releasing Alamelu Pi Tauri or upgrading Pi/Cursor packages, follow
-[documents/REBUILD-PROTECTION.md](documents/REBUILD-PROTECTION.md). Run `pnpm run verify:upgrade` before Rust; preserve the external runtime patches and complete the Mac and native Windows/WSL release gates. Do not equate a source-only adapter test with the manifest-loaded runtime.
+[documents/REBUILD-PROTECTION.md](documents/REBUILD-PROTECTION.md). Run `pnpm run verify:upgrade` before Rust and complete the Mac and native Windows/WSL release gates. Since 2026-11-07 the Mac runs Homebrew pi and the stock Cursor adapter, with no runtime patches; WSL keeps its launcher fix, Luna checker and adapter patch. Do not equate a source-only adapter test with the manifest-loaded runtime.

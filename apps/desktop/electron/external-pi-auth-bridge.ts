@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { access, constants, realpath } from "node:fs/promises";
 import { basename, dirname, join, win32 } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -191,12 +192,39 @@ export function createUnavailableExternalPiAuthBridge(reason: string): ExternalP
   });
 }
 
+const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
+
+/**
+ * Finds Pi's package root from the resolved Pi executable. Three layouts: the unbundled
+ * `<root>/dist/cli.js` (npm with the launcher re-pointed), npm's own `<root>/dist/bundle/cli.js`,
+ * and Homebrew's wrapper script `<keg>/bin/pi`, whose package sits in
+ * `<keg>/libexec/lib/node_modules/@earendil-works/pi-coding-agent`.
+ */
+function externalPiPackageRoot(resolvedPiBin: string): string | undefined {
+  const binDir = dirname(resolvedPiBin);
+  if (basename(resolvedPiBin) === "cli.js") {
+    if (basename(binDir) === "dist") return dirname(binDir);
+    if (basename(binDir) === "bundle" && basename(dirname(binDir)) === "dist") return dirname(dirname(binDir));
+    return undefined;
+  }
+  if (basename(resolvedPiBin) === "pi" && basename(binDir) === "bin") {
+    const root = join(dirname(binDir), "libexec", "lib", "node_modules", ...PI_PACKAGE_NAME.split("/"));
+    try {
+      const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { name?: unknown };
+      if (manifest.name === PI_PACKAGE_NAME) return root;
+    } catch {
+      // Not a Homebrew keg holding Pi.
+    }
+  }
+  return undefined;
+}
+
 export function externalPiAuthModulePaths(resolvedPiBin: string): ExternalPiAuthModulePaths {
-  const distDir = dirname(resolvedPiBin);
-  if (basename(resolvedPiBin) !== "cli.js" || basename(distDir) !== "dist") {
+  const packageRoot = externalPiPackageRoot(resolvedPiBin);
+  if (!packageRoot) {
     throw new Error(`Installed Pi executable has an unsupported layout: ${resolvedPiBin}`);
   }
-  const packageRoot = dirname(distDir);
+  const distDir = join(packageRoot, "dist");
   return {
     packageRoot,
     indexModulePath: join(distDir, "index.js"),

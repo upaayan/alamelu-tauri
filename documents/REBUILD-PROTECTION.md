@@ -1,7 +1,7 @@
 # Preserve the Alamelu Pi fixes when rebuilding or upgrading
 
 Canonical checklist for Mac and native Windows + WSL. Last verified release:
-Mac 2026-10-11, Pi 1.1.0 + pi-cursor-sdk 0.5.3. Windows/WSL is **pending**: still
+Mac 2026-11-07, Homebrew pi 1.5.0 + stock pi-cursor-sdk 0.5.3 (no Luna extension, no pi-ai patch). Windows/WSL is **pending**: still
 Pi 0.85.1 + adapter 0.3.6; its upgrade was deferred by the owner on 2026-09-23. The app uses external Pi; rebuilding Tauri does not preserve
 or repair an npm-installed extension. Keep this document, the maintenance assets,
 and the app source fixes in the same Git checkout used by GitHub Actions.
@@ -11,10 +11,11 @@ and the app source fixes in the same Git checkout used by GitHub Actions.
 | Overwrite route | Required protection | Check |
 | --- | --- | --- |
 | Tauri/backend rebuild from older source | Fresh Pi `get_messages` supplies model-switch size; no JSONL archive-size fallback | `pnpm run verify:upgrade` |
-| Repeated compactions | Count current message content, not archived history, usage metadata or base64 | 19 preflight and 9 RPC tree/compaction regressions in that gate |
+| Repeated compactions | Count current message content, not archived history, usage metadata or base64 | 8 preflight and 9 RPC tree/compaction regressions in that gate |
 | Losing the composer/driver integration | Await current messages and pass them to the estimator | Integration wiring checks in that gate |
-| `npm install -g` of Pi | For 0.85.1, 0.87.1 and 1.1.0 retain the unbundled `dist/cli.js` launcher (npm resets it to `dist/bundle/cli.js`) | Actual launcher + installed Luna extension RPC check |
-| `pi update` / reinstall of `pi-cursor-sdk` | No Pi tool bridge or escaped tool call during summaries (0.5.x: upstream runs compaction/tree summaries in a tool-less summary agent; earlier: omitted/empty tools mean no bridge) | Version-specific patch, hash check, adapter tests (14 on 0.1.60/0.3.6, 49 on 0.3.10, 47 on 0.5.3) and live checks |
+| `brew upgrade pi-coding-agent` (Mac, since 2026-11-07) | Nothing to re-point; reopen Alamelu Pi so it uses the new version's folder | `pi --version`; reopen the app |
+| `npm install -g` of Pi (WSL) | For 0.85.1 retain the unbundled `dist/cli.js` launcher (npm resets it to `dist/bundle/cli.js`) | Actual launcher + installed Luna extension RPC check |
+| Reinstall of `pi-cursor-sdk` (WSL; the Mac runs stock 0.5.3 since 2026-11-07) | No Pi tool bridge or escaped tool call during summaries (0.5.x: upstream runs compaction/tree summaries in a tool-less summary agent; earlier: omitted/empty tools mean no bridge) | Version-specific patch, hash check, adapter tests (14 on 0.1.60/0.3.6, 49 on 0.3.10, 47 on 0.5.3) and live checks |
 | Windows source-only adapter patch | 0.3.6 loads `dist/index.js`; patch all three source AND three compiled files | Manifest loader and all six hashes checked |
 | Installer replacement | Build these fixes from tracked source; preserve external Pi config and platform dependencies | Both-platform release record, installed checks |
 
@@ -32,7 +33,7 @@ From the repository root, after `pnpm install --frozen-lockfile`:
 pnpm run verify:upgrade
 ```
 
-This builds only the two TypeScript driver packages, runs 31 app/RPC/wiring tests,
+This builds only the two TypeScript driver packages, runs 20 app/RPC/wiring tests,
 verifies the retained recovery assets and runs eight negative package-protection
 tests. No Rust, Pi installation, credentials or model calls are needed.
 
@@ -65,8 +66,11 @@ Durable files are in `maintenance/pi-cursor-sdk/` (not the ignored
 - Each version's `test/`: two compaction test files and their fixture helper; 0.3.10 and 0.5.3 also keep
   four stale-auth test files and a model-variant test.
 
-Mac runs 0.5.3 (since 2026-10-11), which loads `dist/index.js`; before that 0.3.10 (also `dist/index.js`,
-2026-09-23 to 2026-10-11) and 0.1.60 (`src/index.ts`). pi-cursor-sdk 0.4.0+ requires Node 24.
+Mac runs stock 0.5.3 since 2026-11-07 (Sudhir dropped the local patches: "not needed; we will remove and test");
+`0.5.3/mac-local-fixes.patch` stays as the recovery source. With stock 0.5.3, Cursor's models appear only with their
+context size (for example `claude-opus-5-5@1m`; 47 unqualified ids such as `claude-opus-5-5` came from the patch), and
+Sudhir keeps stock (7 Nov 2026: "keep the stock Cursor adapter"); stale-auth recovery is untested on stock. From 2026-10-11 to 2026-11-07 the Mac ran 0.5.3 with that patch; it loads `dist/index.js`; before
+that 0.3.10 (also `dist/index.js`, 2026-09-23 to 2026-10-11) and 0.1.60 (`src/index.ts`). pi-cursor-sdk 0.4.0+ requires Node 24.
 WSL 0.3.6 loads `dist/index.js`. Preserve these
 separate versions and their other customizations. Do not copy the whole Mac
 package onto WSL. First inspect `settings.json` → `packages` to identify the
@@ -75,8 +79,8 @@ package Pi actually loads; an editable checkout alone is not the runtime.
 Read-only installed checks, from this repository or the copied maintenance kit:
 
 ```bash
-# Mac
-python3 scripts/check-cursor-compaction.py --package "$HOME/.pi/agent/npm/node_modules/pi-cursor-sdk"
+# Mac (stock 0.5.3 since 2026-11-07, so check against the stock hashes)
+python3 scripts/check-cursor-compaction.py --package "$HOME/.pi/agent/npm/node_modules/pi-cursor-sdk" --baseline
 # WSL (run inside WSL, not native PowerShell)
 python3 scripts/check-cursor-compaction.py --package /home/ubuntu/.pi/agent/npm/node_modules/pi-cursor-sdk
 ```
@@ -131,8 +135,8 @@ actual package manifest, never `--extension src/index.ts` as a substitute.
 
 ## Installed runtime release gates — both machines
 
-1. Run the actual Pi launcher with the installed app's Luna extension using
-   `scripts/check-pi-app-extension.py`. See [Pi upgrade runbook](PI-UPGRADE-WINDOWS.md)
+1. WSL only (the Mac app no longer ships the Luna extension, since 2026-11-07): run the actual Pi launcher with the
+   installed app's Luna extension using `scripts/check-pi-app-extension.py`. See [Pi upgrade runbook](PI-UPGRADE-WINDOWS.md)
    for exact Mac/WSL paths and the 0.85.1 symlink fix. This uses two RPC requests,
    no model and no saved session. An npm reinstall can reset the launcher.
 2. Verify the adapter through the checker above. Preserve auth/settings/models,
@@ -195,6 +199,31 @@ compactions passed on the candidate. Mock and backup run Pi 1.1.0 with stock ada
 `documents/release-evidence/pi110-mac-20261011/`. WSL is unchanged: do not move it to Pi 0.86+ before its
 adapter is upgraded, and an adapter 0.4.0+ there needs Node 24.
 
+## Mac release 2026-11-07 — Homebrew pi 1.5.0, stock adapter, no Luna extension, no pi-ai patch
+
+One pi on the Mac (Sudhir: "we want ONE pi install"): Homebrew's `pi-coding-agent` formula. nvm's pi, the
+`~/.local/bin/pi` launcher and `~/.local/bin/pi_update_safe` are gone; nvm's Node stays for other tools. Homebrew's pi
+runs on Homebrew's own Node whatever is on PATH: the formula's wrapper `exec`s `libexec/bin/pi`, whose first line is
+rewritten to `#!/opt/homebrew/opt/node/bin/node` (Node 26.13 on 2026-11-07), so a `brew upgrade` can move pi's Node too.
+The app no longer
+ships the Luna WebSocket extension (gpt-6-luna works without it) or the pi-ai tool-call-id patch (fixed upstream since
+pi 0.82.1); the sign-in bridge finds pi's package behind Homebrew's wrapper (`<keg>/bin/pi` ->
+`<keg>/libexec/lib/node_modules/@earendil-works/pi-coding-agent`) as well as under `dist/cli.js` and
+`dist/bundle/cli.js`. The Cursor adapter is stock 0.5.3.
+
+Updating pi on the Mac: "sync pi" (alamelu `scripts/server_pi_maintenance.sh`) runs
+`HOMEBREW_NO_INSTALL_CLEANUP=1 brew upgrade pi-coding-agent` first, then the Mac login tests and the servers; or run
+`brew upgrade pi-coding-agent` or `pi update` (`~/.pi/agent/settings.json` has
+`selfUpdateCommand: ["/opt/homebrew/bin/brew","upgrade","pi-coding-agent"]`) for the Mac alone. Then reopen Alamelu Pi:
+the app resolves `/opt/homebrew/bin/pi` to the versioned Cellar folder at launch, and a plain `brew upgrade` deletes the
+old folder at once, so an open app could not start pi for a new thread; "sync pi" holds that clean-up back and Homebrew's
+own 30-day clean-up removes old versions later. Homebrew's wrapper sets `PI_SKIP_VERSION_CHECK=1`, so pi itself no longer
+says a new version exists; `brew outdated` does.
+
+The app looks for pi in this order (`lib.rs`): `PI_GUI_PI_BIN`, PATH, `~/.nvm/versions/node/*/bin/pi`, `~/.local/bin/pi`,
+`/opt/homebrew/bin/pi`, ... So a new nvm or `~/.local/bin` pi would win over Homebrew's again; do not install one.
+Plan, audit and evidence: `documents/plan-audit-implementation/pi_homebrew_migration_{criteria,plan,audit,implementation}.md`.
+
 ## Connection, copies and cleanup
 
 Canonical source: `https://github.com/upaayan/alamelu-tauri`.
@@ -223,6 +252,6 @@ and recovery. Synchronize these copies after changing the canonical files.
 Keep one viable rollback of changed runtime files. Remove only owned relay keys,
 private fixture sessions and staging directories after all test children exit.
 Keep concise evidence and do not delete owner history or unrelated backups.
-September live evidence remains in `.pi/agent/backups/compaction-windows-20260914`
-on each platform, with Mac's earlier implementation evidence in
-`.pi/agent/backups/cursor-compaction-implementation-qrgjrw_u`.
+September live evidence remains in WSL's `.pi/agent/backups/compaction-windows-20260914`.
+The Mac's copies of it and of `cursor-compaction-implementation-qrgjrw_u` are removed with the rest of
+`~/.pi/agent/backups` in the 2026-11-07 clean-up (Sudhir: no backup junk).

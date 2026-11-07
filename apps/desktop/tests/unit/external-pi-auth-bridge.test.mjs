@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
@@ -38,6 +38,38 @@ test("derives the installed Pi public auth module from its CLI entrypoint", () =
         "/Users/example/.nvm/versions/node/v24/lib/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
     },
   );
+});
+
+test("derives the Pi package from npm's bundled entrypoint", () => {
+  const root = "/Users/example/.nvm/versions/node/v24/lib/node_modules/@earendil-works/pi-coding-agent";
+  assert.deepEqual(externalPiAuthModulePaths(`${root}/dist/bundle/cli.js`), {
+    packageRoot: root,
+    indexModulePath: `${root}/dist/index.js`,
+    interactiveModulePath: `${root}/dist/modes/interactive/interactive-mode.js`,
+  });
+});
+
+test("derives the Pi package behind Homebrew's wrapper script", () => {
+  const keg = mkdtempSync(path.join(tmpdir(), "pi-homebrew-keg-"));
+  try {
+    const root = path.join(keg, "libexec", "lib", "node_modules", "@earendil-works", "pi-coding-agent");
+    mkdirSync(root, { recursive: true });
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "@earendil-works/pi-coding-agent" }), "utf8");
+    assert.deepEqual(externalPiAuthModulePaths(path.join(keg, "bin", "pi")), {
+      packageRoot: root,
+      indexModulePath: path.join(root, "dist", "index.js"),
+      interactiveModulePath: path.join(root, "dist", "modes", "interactive", "interactive-mode.js"),
+    });
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "something-else" }), "utf8");
+    assert.throws(() => externalPiAuthModulePaths(path.join(keg, "bin", "pi")), /unsupported layout/);
+  } finally {
+    rmSync(keg, { recursive: true, force: true });
+  }
+});
+
+test("rejects a Pi executable in an unknown layout", () => {
+  assert.throws(() => externalPiAuthModulePaths("/usr/local/bin/pi"), /unsupported layout/);
+  assert.throws(() => externalPiAuthModulePaths("/opt/pi/lib/cli.js"), /unsupported layout/);
 });
 
 test("loads authentication metadata from Pi inside WSL", async () => {

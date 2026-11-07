@@ -79,17 +79,6 @@ End-to-end specs run under Playwright against a real Electron window. Specs must
 pnpm --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/ux-repair.spec.ts
 ```
 
-## The pi-ai patch
-
-`pi-ai` truncates composite tool-call IDs to 40 characters, which makes parallel tool calls from one turn collapse into the same ID; providers then reject the replayed history with `400 Duplicate value for 'tool_call_id'` after a model switch. The app patches the installed `pi-ai` to make that truncation collision-proof, and **re-applies the patch automatically whenever the installed `pi` version changes**, since `pi update` reinstalls the library and reverts it. Manual control if you want it:
-
-```bash
-node apps/desktop/scripts/patch-global-pi-ai.mjs --check
-node apps/desktop/scripts/patch-global-pi-ai.mjs --apply
-```
-
-The patcher refuses to touch the file if pi's source no longer matches what it expects, rather than guessing.
-
 ## Repository layout
 
 - `apps/desktop/src-tauri` — Tauri host, native commands and process transport

@@ -46,10 +46,5 @@ if (process.platform !== "win32") {
   );
   await chmod(helper, 0o755);
 }
-await mkdir(path.join(outDir, "extensions"), { recursive: true });
-await cp(
-  path.join(desktopDir, "resources", "alpi-luna-websocket-recovery.ts"),
-  path.join(outDir, "extensions", "alpi-luna-websocket-recovery.ts"),
-);
 
 console.log(`Tauri backend built at ${outDir}`);

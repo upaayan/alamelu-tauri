@@ -10,8 +10,8 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import { randomUUID } from "node:crypto";
-import { chmod, copyFile, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import { appendFileSync, existsSync } from "node:fs";
+import { chmod, copyFile, mkdir, readFile, realpath, stat } from "node:fs/promises";
+import { appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,7 +32,6 @@ import {
   type DesktopDefaultRpcConfig,
   type DesktopDriverKind,
 } from "./rpc-driver-config";
-import { applyPiAiPatch, checkPiAiPatch, readPiVersion, resolvePiAiTarget, shouldReapplyPatch } from "./pi-ai-patch.mjs";
 import { normalizeProcessPathForPackagedApp, resolveInstalledPiBin } from "./process-path";
 import type { DesktopAppState, ThemeMode } from "../src/desktop-state";
 import { desktopIpc, getDesktopCommandFromShortcut } from "../src/ipc";
@@ -372,16 +371,6 @@ const appIconPath = app.isPackaged
   : path.join(__dirname, "..", "..", "resources", "icon.png");
 const appIcon = nativeImage.createFromPath(appIconPath);
 
-function resolveAlpiLunaWebSocketRecoveryExtensionPath(): string {
-  const extensionPath = app.isPackaged
-    ? path.join(process.resourcesPath, "extensions", "alpi-luna-websocket-recovery.ts")
-    : path.join(__dirname, "..", "..", "resources", "alpi-luna-websocket-recovery.ts");
-  if (!existsSync(extensionPath)) {
-    throw new Error(`Alamelu Luna recovery extension is missing: ${extensionPath}`);
-  }
-  return extensionPath;
-}
-
 function readClipboardImageAttachment(): ComposerImageAttachment | null {
   const image = clipboard.readImage();
   if (image.isEmpty()) {
@@ -672,56 +661,6 @@ function resolveAppBrand(): AppBrandConfig {
   };
 }
 
-/**
- * Keeps the installed pi-ai carrying our tool-call-id patch. `pi update` reinstalls the
- * library and silently reverts it, which brings back the duplicate-id 400 on model
- * switches — so the app re-applies it whenever the installed pi version changes.
- * Never runs under test: Playwright boots must not mutate the global npm tree.
- */
-async function ensurePiAiPatched(piBin: string, userDataDir: string): Promise<void> {
-  if (process.env.PI_APP_TEST_MODE) return;
-  const statePath = path.join(userDataDir, "pi-patch-state.json");
-  try {
-    const currentVersion = readPiVersion(piBin);
-    let storedVersion: string | undefined;
-    try {
-      storedVersion = JSON.parse(await readFile(statePath, "utf8")).piVersion;
-    } catch {
-      // No state yet (first launch, or a fresh user-data dir).
-    }
-
-    const target = resolvePiAiTarget(piBin);
-    const state = checkPiAiPatch(target);
-    if (state === "drifted") {
-      bootLog(`pi-ai patch skipped: installed source no longer matches the expected shape (pi ${currentVersion})`);
-      return;
-    }
-    if (!shouldReapplyPatch(storedVersion, currentVersion, state)) {
-      // Record the evaluation even when nothing was applied, so the state file
-      // shows which pi version was last checked and why no patch was needed.
-      if (storedVersion !== currentVersion) {
-        await writeFile(
-          statePath,
-          `${JSON.stringify({ piVersion: currentVersion, state, checkedAt: new Date().toISOString() }, null, 2)}\n`,
-          "utf8",
-        );
-        bootLog(`pi-ai patch not needed for pi ${currentVersion} (${state})`);
-      }
-      return;
-    }
-
-    const result = applyPiAiPatch(target);
-    await writeFile(
-      statePath,
-      `${JSON.stringify({ piVersion: currentVersion, state: "patched", patchedAt: new Date().toISOString() }, null, 2)}\n`,
-      "utf8",
-    );
-    bootLog(`pi-ai patch ${result.changed ? "applied" : "already present"} for pi ${currentVersion}`);
-  } catch (error) {
-    bootLog(`pi-ai patch check failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
 async function ensureRpcAuthCopy(agentDir: string): Promise<void> {
   const source = path.join(homedir(), ".pi/agent/auth.json");
   const destination = path.join(agentDir, "auth.json");
@@ -824,17 +763,9 @@ app.whenReady().then(async () => {
         reject: (error: Error) => void;
       }
     | undefined;
-  if (desktopDriverConfig.driver === "rpc") {
-    // Before the driver exists, so no pi child is ever spawned against an unpatched lib.
-    await ensurePiAiPatched(desktopDriverConfig.rpc.piBin, desktopDriverConfig.userDataDir);
-  }
   if (desktopDriverConfig.driver === "rpc" && !desktopDriverConfig.rpc.allowSharedAgentDir) {
     await ensureRpcAuthCopy(desktopDriverConfig.rpc.agentDir);
   }
-  const alpiLunaWebSocketRecoveryExtensionPath =
-    desktopDriverConfig.driver === "rpc" && isAlpiBrand() && desktopDriverConfig.rpc.noExtensions === false
-      ? resolveAlpiLunaWebSocketRecoveryExtensionPath()
-      : undefined;
   const rpcDriver =
     desktopDriverConfig.driver === "rpc"
       ? createRpcDesktopDriver({
@@ -854,7 +785,6 @@ app.whenReady().then(async () => {
           ...(desktopDriverConfig.rpc.noSkills !== undefined ? { noSkills: desktopDriverConfig.rpc.noSkills } : {}),
           ...(desktopDriverConfig.rpc.noPromptTemplates !== undefined ? { noPromptTemplates: desktopDriverConfig.rpc.noPromptTemplates } : {}),
           ...(desktopDriverConfig.rpc.noThemes !== undefined ? { noThemes: desktopDriverConfig.rpc.noThemes } : {}),
-          ...(alpiLunaWebSocketRecoveryExtensionPath ? { extensionPaths: [alpiLunaWebSocketRecoveryExtensionPath] } : {}),
           ...(desktopDriverConfig.rpc.allowRealWorkspace ? { allowRealWorkspace: desktopDriverConfig.rpc.allowRealWorkspace } : {}),
         })
       : undefined;
@@ -872,7 +802,7 @@ app.whenReady().then(async () => {
     generateThreadTitleOverride: async (workspace, options) => generateThreadTitleOverride?.(workspace, options),
     ...(rpcDriver ? { driver: rpcDriver } : {}),
     ...(desktopDriverConfig.driver === "rpc"
-      ? { sessionDir: desktopDriverConfig.rpc.sessionDir, piBin: desktopDriverConfig.rpc.piBin }
+      ? { sessionDir: desktopDriverConfig.rpc.sessionDir }
       : {}),
   });
   bootLog(`store config userData=${configuredUserDataDir} driver=${desktopDriverConfig.driver} appPath=${app.getAppPath()} cwd=${process.cwd()} path=${process.env.PATH || ""}`);

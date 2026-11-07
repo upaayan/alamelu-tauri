@@ -2,6 +2,11 @@
 
 Start with [the canonical rebuild protection checklist](REBUILD-PROTECTION.md). It includes tracked version-specific adapter patches, Mac/WSL runtime check commands, pre-Rust CI gates, and recovery after package reinstalls. The historical evidence below does not replace those gates.
 
+Mac, since 2026-11-07: Homebrew pi (`brew install pi-coding-agent`), with no launcher re-point and no Luna extension (the
+app no longer ships it). Everything below about the launcher and the Luna check applies to WSL only. A Windows app built
+from this source no longer loads the Luna extension either; WSL's re-pointed launcher is then unnecessary but harmless,
+so leave it.
+
 ## 2026-09-14: Pi 0.85.1 extension startup failure
 
 The Windows app was already current and did not need rebuilding. Upgrading WSL

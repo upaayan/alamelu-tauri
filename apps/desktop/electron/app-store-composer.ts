@@ -22,7 +22,6 @@ import {
 import type { AppStoreInternals } from "./app-store-internals";
 import {
   evaluateModelSwitch,
-  isPiPatchApplied,
   readThreadStats,
   type PreflightDecision,
 } from "./model-switch-preflight";
@@ -509,7 +508,6 @@ async function preflightModelSwitch(
       ...(record?.api !== undefined ? { api: record.api } : {}),
       ...(providerRecord ? { connected: providerRecord.hasAuth !== false } : {}),
     },
-    isPiPatchApplied(store.piBin),
   );
 }
 

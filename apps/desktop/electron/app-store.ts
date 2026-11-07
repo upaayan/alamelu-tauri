@@ -135,8 +135,6 @@ export interface DesktopAppStoreOptions {
   readonly noRepositoryWorkspacePath?: string;
   /** Where pi writes session JSONL. Used to size a thread before a model switch. */
   readonly sessionDir?: string;
-  /** Resolved pi binary, used to detect whether the local pi-ai patch is applied. */
-  readonly piBin?: string;
 }
 
 export class DesktopAppStore implements AppStoreInternals {
@@ -164,7 +162,6 @@ export class DesktopAppStore implements AppStoreInternals {
   private streamingPublishTimer: NodeJS.Timeout | undefined;
   private readonly restoredSelectedSessionKeysAwaitingSelection = new Set<string>();
   readonly sessionDir: string | undefined;
-  readonly piBin: string | undefined;
   private initPromise: Promise<void> | undefined;
   private selectionEpoch = 0;
   private refreshStateDepth = 0;
@@ -188,7 +185,6 @@ export class DesktopAppStore implements AppStoreInternals {
       options.noRepositoryWorkspacePath ??
       join(options.userDataDir, NO_REPOSITORY_WORKSPACE_NAME);
     this.sessionDir = options.sessionDir;
-    this.piBin = options.piBin;
   }
 
   /* ── Lifecycle ──────────────────────────────────────────── */

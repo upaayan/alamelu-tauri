@@ -17,7 +17,7 @@ test('Alamelu Pi electron-builder config is separate and uses alpi executable', 
   assert.match(config, /^  icon: resources\/alpi-icon\.icns$/m);
   assert.match(
     config,
-    /^extraResources:\n  - from: resources\/alpi-icon\.png\n    to: icon\.png\n  - from: resources\/alpi-luna-websocket-recovery\.ts\n    to: extensions\/alpi-luna-websocket-recovery\.ts$/m,
+    /^extraResources:\n  - from: resources\/alpi-icon\.png\n    to: icon\.png$/m,
   );
   assert.match(config, /^publish: null$/m);
 });
