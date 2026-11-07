@@ -1402,6 +1402,13 @@ export async function selectSession(window: Page, sessionTitle: string): Promise
   await expect(window.locator(".topbar__session")).toHaveText(sessionTitle);
 }
 
+/** Select a thread and wait until the app has applied the selection's draft, so typing right after is not overwritten. */
+export async function selectSessionAndWaitForDraft(window: Page, sessionTitle: string): Promise<void> {
+  const nonceBefore = (await getDesktopState(window)).composerDraftSyncNonce;
+  await selectSession(window, sessionTitle);
+  await expect.poll(async () => (await getDesktopState(window)).composerDraftSyncNonce).toBeGreaterThan(nonceBefore);
+}
+
 export async function clickSession(window: Page, sessionTitle: string): Promise<void> {
   await window.locator(".session-row__select", { hasText: sessionTitle }).click();
 }
@@ -1627,6 +1634,21 @@ function ensureNativeClipboardImage(): string {
   return filePath;
 }
 
+/** A thread with two user messages, seeded where the alpi/rpc desktop finds it (session dir + catalog). */
+export async function seedComposerHistorySessionFixture(agentDir: string, workspacePath: string): Promise<void> {
+  const { SessionManager } = await importExternalSessionManager();
+  await withAgentDirEnv(agentDir, async () => {
+    const session = SessionManager.create(workspacePath, join(dirname(agentDir), "sessions"));
+    session.appendModelChange("openai", "gpt-5");
+    session.appendMessage({ role: "user", content: "First question", timestamp: Date.now() });
+    session.appendMessage({ role: "assistant", content: [{ type: "text", text: "First answer" }], timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "Second question", timestamp: Date.now() });
+    session.appendMessage({ role: "assistant", content: [{ type: "text", text: "Second answer" }], timestamp: Date.now() });
+    session.appendSessionInfo("Composer history fixture");
+    await registerSeededSessionInCatalog(agentDir, workspacePath, session, "Composer history fixture");
+  });
+}
+
 /** Large retained archive, but only a small summary/tail remains active in Pi. */
 export async function seedCompactedModelSwitchSessionFixture(agentDir: string, workspacePath: string): Promise<void> {
   const { SessionManager } = await importExternalSessionManager();
@@ -1640,12 +1662,22 @@ export async function seedCompactedModelSwitchSessionFixture(agentDir: string, w
     const second = session.appendMessage({role:"user",content:"Second retained turn",timestamp:Date.now()});
     session.appendCompaction("Second summary",second,600000,{archivedFixture:"x".repeat(2200000)});
     session.appendSessionInfo("Compacted model switch fixture");
-    const { JsonCatalogStore } = await import("@alamelu-pi/catalogs");
-    const catalogs = new JsonCatalogStore({catalogFilePath:join(dirname(agentDir), "catalogs.json")});
-    const workspaceId = await realpath(workspacePath);
-    const sessionRef = {workspaceId,sessionId:session.getSessionId()};
-    await catalogs.workspaces.upsertWorkspace({workspaceId,path:workspaceId,displayName:basename(workspaceId),lastOpenedAt:new Date().toISOString(),sortOrder:0});
-    await catalogs.sessions.upsertSession({sessionRef,workspaceId,title:"Compacted model switch fixture",updatedAt:new Date().toISOString(),status:"idle"});
-    await catalogs.setSessionFile(sessionRef,session.getSessionFile()!);
+    await registerSeededSessionInCatalog(agentDir, workspacePath, session, "Compacted model switch fixture");
   });
+}
+
+/** Register a seeded session in the catalog the alpi/rpc desktop reads, so the app lists it. */
+async function registerSeededSessionInCatalog(
+  agentDir: string,
+  workspacePath: string,
+  session: { getSessionId(): string; getSessionFile(): string | undefined },
+  title: string,
+): Promise<void> {
+  const { JsonCatalogStore } = await import("@alamelu-pi/catalogs");
+  const catalogs = new JsonCatalogStore({ catalogFilePath: join(dirname(agentDir), "catalogs.json") });
+  const workspaceId = await realpath(workspacePath);
+  const sessionRef = { workspaceId, sessionId: session.getSessionId() };
+  await catalogs.workspaces.upsertWorkspace({ workspaceId, path: workspaceId, displayName: basename(workspaceId), lastOpenedAt: new Date().toISOString(), sortOrder: 0 });
+  await catalogs.sessions.upsertSession({ sessionRef, workspaceId, title, updatedAt: new Date().toISOString(), status: "idle" });
+  await catalogs.setSessionFile(sessionRef, session.getSessionFile()!);
 }

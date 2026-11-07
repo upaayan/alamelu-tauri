@@ -7,6 +7,7 @@ import {
   hasFilesInDataTransfer,
 } from "../../src/composer-attachments.ts";
 import { fitComposerTextarea } from "../../src/composer-height.ts";
+import { composerHistoryEntries, stepComposerHistory } from "../../src/composer-history.ts";
 
 function transfer({ types = [], files = [], items = [] } = {}) {
   return { types, files, items };
@@ -70,4 +71,58 @@ test("dispatchNativeAttachments emits captured attachments", async () => {
   target.removeEventListener(NATIVE_ATTACHMENTS_EVENT, listener);
   assert.equal(seen.length, 1);
   assert.equal(seen[0][0].name, "note.txt");
+});
+
+function message(role, text, id = text) {
+  return { kind: "message", role, text, id, createdAt: "2026-11-07T00:00:00.000Z" };
+}
+
+test("composer history lists only the user's own non-blank messages, oldest first", () => {
+  const transcript = [
+    message("user", "first"),
+    message("assistant", "answer one"),
+    { kind: "tool", id: "t1", callId: "c1", toolName: "bash", status: "success", label: "ls", createdAt: "2026-11-07T00:00:00.000Z" },
+    message("user", "   ", "image-only"),
+    message("compactionSummary", "summary"),
+    message("user", "second"),
+  ];
+  assert.deepEqual(composerHistoryEntries(transcript), ["first", "second"]);
+  assert.deepEqual(composerHistoryEntries([]), []);
+});
+
+test("composer history steps like a terminal and leaves other keys alone", () => {
+  const history = ["first", "second", "third"];
+  const base = { hasAttachments: false, history, sessionKey: "w:s" };
+  const step = (key, draft, state) => stepComposerHistory({ ...base, key, draft, state });
+
+  // Up from an empty box brings back the newest message.
+  const up1 = step("ArrowUp", "", undefined);
+  assert.equal(up1.draft, "third");
+  // More Ups go older and stop at the oldest.
+  const up2 = step("ArrowUp", up1.draft, up1.state);
+  assert.equal(up2.draft, "second");
+  const up3 = step("ArrowUp", up2.draft, up2.state);
+  assert.equal(up3.draft, "first");
+  const up4 = step("ArrowUp", up3.draft, up3.state);
+  assert.equal(up4.draft, "first");
+  assert.equal(up4.state.index, 0);
+  // Down goes newer; past the newest it empties the box and ends recall.
+  const down1 = step("ArrowDown", up4.draft, up4.state);
+  assert.equal(down1.draft, "second");
+  const down2 = step("ArrowDown", down1.draft, down1.state);
+  assert.equal(down2.draft, "third");
+  const down3 = step("ArrowDown", down2.draft, down2.state);
+  assert.deepEqual(down3, { draft: "", state: undefined });
+
+  // Typed text and Down without recall are left alone.
+  assert.equal(step("ArrowUp", "typed text", undefined), undefined);
+  assert.equal(step("ArrowDown", "", undefined), undefined);
+  // Attachments, or no history, block the start.
+  assert.equal(stepComposerHistory({ ...base, key: "ArrowUp", draft: "", state: undefined, hasAttachments: true }), undefined);
+  assert.equal(stepComposerHistory({ ...base, key: "ArrowUp", draft: "", state: undefined, history: [] }), undefined);
+  // Editing the recalled text ends recall, so the arrows move the cursor again.
+  assert.equal(step("ArrowUp", "third, edited", up1.state), undefined);
+  // A different thread ends recall; an empty box there starts from its own newest message.
+  assert.equal(stepComposerHistory({ ...base, key: "ArrowUp", draft: "third", state: up1.state, sessionKey: "w:other" }), undefined);
+  assert.equal(stepComposerHistory({ ...base, key: "ArrowUp", draft: "", state: up1.state, sessionKey: "w:other", history: ["elsewhere"] }).draft, "elsewhere");
 });

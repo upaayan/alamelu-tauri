@@ -58,6 +58,7 @@ import {
   readComposerAttachmentsFromFiles,
 } from "./composer-attachments";
 import { fitComposerTextarea } from "./composer-height";
+import { composerHistoryEntries, stepComposerHistory, type ComposerHistoryState } from "./composer-history";
 import { NATIVE_ATTACHMENTS_EVENT, requestNativeClipboardFiles, requestNativeClipboardImage } from "./tauri-native-attachments";
 
 function useDesktopAppState() {
@@ -252,6 +253,7 @@ export default function App() {
   const previousActiveViewRef = useRef<AppView | null>(null);
   const hydratedComposerSessionKeyRef = useRef("");
   const handledComposerSyncNonceRef = useRef(0);
+  const composerHistoryRef = useRef<ComposerHistoryState | undefined>(undefined);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1317,6 +1319,7 @@ export default function App() {
     preserveBottomOnNextPaneResizeRef.current = false;
     resetExactBottomRestoreState(selectedSessionKey || null);
     setDisableTimelineVirtualization(Boolean(selectedSessionKey));
+    composerHistoryRef.current = undefined;
   }, [selectedSessionKey]);
 
   useLayoutEffect(() => {
@@ -2136,6 +2139,28 @@ export default function App() {
 
     if (slashMenu.handleSlashKeyDown(event)) {
       return;
+    }
+
+    if (
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey &&
+      !event.nativeEvent.isComposing &&
+      selectedSessionKey
+    ) {
+      const step = stepComposerHistory({
+        key: event.key,
+        draft: composerDraft,
+        hasAttachments: composerAttachments.length > 0,
+        history: composerHistoryEntries(activeTranscript),
+        sessionKey: selectedSessionKey,
+        state: composerHistoryRef.current,
+      });
+      if (step) {
+        event.preventDefault();
+        composerHistoryRef.current = step.state;
+        setComposerDraft(step.draft);
+        return;
+      }
     }
 
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && selectedSession?.status === "running") {
