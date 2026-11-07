@@ -26,3 +26,11 @@ Manual / live (I1-02):
 - Synthesized image paste: PASS (`pastedImageAdded`)
 - Composer grow/wrap/shrink without `0px`: PASS (unit)
 - Type/wrap/Enter in the live window, Finder `.txt` Cmd+V, one PNG drop count, text-only paste, Numbers/Excel paste: not driven from this session (same automation-permission risk as Round 2). Owner can check on the app now open as Alamelu Pi Tauri.
+
+## GitHub Actions
+
+Run https://github.com/upaayan/alamelu-tauri/actions/runs/34747087267 — success (commit `74d801e`).
+
+- Mac: assets, Pi-free unit, cargo, `.app` artifact all green.
+- Windows: assets, Pi-free unit, cargo, NSIS artifact all green.
+- CI packaged smoke (best effort, `continue-on-error`): app exited `SIGABRT` on the runner (`AssertionError: 'SIGABRT' !== null`). Same class of environmental launch failure as unsigned/no-Pi runner; job stayed green. Local signed smoke remains the required gate and passed.

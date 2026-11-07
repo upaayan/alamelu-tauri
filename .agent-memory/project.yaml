@@ -1,0 +1,16 @@
+# repo-memory contract for this repo (committed). Cards inform; this file enforces.
+project:
+  id: alamelu-tauri-b776c178
+  name: alamelu-tauri
+
+commands: {}        # e.g. test: "uv run pytest"
+environment: {}     # e.g. python_env: ".venv"
+
+# Guardrails are EARNED, not hand-enumerated. Catastrophic blocks (rm -rf, force-push,
+# .env/credentials) are built in. Add repo-specific rules here, or let
+# `repomem mistakes promote <id>` append them after a real incident. WARN-biased.
+guardrails:
+  - id: use-uv-example          # illustrative; edit or delete
+    match: {kind: command, pattern: "\\bpip install\\b"}
+    decision: warn
+    reason: "If this repo uses uv, prefer `uv pip install`."

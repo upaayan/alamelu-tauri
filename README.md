@@ -24,6 +24,7 @@ GitHub Actions produces:
 
 The macOS CI artifact is ad-hoc signed, not notarized. The Windows app uses
 native Tauri and Node on Windows, then runs the installed `pi` through WSL.
+For Pi upgrades, follow [the Windows Pi compatibility checks](documents/PI-UPGRADE-WINDOWS.md).
 It reads Pi credentials from the default WSL distribution; credentials are
 never bundled in either artifact or stored in this repository.
 
