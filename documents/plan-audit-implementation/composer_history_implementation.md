@@ -144,3 +144,19 @@ The old copy, `/Applications/Alamelu Pi Tauri.app.before-composer-history-202611
 ## Sudhir's check in the installed app (I1)
 
 19:19 IST, 2026-11-07. Sudhir tried Up and Down in the installed app: "Looks fine to me."
+
+## Verification Round 4: commit, push, CI, clean-up (I7, I8) (2026-11-07, 19:20–19:25 IST)
+
+```
+git fetch; git log HEAD..origin/main and origin/main..HEAD -> both empty (no one else's commits)
+git add <the 11 files of this change only>; commit 2de5eba "Chat box: Up in an empty box recalls this thread's earlier messages"; git push origin main
+CI "Native builds" run 42378757475 for 2de5eba: success
+  compatibility (macos-15) success · compatibility (windows-2022) success · macOS Apple Silicon success · Windows AMD64 success
+```
+
+- **Old app copy:** `/Applications/Alamelu Pi Tauri.app.before-composer-history-20261107-191249` (77M) was moved to the Trash at 19:20, after Sudhir's check. `/Applications` now holds only `Alamelu Pi Tauri.app`. Sudhir empties the Trash.
+- **Review scratch files:** the prompts, heartbeats, the spare `App.tsx` copy and the two throwaway diagnostic specs went to the Trash. The logs and `finder_launch.sh` stay in `/private/tmp/composer-history-debate.FsBn1t/`, where macOS clears them later.
+- **Stray processes:** no test Electron process is left running.
+- **Documents:** none beyond these four records (plan, P7).
+- **Repo-memory cards:** none.
+- **Windows:** CI built the AMD64 installer. It is not installed in this change (P8).
