@@ -210,3 +210,35 @@ After Sudhir's "keep the stock Cursor adapter" (16:52): `REBUILD-PROTECTION.md` 
 re-synced (32 entries, 0 mismatches); card mem_4ef89d9260c6 replaced by mem_fb0ea5dba49f with the same note
 (`memory_check` OK). The app bundle installed at 16:29 carries the checklist from 16:28 inside its own kit copy; the next
 build refreshes it, and the stable kit in Application Support is current.
+
+## Verification Round 5 — I9 commits and pushes, then I8 Trash (2026-11-07 16:55-16:58 IST, after the PASS)
+
+I9 (before each push `git fetch` and `git log --oneline origin/<upstream>..HEAD` listed only this work's commit):
+```
+alamelu-tauri main:   29154a6 Run on Homebrew pi: drop the Luna extension and the pi-ai patch   -> pushed, origin/main = 29154a6
+alamelu main:         37e8798 sync pi: upgrade the Mac's Homebrew pi first (Sudhir, 7 Nov)      -> pushed, origin/main = 37e8798
+                      (staged: the script, AGENTS.md, and only the new progress.md entry via `git apply --cached`; the
+                      older uncommitted progress.md entries stay uncommitted)
+mock alamelu:         e70fb9c -> git pull --ff-only -> 37e8798 (it also brought 49e8aca of 3 Nov, already on origin; that
+                      commit changes only the laptop-only server_codex_maintenance.sh); HEAD^{tree}
+                      e093c7974646b0e9fcb56ff265ea2cb670bbb23a on mock = laptop
+agents-brain main:    e20fdb8 pi on the Mac: Homebrew route (sync pi runs brew upgrade first)   -> pushed
+lazydata dev-main:    09af5aa1 sync pi: upgrade the Mac's Homebrew pi first (copied from alamelu 37e8798) -> pushed
+                      cmp alamelu vs lazydata scripts/server_pi_maintenance.sh -> byte-identical; both blobs
+                      f7c683aeb34d437589740303fc47c2daa47ed6c7; mode -rwxr-xr-x on both; bash -n OK
+```
+I8 (moves to `~/.Trash` only; nothing deleted; Sudhir empties the Trash; `~/.Trash` itself cannot be listed from this
+shell, so each old place was checked to be empty):
+```
+trashed (259M): ~/pi-homebrew-hold (old Tauri app, nvm pi package and link, ~/.local/bin/pi, pi_update_safe,
+                old ~/.pi/agent/bin/pi link, settings.json copy, patched pi-cursor-sdk, RESTORE.txt)
+trashed (77M):  /Applications/Alamelu Pi Tauri.app.backup-20260901-001156
+trashed (293M): /Applications/Alamelu Pi.app.before-compaction-queue-20260913-013815
+trashed (293M): /Applications/Alamelu Pi.app (the old Electron app)
+trashed (340M): ~/.pi/agent/backups
+trashed (1.3G): apps/desktop/src-tauri/target (Rust build folder)
+trashed:        both leftover pi-patch-state.json files (Tauri and Electron app data folders), the empty nvm
+                @earendil-works scope folder
+after: pi --version 1.5.0; login shell finds only /opt/homebrew/bin/pi; /Applications has only Alamelu Pi Tauri.app,
+       which is running (Sudhir's session); every old place reported "gone from place"
+```
