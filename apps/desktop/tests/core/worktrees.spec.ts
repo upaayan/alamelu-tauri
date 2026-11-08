@@ -10,7 +10,14 @@ import {
   waitForWorkspaceByPath,
 } from "../helpers/electron-app";
 
-test("creates and selects a worktree-backed workspace from the desktop UI", async () => {
+// DISABLED on 2026-11-07, off by design: Alamelu Pi's only session driver (pi RPC) has no worktrees
+// (`supportsWorktrees = false` in apps/desktop/electron/rpc-desktop-driver.ts; alpi_ux_repair_plan.md
+// §1.4(d): "only honest disabling"). createWorktree and worktree threads are rejected, so these tests can
+// never pass. Since 2026-11-08 the workspace menu no longer offers "Create permanent worktree". The off
+// state, chip and menu, is checked by ux-repair.spec.ts ("a rejected worktree thread keeps the prompt and
+// explains itself").
+
+test.skip("creates and selects a worktree-backed workspace from the desktop UI", async () => {
   test.setTimeout(90_000);
   const userDataDir = await makeUserDataDir();
   const workspacePath = await makeGitWorkspace("worktree-live-workspace");
@@ -56,7 +63,7 @@ test("creates and selects a worktree-backed workspace from the desktop UI", asyn
   }
 });
 
-test("shows a worktree icon in the sidebar without a local text badge", async () => {
+test.skip("shows a worktree icon in the sidebar without a local text badge", async () => {
   test.setTimeout(90_000);
   const userDataDir = await makeUserDataDir();
   const workspacePath = await makeGitWorkspace("worktree-sidebar-indicator");
@@ -103,7 +110,7 @@ test("shows a worktree icon in the sidebar without a local text badge", async ()
   }
 });
 
-test("keeps orphaned worktree workspaces visible after removing the root workspace", async () => {
+test.skip("keeps orphaned worktree workspaces visible after removing the root workspace", async () => {
   test.setTimeout(90_000);
   const userDataDir = await makeUserDataDir();
   const workspacePath = await makeGitWorkspace("worktree-orphan-visibility");

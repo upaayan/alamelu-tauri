@@ -225,7 +225,8 @@ test("dark mode keeps the send button visible before and after typing", async ()
       .toBe(true);
 
     await settingsSurface.getByRole("button", { name: "Back to app" }).click();
-    await selectSessionAndWaitForDraft(window, "Dark send button session");
+    // No wait before typing: clicking the open thread must not wipe text typed right after (the app keeps it).
+    await selectSession(window, "Dark send button session");
 
     const sendButton = window.getByTestId("send");
     await expect(sendButton).toBeDisabled();

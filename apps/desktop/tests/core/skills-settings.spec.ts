@@ -1,7 +1,27 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createNamedThread, launchDesktop, makeUserDataDir, makeWorkspace, openSidebarDestination } from "../helpers/electron-app";
+import {
+  createNamedThread,
+  launchDesktop,
+  makeUserDataDir,
+  makeWorkspace,
+  openSidebarDestination,
+  seedAgentDir,
+} from "../helpers/electron-app";
+
+// pi needs `name` and `description` frontmatter in SKILL.md and loads a workspace's .agents/skills only for
+// a trusted project (RPC mode cannot ask), so each test trusts its project. The launch helper gives the app
+// a temporary HOME, which keeps the user's own ~/.agents/skills out.
+async function launchWithWorkspaceSkills(userDataDir: string, workspacePath: string) {
+  const agentDir = join(userDataDir, "agent");
+  await seedAgentDir(agentDir, { defaultProjectTrust: "always" });
+  return launchDesktop(userDataDir, {
+    agentDir,
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+}
 
 test("shows skills and settings surfaces from runtime data", async () => {
   test.setTimeout(60_000);
@@ -10,7 +30,12 @@ test("shows skills and settings surfaces from runtime data", async () => {
   await mkdir(join(workspacePath, ".agents", "skills", "demo-skill"), { recursive: true });
   await writeFile(
     join(workspacePath, ".agents", "skills", "demo-skill", "SKILL.md"),
-    `# Demo Skill
+    `---
+name: demo-skill
+description: Use this skill when the user wants a short demo workflow.
+---
+
+# Demo Skill
 
 Use this skill when the user wants a short demo workflow.
 
@@ -22,10 +47,7 @@ Use this skill when the user wants a short demo workflow.
     "utf8",
   );
 
-  const harness = await launchDesktop(userDataDir, {
-    initialWorkspaces: [workspacePath],
-    testMode: "background",
-  });
+  const harness = await launchWithWorkspaceSkills(userDataDir, workspacePath);
 
   try {
     const window = await harness.firstWindow();
@@ -75,17 +97,19 @@ test("matches skill slash commands by skill name aliases", async () => {
   await mkdir(join(workspacePath, ".agents", "skills", "plan-loop"), { recursive: true });
   await writeFile(
     join(workspacePath, ".agents", "skills", "plan-loop", "SKILL.md"),
-    `# Plan Loop
+    `---
+name: plan-loop
+description: Use this skill for complex or high-risk implementation work that needs plan-first execution.
+---
+
+# Plan Loop
 
 Use this skill for complex or high-risk implementation work that needs plan-first execution.
 `,
     "utf8",
   );
 
-  const harness = await launchDesktop(userDataDir, {
-    initialWorkspaces: [workspacePath],
-    testMode: "background",
-  });
+  const harness = await launchWithWorkspaceSkills(userDataDir, workspacePath);
 
   try {
     const window = await harness.firstWindow();

@@ -414,8 +414,9 @@ test("refreshing after a provider becomes available auto-enables that provider's
 
     await modelBadge.click();
     const dropdown = window.locator(".new-thread__hint .model-selector__dropdown").first();
-    await expect(dropdown).toContainText("GPT-5");
-    await expect(dropdown).toContainText("GPT-4o");
+    // Model labels come from pi's catalog, which names them in lower case.
+    await expect(dropdown).toContainText("gpt-5");
+    await expect(dropdown).toContainText("gpt-4o");
   } finally {
     await harness.close();
   }

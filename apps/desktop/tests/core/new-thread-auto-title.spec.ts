@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import {
   createNamedThread,
+  expandWorkspaceOfSession,
   getDesktopState,
   launchDesktop,
   makeGitWorkspace,
@@ -46,7 +47,8 @@ test("auto-titles a brand-new local thread after showing the placeholder first",
   }
 });
 
-test("auto-titles a brand-new worktree thread after showing the placeholder first", async () => {
+// DISABLED on 2026-11-07, off by design: worktrees are off in Alamelu Pi (see worktrees.spec.ts).
+test.skip("auto-titles a brand-new worktree thread after showing the placeholder first", async () => {
   test.setTimeout(90_000);
   const userDataDir = await makeUserDataDir("pi-app-user-data-");
   const workspacePath = await makeGitWorkspace("auto-title-worktree-workspace");
@@ -216,6 +218,14 @@ test("reopen heals a stale placeholder catalog title after auto-title finished",
     await resolveDeferredThreadTitleEventually(harness, generatedTitle);
     await expect(window.locator(".topbar__session")).toHaveText(generatedTitle);
     await expect(window.locator(".session-row__select", { hasText: generatedTitle }).first()).toBeVisible();
+    // Close only once the first run has ended, so the reopen below checks a finished thread. Closed
+    // mid-run, the reopened thread kept the stale catalog title even though pi's file had the name.
+    await expect
+      .poll(async () => {
+        const current = await getDesktopState(window);
+        return current.workspaces.flatMap((entry) => entry.sessions).find((session) => session.id === current.selectedSessionId)?.status;
+      })
+      .not.toBe("running");
 
     const state = await getDesktopState(window);
     workspaceId = state.selectedWorkspaceId;
@@ -243,6 +253,7 @@ test("reopen heals a stale placeholder catalog title after auto-title finished",
     const window = await secondRun.firstWindow();
     await waitForWorkspaceByPath(window, workspacePath);
     await expect(window.locator(".topbar__session")).toHaveText(generatedTitle);
+    await expandWorkspaceOfSession(window, generatedTitle);
     await expect(window.locator(".session-row__select", { hasText: generatedTitle }).first()).toBeVisible();
     await expect(window.locator(".session-row__select", { hasText: "New thread" })).toHaveCount(0);
   } finally {

@@ -43,7 +43,10 @@ export class RpcDesktopDriver implements DesktopSessionDriver {
   private readonly paths: ValidatedLabPaths;
   private readonly openSessions = new Map<string, SessionRef>();
   readonly supportsWorktrees = false;
-  readonly supportsTree = true;
+  // `/tree` is off (Sudhir, 2026-11-07: "I do not need the tree command"). pi's RPC mode has no
+  // in-place branch switch, so navigateSessionTree uses pi's `fork`, which writes a new thread file
+  // this app never tracks. See tests/core/tree-command.spec.ts for the full reasons.
+  readonly supportsTree = false;
   readonly supportsCompact = true;
   readonly supportsQueueEditing = false;
   readonly supportsSkillToggles = false;

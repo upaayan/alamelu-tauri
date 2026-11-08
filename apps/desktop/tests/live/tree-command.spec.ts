@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { getRealAuthConfig, launchDesktop, makeUserDataDir, makeWorkspace } from "../helpers/electron-app";
 
-test("runs /tree summarize flow against a real provider and surfaces the branch summary", async () => {
+// DISABLED on 2026-11-07: `/tree` is turned off in Alamelu Pi (Sudhir). The reasons, and what reviving
+// it would need, are at the top of tests/core/tree-command.spec.ts.
+test.skip("runs /tree summarize flow against a real provider and surfaces the branch summary", async () => {
   test.setTimeout(240_000);
   const realAuth = getRealAuthConfig();
   test.skip(!realAuth.enabled, realAuth.skipReason);

@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
   createSessionViaIpc,
+  expandWorkspaceOfSession,
   getSelectedTranscript,
   launchDesktop,
   makeUserDataDir,
@@ -23,12 +24,13 @@ test("boots an existing workspace and starts a new thread through the real UI", 
 
     await waitForWorkspaceByPath(window, workspacePath);
     await expect(window.getByTestId("workspace-list")).toContainText(basename(workspacePath));
-    await window.getByRole("complementary").getByRole("button", { name: "New thread" }).click();
+    // Each workspace row also has a "New thread in <workspace>" button (commit 04f0de2).
+    await window.getByRole("complementary").getByRole("button", { name: "New thread", exact: true }).click();
 
     const prompt = window.getByLabel("New thread prompt");
     await expect(prompt).toBeVisible();
     await expect(prompt).toBeFocused();
-    await expect(window.getByRole("heading", { name: "Let's build" })).toBeVisible();
+    await expect(window.getByRole("heading", { name: "Alamelu Pi" })).toBeVisible();
     await prompt.fill(promptText);
 
     await window.getByRole("button", { name: "Start thread" }).click();
@@ -64,6 +66,7 @@ test("aligns workspace names with session titles in the sidebar gutter", async (
     await waitForWorkspaceByPath(window, workspacePath);
     await expect(window.getByTestId("workspace-list")).toContainText(basename(workspacePath));
     await createSessionViaIpc(window, workspacePath, "Aligned session");
+    await expandWorkspaceOfSession(window, "Aligned session");
 
     const workspaceGroup = window.locator(".workspace-group").first();
     const workspaceName = workspaceGroup.locator(".workspace-row__name");

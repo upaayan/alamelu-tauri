@@ -126,7 +126,17 @@ test("reopens persisted folders and thread state while a saved running session k
       });
     }
 
-    await expect(window.getByTestId("transcript")).toContainText("stream chunk 23");
+    // Replies show only when finished (commit a8a9832; timeline-pinning's final-only test): while it
+    // streams, the timeline shows "Preparing response…" and the text is kept in the transcript record.
+    await expect(window.locator(".timeline-item--assistant").last()).toHaveText("Preparing response…");
+    await expect
+      .poll(async () => {
+        const transcript = await getSelectedTranscript(window);
+        return (transcript?.transcript ?? []).some(
+          (item) => item.kind === "message" && item.role === "assistant" && item.text.includes("stream chunk 23"),
+        );
+      })
+      .toBe(true);
     await expect
       .poll(async () => {
         const state = await getDesktopState(window);

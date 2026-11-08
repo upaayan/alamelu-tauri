@@ -73,7 +73,7 @@ pnpm --filter @alamelu-pi/desktop run test:tauri:functional
 pnpm --filter @alamelu-pi/pi-rpc-driver test        # RPC driver suite
 ```
 
-End-to-end specs run under Playwright against a real Electron window. Specs must set `PI_GUI_BRAND=alpi` and an isolated `PI_APP_USER_DATA_DIR`; unbranded specs select a driver this fork no longer has and cannot boot. Run them by name:
+End-to-end specs run under Playwright against a real Electron window. The shared launch helper (`apps/desktop/tests/helpers/electron-app.ts`) gives every spec `PI_GUI_BRAND=alpi` and an isolated `PI_APP_USER_DATA_DIR`; unbranded, the app selects a driver this fork no longer has and cannot boot. Specs for features that are off in Alamelu Pi (`/tree`, worktrees, editing queued messages) are skipped, with the reason at the top of the test. Run the whole core lane with `pnpm --filter @alamelu-pi/desktop run test:e2e:core`, or specs by name:
 
 ```bash
 pnpm --filter @alamelu-pi/desktop run test:e2e:runner -- apps/desktop/tests/core/ux-repair.spec.ts

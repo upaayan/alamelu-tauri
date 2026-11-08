@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   applyHostUiRequestToExtensionUiState,
   type GenerateThreadTitleOptions,
@@ -29,6 +29,7 @@ import type {
   RuntimeCommandRecord,
   RuntimeLoginCallbacks,
   RuntimeSettingsSnapshot,
+  RuntimeSkillRecord,
   RuntimeSnapshot,
 } from "@alamelu-pi/session-driver/runtime-types";
 import {
@@ -162,6 +163,7 @@ export class DesktopAppStore implements AppStoreInternals {
   private streamingPublishTimer: NodeJS.Timeout | undefined;
   private readonly restoredSelectedSessionKeysAwaitingSelection = new Set<string>();
   readonly sessionDir: string | undefined;
+  readonly generateThreadTitleOverride: DesktopAppStoreOptions["generateThreadTitleOverride"];
   private initPromise: Promise<void> | undefined;
   private selectionEpoch = 0;
   private refreshStateDepth = 0;
@@ -185,6 +187,7 @@ export class DesktopAppStore implements AppStoreInternals {
       options.noRepositoryWorkspacePath ??
       join(options.userDataDir, NO_REPOSITORY_WORKSPACE_NAME);
     this.sessionDir = options.sessionDir;
+    this.generateThreadTitleOverride = options.generateThreadTitleOverride;
   }
 
   /* ── Lifecycle ──────────────────────────────────────────── */
@@ -687,7 +690,7 @@ export class DesktopAppStore implements AppStoreInternals {
         const snapshot = await this.driver.runtimeSupervisor.refreshRuntime(ws);
         this.state = {
           ...this.state,
-          runtimeByWorkspace: { ...this.state.runtimeByWorkspace, [workspace.id]: snapshot },
+          runtimeByWorkspace: { ...this.state.runtimeByWorkspace, [workspace.id]: this.withDiscoveredSkills(workspace.id, snapshot) },
         };
       } catch {
         // A workspace that cannot refresh keeps its previous snapshot.
@@ -1616,7 +1619,33 @@ export class DesktopAppStore implements AppStoreInternals {
   }
 
   private serializeRuntimeState(): Record<string, RuntimeSnapshot> {
-    return mapToRecord(this.runtimeByWorkspace);
+    return Object.fromEntries(
+      [...this.runtimeByWorkspace].map(([workspaceId, snapshot]) => [workspaceId, this.withDiscoveredSkills(workspaceId, snapshot)]),
+    );
+  }
+
+  /**
+   * pi's RPC runtime reports no skills list (`skills: []`), so the Skills view would always be empty.
+   * Take the list from the skill commands pi returned for this workspace's threads.
+   */
+  private withDiscoveredSkills(workspaceId: string, snapshot: RuntimeSnapshot): RuntimeSnapshot {
+    const skills = new Map<string, RuntimeSkillRecord>();
+    for (const sessionRef of this.sessionRefsForWorkspace(workspaceId)) {
+      for (const command of this.sessionState.sessionCommandsBySession.get(sessionKey(sessionRef)) ?? []) {
+        if (command.source !== "skill" || skills.has(command.name)) continue;
+        skills.set(command.name, {
+          name: command.name.replace(/^skill:/, ""),
+          description: command.description ?? "",
+          filePath: command.sourceInfo.path,
+          baseDir: command.sourceInfo.baseDir ?? dirname(command.sourceInfo.path),
+          source: command.sourceInfo.source,
+          enabled: true,
+          disableModelInvocation: false,
+          slashCommand: `/${command.name}`,
+        });
+      }
+    }
+    return skills.size > 0 ? { ...snapshot, skills: [...skills.values()] } : snapshot;
   }
 
   private async serializeRuntimeStateForCurrentWorkspaces(): Promise<Record<string, RuntimeSnapshot>> {
@@ -1693,6 +1722,8 @@ export class DesktopAppStore implements AppStoreInternals {
     const key = sessionKey(sessionRef);
     const serializedExtensionUi = this.sessionState.extensionUiBySession.get(key);
 
+    const runtime = state.runtimeByWorkspace[sessionRef.workspaceId];
+
     return {
       ...state,
       sessionCommandsBySession: updateRecordValue(
@@ -1700,6 +1731,14 @@ export class DesktopAppStore implements AppStoreInternals {
         key,
         this.sessionState.sessionCommandsBySession.get(key),
       ),
+      ...(runtime
+        ? {
+            runtimeByWorkspace: {
+              ...state.runtimeByWorkspace,
+              [sessionRef.workspaceId]: this.withDiscoveredSkills(sessionRef.workspaceId, runtime),
+            },
+          }
+        : {}),
       sessionExtensionUiBySession: updateRecordValue(
         state.sessionExtensionUiBySession,
         key,

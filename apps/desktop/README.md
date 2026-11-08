@@ -46,7 +46,7 @@ Live agent tests use your existing `pi` runtime and provider auth. If local `pi`
 Use the smallest lane that matches the changed surface.
 
 - `core`
-  Background-friendly Electron UI coverage. This is the default lane for renderer, sidebar, composer, persistence, settings, skills, and worktree UI behavior.
+  Background-friendly Electron UI coverage. This is the default lane for renderer, sidebar, composer, persistence, settings, and skills behavior. Worktrees are off in Alamelu Pi, so their specs are skipped.
 
   ```bash
   pnpm --filter @alamelu-pi/desktop run test:e2e
@@ -127,7 +127,7 @@ Rerun the matching lane before closing for `core` and `live`.
 For `native`, rerun the targeted native spec by default and expand to `test:e2e:native` only when the change touches shared native helpers, multiple native specs, or lane-wide native behavior.
 
 ```bash
-pnpm --filter @alamelu-pi/desktop run test:core:worktrees
+pnpm --filter @alamelu-pi/desktop run test:core:navigation
 pnpm --filter @alamelu-pi/desktop run test:core:persistence
 pnpm --filter @alamelu-pi/desktop run test:live:tool-calls
 pnpm --filter @alamelu-pi/desktop run test:native:paste

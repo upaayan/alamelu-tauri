@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
   createNamedThread,
+  expandWorkspaceOfSession,
   getDesktopState,
   launchDesktop,
   makeUserDataDir,
@@ -54,6 +55,7 @@ test("persists workspace, selected session, and draft across app restart", async
         hasPersistenceSession: true,
       });
     await expect(window.getByTestId("workspace-list")).toContainText(basename(workspacePath));
+    await expandWorkspaceOfSession(window, "Persistence session");
     await expect(window.locator(".session-row--active")).toContainText("Persistence session");
     await expect(window.getByTestId("composer")).toHaveValue(draft);
 

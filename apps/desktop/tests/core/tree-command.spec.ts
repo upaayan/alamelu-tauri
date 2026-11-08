@@ -11,7 +11,33 @@ import {
   selectSession,
 } from "../helpers/electron-app";
 
-test("opens /tree from the composer, navigates branches, and blocks it on the new-thread surface", async () => {
+// DISABLED on 2026-11-07: `/tree` is turned off in Alamelu Pi (Sudhir: "I do not need the tree command.
+// So, 2 it is. But disable the test also. And document it as comments inside the test or somewhere.").
+// Off by `supportsTree = false` in apps/desktop/electron/rpc-desktop-driver.ts; ux-repair.spec.ts checks
+// that the menu no longer offers it and a typed `/tree` is refused.
+//
+// What these tests covered: `/tree` opens the branch map of a thread; you pick another branch and
+// switch (with or without a summary); the chat box and conversation then show that branch; `/tree` is
+// refused on the new-thread screen; tool results show as short previews in the map.
+//
+// Why `/tree` is off:
+// - pi's RPC mode has no in-place branch switch. packages/pi-rpc-driver/src/pi-rpc-driver.ts
+//   navigateSessionTree sends pi's `fork`, which writes a NEW thread file with a new pi
+//   session id. The app keeps the original thread selected and never lists the new file, so messages
+//   sent after a switch are missing from the thread after a restart.
+// - The summary choice in the dialog is ignored (the driver drops the options argument).
+// - transcriptFromLocalSessionFile reads every message entry in the file regardless of
+//   branch, so a thread branched in pi's terminal shows all branches mixed together.
+//
+// To revive these tests (only once `/tree` works properly), they also need:
+// - Seeding the app can see: the fixtures (seedBranchedTreeSessionFixture, seedToolResultTreeSessionFixture
+//   in tests/helpers/electron-app.ts) create sessions in pi's default folder with no catalog entry. Use
+//   `SessionManager.create(workspacePath, join(dirname(agentDir), "sessions"))` and then
+//   `registerSeededSessionInCatalog(...)`, as seedComposerHistorySessionFixture does.
+// - The workspace expanded before clicking the thread: sidebar workspaces start collapsed.
+// - Waiting for the selection before typing (selectSessionAndWaitForDraft).
+// - The tool-row expectation `[read: …]` updated: the RPC driver's tree shows the tool's output.
+test.skip("opens /tree from the composer, navigates branches, and blocks it on the new-thread surface", async () => {
   test.setTimeout(90_000);
   const userDataDir = await makeUserDataDir();
   const agentDir = join(userDataDir, "agent");
@@ -103,7 +129,8 @@ test("opens /tree from the composer, navigates branches, and blocks it on the ne
   }
 });
 
-test("renders tool results with compact previews in the tree modal", async () => {
+// Disabled with the test above; see the comment at the top of this file.
+test.skip("renders tool results with compact previews in the tree modal", async () => {
   test.setTimeout(90_000);
   const userDataDir = await makeUserDataDir();
   const agentDir = join(userDataDir, "agent");

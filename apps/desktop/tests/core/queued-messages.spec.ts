@@ -3,6 +3,9 @@
 // driver for that mode) and it exercises queue editing, which the RPC driver does not support.
 // The RPC-driven queue display is covered by tests/core/compaction-status.spec.ts and the
 // real-Pi check in tests/live/compaction-queue.spec.ts. Kept for history; not run.
+// 2026-11-07: both tests are now skipped, so "not run" is true (nothing skipped them before). Launching
+// as Alamelu Pi works, but queue editing stays off (`supportsQueueEditing = false`, commit 288a725), and
+// display-only queued messages are checked by compaction-status.spec.ts.
 import { expect, test } from "@playwright/test";
 import type { SessionDriverEvent, SessionQueuedMessage, SessionRef, WorkspaceRef } from "@alamelu-pi/session-driver";
 import {
@@ -96,7 +99,7 @@ async function transcriptMessages(window: Parameters<typeof getDesktopState>[0])
   ) ?? [];
 }
 
-test("shows queued messages while running and preserves attachments through inline edit", async () => {
+test.skip("shows queued messages while running and preserves attachments through inline edit", async () => {
   test.setTimeout(60_000);
   const userDataDir = await makeUserDataDir();
   const workspacePath = await makeWorkspace("queued-messages-core");
@@ -152,7 +155,7 @@ test("shows queued messages while running and preserves attachments through inli
   }
 });
 
-test("delineates queued follow-ups and submitted steers in the timeline", async () => {
+test.skip("delineates queued follow-ups and submitted steers in the timeline", async () => {
   test.setTimeout(60_000);
   const userDataDir = await makeUserDataDir();
   const workspacePath = await makeWorkspace("queued-messages-timeline");

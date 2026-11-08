@@ -429,13 +429,18 @@ export class PiRpcDriver implements SessionDriver {
 
   async renameSession(sessionRef: SessionRef, title: string): Promise<void> {
     const record = this.requireSession(sessionRef);
-    return this.enqueueIdleOperation(record, async () => {
-      const current = await this.prepareIdleClientForMutation(record);
+    const applyName = async (current: SessionRecord) => {
       const response = await current.client.sendCommand({ type: "set_session_name", name: title }, `set-name-${randomUUID()}`);
       if (!response.success) throw new Error(response.error ?? "RPC set_session_name failed");
       current.snapshot = { ...current.snapshot, title, updatedAt: this.now() };
       this.emit(sessionRef, { type: "sessionUpdated", sessionRef, timestamp: this.now(), snapshot: current.snapshot });
-    });
+    };
+    // pi applies set_session_name at any time, also during a run (dist/modes/rpc/rpc-mode.js). Waiting for an
+    // idle child made a rename during the first run fail ("must wait for it to finish"), losing the auto-title.
+    if (record.snapshot.runningRunId || record.snapshot.status === "running") {
+      return applyName(record);
+    }
+    return this.enqueueIdleOperation(record, async () => applyName(await this.prepareIdleClientForMutation(record)));
   }
 
   /**
@@ -946,9 +951,9 @@ export class PiRpcDriver implements SessionDriver {
     const files = fs.readdirSync(this.paths.sessionDir, { withFileTypes: true });
     const expectedSuffix = `_${sessionId}.jsonl`;
     const match = files.find((entry) => entry.isFile() && entry.name.endsWith(expectedSuffix));
-    if (!match) {
-      throw new Error(`RPC lab session not found in isolated session dir: ${sessionId}`);
-    }
+    // pi writes a thread's file only when its first message is sent, so a thread that never sent one
+    // has no file yet. `--session-id` with `--session-dir` opens it, or creates it in this folder.
+    if (!match) return;
     const resolved = fs.realpathSync.native(path.join(this.paths.sessionDir, match.name));
     if (!resolved.startsWith(`${this.paths.sessionDir}${path.sep}`)) {
       throw new Error(`RPC lab session resolves outside isolated session dir: ${resolved}`);

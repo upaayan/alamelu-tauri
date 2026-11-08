@@ -34,6 +34,7 @@ interface SidebarProps {
   readonly visibleWorkspaces: readonly WorkspaceRecord[];
   readonly threadGroups: readonly ThreadGroup[];
   readonly linkedWorktreeByWorkspaceId: Map<string, WorktreeRecord>;
+  readonly worktreesUnsupported: boolean;
   readonly wsMenu: WorkspaceMenuState;
   readonly api: PiDesktopApi;
   readonly setSnapshot: Dispatch<SetStateAction<DesktopAppState | null>>;
@@ -61,6 +62,7 @@ export function Sidebar(props: SidebarProps) {
     visibleWorkspaces,
     threadGroups,
     linkedWorktreeByWorkspaceId,
+    worktreesUnsupported,
     wsMenu,
     api,
     setSnapshot,
@@ -220,6 +222,7 @@ export function Sidebar(props: SidebarProps) {
                     selectedWorkspace={selectedWorkspace}
                     selectedSession={selectedSession}
                     linkedWorktreeByWorkspaceId={linkedWorktreeByWorkspaceId}
+                    worktreesUnsupported={worktreesUnsupported}
                     wsMenu={wsMenu}
                     api={api}
                     onArchiveSession={onArchiveSession}
@@ -237,6 +240,7 @@ export function Sidebar(props: SidebarProps) {
                     selectedWorkspace={selectedWorkspace}
                     selectedSession={selectedSession}
                     linkedWorktreeByWorkspaceId={linkedWorktreeByWorkspaceId}
+                    worktreesUnsupported={worktreesUnsupported}
                     wsMenu={wsMenu}
                     api={api}
                     onArchiveSession={onArchiveSession}
@@ -258,6 +262,7 @@ export function Sidebar(props: SidebarProps) {
                     selectedWorkspace={selectedWorkspace}
                     selectedSession={selectedSession}
                     linkedWorktreeByWorkspaceId={linkedWorktreeByWorkspaceId}
+                    worktreesUnsupported={worktreesUnsupported}
                     wsMenu={wsMenu}
                     api={api}
                     onArchiveSession={onArchiveSession}
@@ -284,6 +289,7 @@ interface WorkspaceGroupProps {
   readonly selectedWorkspace: WorkspaceRecord | undefined;
   readonly selectedSession: SessionRecord | undefined;
   readonly linkedWorktreeByWorkspaceId: Map<string, WorktreeRecord>;
+  readonly worktreesUnsupported: boolean;
   readonly wsMenu: WorkspaceMenuState;
   readonly api: PiDesktopApi;
   readonly onArchiveSession: (target: { workspaceId: string; sessionId: string }) => void;
@@ -335,6 +341,7 @@ function WorkspaceGroupContent(
     selectedWorkspace,
     selectedSession,
     linkedWorktreeByWorkspaceId,
+    worktreesUnsupported,
     wsMenu,
     api,
     onArchiveSession,
@@ -413,7 +420,7 @@ function WorkspaceGroupContent(
                 >
                   Remove worktree
                 </button>
-              ) : isNoRepository ? null : (
+              ) : isNoRepository || worktreesUnsupported ? null : (
                 <button
                   className="workspace-menu__item"
                   type="button"

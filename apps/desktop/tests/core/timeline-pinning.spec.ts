@@ -404,8 +404,6 @@ test("restores the true bottom when reopening a virtualized thread with oversize
     await createTimelineSession(window, "Neighbor session");
     await expect(window.locator(".topbar__session")).toHaveText("Neighbor session");
 
-    const collapsedWorkspace = window.locator(".workspace-row--active .workspace-row__select:has([data-collapsed])");
-    if (await collapsedWorkspace.count()) await collapsedWorkspace.click();
     await selectSession(window, targetTitle);
     const finalRow = window.locator(".timeline-item--assistant", { hasText: finalMarker });
     await expect(finalRow).toBeVisible();
@@ -448,8 +446,6 @@ test("keeps a virtualized thread off-bottom after switching sessions", async () 
     await createTimelineSession(window, "Neighbor session");
     await expect(window.locator(".topbar__session")).toHaveText("Neighbor session");
 
-    const collapsedWorkspace = window.locator(".workspace-row--active .workspace-row__select:has([data-collapsed])");
-    if (await collapsedWorkspace.count()) await collapsedWorkspace.click();
     await selectSession(window, targetTitle);
     await expect(window.locator(".topbar__session")).toHaveText(targetTitle);
     await expect.poll(async () => (await getTimelineScrollMetrics(window)).remainingFromBottom).toBeGreaterThan(500);

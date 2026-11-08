@@ -98,7 +98,8 @@ test("shows compaction progress and its outcome in the timeline, header and comp
     const transcript = window.getByTestId("transcript");
     await expect(transcript).toContainText("Compacting conversation…");
     await expect(window.locator(".chat-header__status")).toContainText("Compacting conversation for");
-    await expect(window.locator(".composer__hint")).toContainText("Compacting conversation for");
+    // The elapsed label has its own slot beside the hint (commit 3c02194).
+    await expect(window.locator(".composer__elapsed")).toContainText("Compacting conversation for");
 
     await emitTestSessionEvent(harness, {
       type: "compactionEnded",

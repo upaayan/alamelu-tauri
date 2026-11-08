@@ -56,7 +56,7 @@ test("settings lets the user save an API key for a built-in provider", async () 
     const connectedProviders = window.locator(".settings-section", {
       has: window.locator(".settings-section__title", { hasText: "Connected" }),
     });
-    await expect(connectedProviders).toContainText("openai");
+    await expect(connectedProviders).toContainText(/openai/i);
     await expect(connectedProviders).toContainText("API key");
     await expect(connectedProviders.getByRole("button", { name: "Manage" })).toBeVisible();
 
@@ -292,7 +292,10 @@ test("settings keeps models.json provider overrides in the external-config state
   }
 });
 
-test("opening the first workspace from the empty state hydrates provider and model settings without refresh", async () => {
+// DISABLED on 2026-11-07, off by design: Alamelu Pi always has the "Others" (No Repository) workspace
+// (alpi_sidebar_no_repository_plan.md §2, commit 04f0de2), so the "no folders yet" empty state this test
+// starts from can never appear. The always-present Others workspace is checked by new-thread-composer.spec.ts.
+test.skip("opening the first workspace from the empty state hydrates provider and model settings without refresh", async () => {
   test.setTimeout(60_000);
   const userDataDir = await makeUserDataDir();
   const agentDir = join(userDataDir, "agent");
@@ -375,8 +378,8 @@ test("provider login dialog completes a mocked browser OAuth flow from Settings"
       has: window.locator(".settings-section__title", { hasText: "Sign in" }),
     });
     const providerRow = signInProviders.locator(".settings-row").filter({ hasText: /anthropic/i }).first();
-    await expect(providerRow.getByRole("button", { name: "Login" })).toBeVisible();
-    await providerRow.getByRole("button", { name: "Login" }).click();
+    await expect(providerRow.getByRole("button", { name: "Use subscription" })).toBeVisible();
+    await providerRow.getByRole("button", { name: "Use subscription" }).click();
 
     const dialog = window.getByTestId("provider-login-dialog");
     await expect(dialog).toBeVisible();
@@ -393,7 +396,7 @@ test("provider login dialog completes a mocked browser OAuth flow from Settings"
     await dialog.getByRole("button", { name: "Continue" }).click();
 
     await expect(dialog).toHaveCount(0);
-    await expect(providerRow.getByRole("button", { name: "Login" })).toBeVisible();
+    await expect(providerRow.getByRole("button", { name: "Use subscription" })).toBeVisible();
   } finally {
     await harness.close();
   }
@@ -428,8 +431,8 @@ test("provider login dialog shows device code and cancels without live auth", as
       has: window.locator(".settings-section__title", { hasText: "Sign in" }),
     });
     const providerRow = signInProviders.locator(".settings-row").filter({ hasText: /openai|chatgpt|codex/i }).first();
-    await expect(providerRow.getByRole("button", { name: "Login" })).toBeVisible();
-    await providerRow.getByRole("button", { name: "Login" }).click();
+    await expect(providerRow.getByRole("button", { name: "Use subscription" })).toBeVisible();
+    await providerRow.getByRole("button", { name: "Use subscription" }).click();
 
     const dialog = window.getByTestId("provider-login-dialog");
     await expect(dialog).toBeVisible();
@@ -440,7 +443,7 @@ test("provider login dialog shows device code and cancels without live auth", as
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
     await expect(dialog).toHaveCount(0);
-    await expect(providerRow.getByRole("button", { name: "Login" })).toBeVisible();
+    await expect(providerRow.getByRole("button", { name: "Use subscription" })).toBeVisible();
   } finally {
     await harness.close();
   }

@@ -18,7 +18,7 @@ import { formatRelativeTime } from "./string-utils";
 import { ComposerPanel } from "./composer-panel";
 import { DiffPanel, type DiffPanelFileRequest } from "./diff-panel";
 import { buildModelOptions } from "./composer-commands";
-import { parseTreeComposerCommand } from "./composer-commands";
+import { parseComposerCommand, parseTreeComposerCommand } from "./composer-commands";
 import {
   desktopCommands,
   getDesktopCommandFromShortcut,
@@ -1058,7 +1058,13 @@ export default function App() {
     }
 
     handledComposerSyncNonceRef.current = snapshot.composerDraftSyncNonce;
-    if (snapshot.composerDraftSyncSource === "persist" || snapshot.composerDraftSyncSource === "state") {
+    // A "selection" sync reaching here re-selected the thread already in the box (a switch to another
+    // thread takes the branch above). The box holds newer text than the saved draft, so keep it.
+    if (
+      snapshot.composerDraftSyncSource === "persist" ||
+      snapshot.composerDraftSyncSource === "state" ||
+      snapshot.composerDraftSyncSource === "selection"
+    ) {
       return;
     }
 
@@ -1619,12 +1625,18 @@ export default function App() {
     }
 
     const treeCommand = parseTreeComposerCommand(composerDraft);
-    if (treeCommand?.type === "error") {
+    const treeError =
+      treeCommand && snapshot?.driverCapabilities.tree === false
+        ? "/tree is turned off in Alamelu Pi."
+        : treeCommand?.type === "error"
+          ? treeCommand.message
+          : undefined;
+    if (treeError) {
       setSnapshot((current) =>
         current
           ? {
               ...current,
-              lastError: treeCommand.message,
+              lastError: treeError,
             }
           : current,
       );
@@ -1637,7 +1649,8 @@ export default function App() {
 
     const previousDraft = composerDraft;
     setComposerDraft("");
-    setAttachmentsClearedOnSubmit(true);
+    // A host command such as /status keeps the attachments (finishComposerCommand), so only a message hides them.
+    setAttachmentsClearedOnSubmit(parseComposerCommand(previousDraft) === undefined);
     void (async () => {
       const nextState = await updateSnapshot(api, setSnapshot, () =>
         api.submitComposer(previousDraft, selectedSession.status === "running" ? { deliverAs: options.deliverAs ?? "followUp" } : undefined),
@@ -2000,7 +2013,14 @@ export default function App() {
   const handleSelectSession = (target: { workspaceId: string; sessionId: string }) => {
     setOpenTerminalSessionKey("");
     setTakeoverTerminalSessionKey("");
-    void updateSnapshot(api, setSnapshot, () => api.selectSession(target)).then(() => {
+    // Save text typed in the last 350 ms (before the debounced save) for the thread being left.
+    const unsavedDraft = composerDraft !== persistedComposerDraft ? composerDraft : undefined;
+    void updateSnapshot(api, setSnapshot, async () => {
+      if (unsavedDraft !== undefined) {
+        await api.updateComposerDraft(unsavedDraft);
+      }
+      return api.selectSession(target);
+    }).then(() => {
       focusComposer();
     });
   };
@@ -2137,7 +2157,15 @@ export default function App() {
       return;
     }
 
-    if (slashMenu.handleSlashKeyDown(event)) {
+    // /tree is off, so an exact "/tree" + Enter goes on to the submit check, which says so, instead of
+    // picking whichever menu entry merely contains "tree" (a skill such as using-git-worktrees).
+    const treeOffEnter =
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent.isComposing &&
+      snapshot?.driverCapabilities.tree === false &&
+      composerDraft.trim() === "/tree";
+    if (!treeOffEnter && slashMenu.handleSlashKeyDown(event)) {
       return;
     }
 
@@ -2422,6 +2450,7 @@ export default function App() {
           visibleWorkspaces={visibleWorkspaces}
           threadGroups={threadGroups}
           linkedWorktreeByWorkspaceId={linkedWorktreeByWorkspaceId}
+          worktreesUnsupported={snapshot.driverCapabilities.worktrees === false}
           wsMenu={wsMenu}
           api={api}
           setSnapshot={setSnapshot}

@@ -22,10 +22,12 @@ test("archives a hovered thread into a restorable sidebar section", async () => 
     await expect(window.locator(".topbar__session")).toHaveText("Thread two");
 
     const activeRow = window.locator(".session-list > .session-row").filter({ hasText: "Thread two" }).first();
-    const archiveButton = activeRow.locator(".session-row__action");
+    // Rows have Rename and Archive buttons; they are hidden until hover as one group.
+    const rowActions = activeRow.locator(".session-row__actions");
+    const archiveButton = activeRow.getByRole("button", { name: "Archive Thread two", exact: true });
     const timeLabel = activeRow.locator(".session-row__time");
 
-    await expect(archiveButton).toHaveCSS("opacity", "0");
+    await expect(rowActions).toHaveCSS("opacity", "0");
     await expect(timeLabel).toHaveCSS("opacity", "1");
 
     await activeRow.hover();
@@ -49,7 +51,7 @@ test("archives a hovered thread into a restorable sidebar section", async () => 
     await expect(window.locator(".session-list--archived")).toContainText("Thread two");
 
     const archivedRow = window.locator(".session-list--archived .session-row").filter({ hasText: "Thread two" }).first();
-    const restoreButton = archivedRow.locator(".session-row__action");
+    const restoreButton = archivedRow.getByRole("button", { name: "Restore Thread two", exact: true });
     await archivedRow.hover();
     await restoreButton.click();
 

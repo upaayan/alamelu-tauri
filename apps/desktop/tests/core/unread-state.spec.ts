@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
   createNamedThread,
+  expandWorkspaceOfSession,
   getDesktopState,
   launchDesktop,
   makeUserDataDir,
@@ -118,6 +119,7 @@ test("selecting an unread thread persists read state through the latest known ac
   const secondRun = await launchDesktop(userDataDir, { testMode: "background" });
   try {
     const window = await secondRun.firstWindow();
+    await expandWorkspaceOfSession(window, title);
     const row = window.locator(".session-row", { hasText: title });
     await expect(row).toHaveAttribute("data-sidebar-indicator", "unseen");
 
@@ -130,6 +132,7 @@ test("selecting an unread thread persists read state through the latest known ac
   const thirdRun = await launchDesktop(userDataDir, { testMode: "background" });
   try {
     const window = await thirdRun.firstWindow();
+    await expandWorkspaceOfSession(window, title);
     await expect(window.locator(".session-row", { hasText: title })).toHaveAttribute("data-sidebar-indicator", "none");
   } finally {
     await thirdRun.close();

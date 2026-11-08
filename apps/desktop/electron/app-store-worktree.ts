@@ -307,12 +307,15 @@ async function generateAndApplyAutoTitle(
   };
 
   try {
-    const generatedTitle = await store.driver.generateThreadTitle(workspace, {
+    const titleOptions = {
       prompt: options.prompt,
       signal: options.signal,
       ...(options.model ? { model: options.model } : {}),
       ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
-    });
+    };
+    const overriddenTitle = await store.generateThreadTitleOverride?.(workspace, titleOptions);
+    const generatedTitle =
+      overriddenTitle !== undefined ? overriddenTitle : await store.driver.generateThreadTitle(workspace, titleOptions);
     if (!generatedTitle) {
       clearMatchingPendingTitle();
       return;

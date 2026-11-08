@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { launchDesktop, makeUserDataDir, makeWorkspace, seedAgentDir } from "../helpers/electron-app";
@@ -5,11 +6,12 @@ import { launchDesktop, makeUserDataDir, makeWorkspace, seedAgentDir } from "../
 // Debt owed by the UX repair plan: each of these guards a defect that shipped once.
 // All branded, because the unbranded (sdk) path cannot boot in this fork.
 
-async function launchAlpi(workspaceName: string) {
+async function launchAlpi(workspaceName: string, seed?: (agentDir: string) => Promise<void>) {
   const userDataDir = await makeUserDataDir();
   const agentDir = join(userDataDir, "agent");
   const workspacePath = await makeWorkspace(workspaceName);
   await seedAgentDir(agentDir);
+  await seed?.(agentDir);
   const harness = await launchDesktop(userDataDir, {
     agentDir,
     initialWorkspaces: [workspacePath],
@@ -38,6 +40,11 @@ test("a rejected worktree thread keeps the prompt and explains itself", async ()
 
     // The prompt is still there either way — the old bug wiped it on any failure.
     await expect(composer).toHaveValue("this prompt must survive a failed start");
+
+    // Nor does the workspace menu offer a worktree it cannot make (2026-11-08).
+    await window.getByRole("button", { name: "Workspace actions for ux-repair-env-chip" }).click();
+    await expect(window.locator(".workspace-menu")).toContainText("Open folder");
+    await expect(window.getByRole("button", { name: "Create permanent worktree" })).toHaveCount(0);
   } finally {
     await harness.close();
   }
@@ -96,9 +103,17 @@ test("the model dropdown opens fully inside the window", async () => {
   }
 });
 
-test("/tree is offered now that the driver implements it", async () => {
+test("/tree is turned off: not offered, and refused when typed; /compact is still offered", async () => {
   test.setTimeout(60_000);
-  const { harness } = await launchAlpi("ux-repair-tree-command");
+  // A skill whose name contains "tree", like Sudhir's using-git-worktrees, puts an entry in the "/tree" menu.
+  const { harness } = await launchAlpi("ux-repair-tree-command", async (agentDir) => {
+    await mkdir(join(agentDir, "skills", "using-git-worktrees"), { recursive: true });
+    await writeFile(
+      join(agentDir, "skills", "using-git-worktrees", "SKILL.md"),
+      "---\nname: using-git-worktrees\ndescription: Use this skill when work needs an isolated git worktree.\n---\n\n# Using git worktrees\n",
+      "utf8",
+    );
+  });
 
   try {
     const window = await harness.firstWindow();
@@ -109,13 +124,21 @@ test("/tree is offered now that the driver implements it", async () => {
     const composer = window.getByTestId("composer");
     await expect(composer).toBeVisible({ timeout: 30_000 });
 
-    // Phase 3 hid /tree and /compact because the driver stubbed them out; Phase 5
-    // implements both against pi, so the menu must offer them again.
+    // Phase 5 implemented /tree and /compact against pi. /tree was turned off on 2026-11-07
+    // (Sudhir: "I do not need the tree command"); the reasons are in tree-command.spec.ts.
     await composer.fill("/");
     const slashMenu = window.locator(".slash-menu");
     await expect(slashMenu).toBeVisible();
-    await expect(slashMenu).toContainText("/tree");
     await expect(slashMenu).toContainText("/compact");
+    await expect(slashMenu).not.toContainText("/tree");
+
+    // An exact "/tree" + Enter is refused, even with that skill in the menu (2026-11-08).
+    await composer.fill("/tree");
+    await expect(slashMenu).toContainText("using-git-worktrees");
+    await composer.press("Enter");
+    await expect(window.getByText("/tree is turned off in Alamelu Pi.")).toBeVisible();
+    await expect(composer).toHaveValue("/tree");
+    await expect(window.getByTestId("tree-modal")).toHaveCount(0);
   } finally {
     await harness.close();
   }

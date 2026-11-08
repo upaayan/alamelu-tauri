@@ -1,6 +1,13 @@
 import type { JsonCatalogStore } from "@alamelu-pi/catalogs";
 import type { DesktopSessionDriver } from "./desktop-driver";
-import type { CreateSessionOptions, SessionConfig, SessionRef, SessionSnapshot, WorkspaceRef } from "@alamelu-pi/session-driver";
+import type {
+  CreateSessionOptions,
+  GenerateThreadTitleOptions,
+  SessionConfig,
+  SessionRef,
+  SessionSnapshot,
+  WorkspaceRef,
+} from "@alamelu-pi/session-driver";
 import type { RuntimeCommandRecord, RuntimeSnapshot } from "@alamelu-pi/session-driver/runtime-types";
 import type {
   AppView,
@@ -36,6 +43,11 @@ export interface AppStoreInternals {
   readonly worktreeManager: GitWorktreeManager;
   readonly attachmentStore: JsonFileStore<ComposerAttachment[]>;
   readonly sessionDir: string | undefined;
+  /** Test mode only (main.ts test hooks): a title that replaces the driver's; undefined means none. */
+  readonly generateThreadTitleOverride?: (
+    workspace: WorkspaceRef,
+    options: GenerateThreadTitleOptions,
+  ) => Promise<string | null | undefined>;
 
   /* ── Shared helpers (called by extracted method groups) ── */
   initialize(): Promise<void>;

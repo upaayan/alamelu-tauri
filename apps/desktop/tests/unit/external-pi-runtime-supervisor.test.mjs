@@ -54,3 +54,31 @@ console.log(JSON.stringify({ cwd: process.cwd(), agentDir: process.env.PI_CODING
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("refresh turns on signed-in providers' models only for a plain provider/model list", async () => {
+  const writes = [];
+  const refreshWith = async (patterns) => {
+    const supervisor = new ExternalPiRuntimeSupervisor({ piBin: "unused", agentDir: "unused", userDataDir: "unused" });
+    // TypeScript-private methods, replaced so no pi runs and no settings file is written.
+    supervisor.buildSnapshot = async () => ({
+      settings: { enabledModelPatterns: patterns },
+      providers: [{ id: "anthropic", hasAuth: true }],
+      models: [{ providerId: "anthropic", modelId: "claude-x", available: true }],
+    });
+    supervisor.setScopedModelPatterns = async (_workspace, next) => {
+      writes.push(next);
+      return {};
+    };
+    await supervisor.refreshRuntime({ workspaceId: "w", path: "/w", displayName: "w" });
+  };
+
+  // pi reads these as patterns (glob, bare id, thinking suffix): left alone.
+  for (const patterns of [["anthropic/*"], ["claude-x"], ["openai/gpt-5:high"], ["openai/gpt-5", "*sonnet*"]]) {
+    await refreshWith(patterns);
+  }
+  assert.deepEqual(writes, []);
+
+  // A plain list with nothing selectable still gains the signed-in provider's models, as before.
+  await refreshWith(["fake-provider/fake-model"]);
+  assert.deepEqual(writes, [["fake-provider/fake-model", "anthropic/claude-x"]]);
+});

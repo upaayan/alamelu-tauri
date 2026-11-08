@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
   createNamedThread,
+  expandWorkspaceOfSession,
   getDesktopState,
   getSelectedTranscript,
   launchDesktop,
@@ -70,6 +71,8 @@ test("persists transcript storage separately from ui state and restores the curr
     await composer.fill("/status");
     await composer.press("Enter");
     await expect(window.getByTestId("transcript")).toContainText(/Model |No session overrides set/);
+    // A command sends no attachments, so they stay for the next message (2026-11-08).
+    await expect(window.locator(".composer-attachment")).toHaveCount(2);
 
     await composer.fill("draft survives restart");
     await expect(composer).toHaveValue("draft survives restart");
@@ -240,6 +243,7 @@ test("migrates legacy inline transcript and attachment persistence into file-bac
   try {
     const window = await secondRun.firstWindow();
     await expect(window.getByTestId("workspace-list")).toContainText("legacy-persistence-workspace");
+    await expandWorkspaceOfSession(window, "Legacy persistence session");
     await expect(window.locator(".session-row--active")).toContainText("Legacy persistence session");
     await expect(window.getByTestId("composer")).toHaveValue("legacy draft", { timeout: 15_000 });
     await expect(window.locator(".composer-attachment")).toHaveCount(1);

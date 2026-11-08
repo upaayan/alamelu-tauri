@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, writeFile, access } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, delimiter, dirname, extname, isAbsolute, join, resolve } from "node:path";
@@ -38,6 +38,11 @@ const PROVIDER_ENV_VARS = [
   "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "DEEPSEEK_API_KEY",
+  // pi reports Google Vertex AI as connected from these alone.
+  "GOOGLE_CLOUD_API_KEY",
+  "GOOGLE_CLOUD_PROJECT",
+  "GCLOUD_PROJECT",
+  "GOOGLE_CLOUD_LOCATION",
 ] as const;
 export const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZfXQAAAAASUVORK5CYII=";
@@ -69,6 +74,35 @@ export interface SeedAgentDirOptions {
   readonly withOpenAiAuth?: boolean;
   readonly withDefaultModel?: boolean;
   readonly enabledModels?: readonly string[];
+  /** pi loads a workspace's own skills (.agents/skills) only for trusted projects; RPC mode cannot ask. */
+  readonly defaultProjectTrust?: "always";
+}
+
+/**
+ * pi's dist/core/session-manager.js, found from its launcher: npm's dist/cli.js, dist/bundle/cli.js,
+ * or Homebrew's bin/pi wrapper script (which runs libexec/bin/pi, a link to dist/bundle/cli.js).
+ */
+async function findPiSessionManagerModule(resolvedPiBin: string): Promise<string> {
+  const launchers = [resolvedPiBin];
+  try {
+    launchers.push(await realpath(resolve(dirname(resolvedPiBin), "..", "libexec", "bin", "pi")));
+  } catch {
+    // Not Homebrew's layout.
+  }
+  for (const launcher of launchers) {
+    for (const candidate of [
+      resolve(dirname(launcher), "core", "session-manager.js"),
+      resolve(dirname(launcher), "..", "core", "session-manager.js"),
+    ]) {
+      try {
+        await access(candidate);
+        return candidate;
+      } catch {
+        // Try the next layout.
+      }
+    }
+  }
+  throw new Error(`Unable to find pi's core/session-manager.js from ${resolvedPiBin}`);
 }
 
 async function resolveExternalPiBinForTests(): Promise<string> {
@@ -138,9 +172,7 @@ async function importExternalSessionManager(): Promise<{
   };
 }> {
   const piBin = await resolveExternalPiBinForTests();
-  const resolvedPiBin = await realpath(piBin);
-  const sessionManagerPath = resolve(dirname(resolvedPiBin), "core", "session-manager.js");
-  await access(sessionManagerPath);
+  const sessionManagerPath = await findPiSessionManagerModule(await realpath(piBin));
   return (await import(pathToFileURL(sessionManagerPath).href)) as {
     SessionManager: {
       create(cwd: string, sessionDir?: string): {
@@ -295,6 +327,12 @@ function createDesktopHarness(electronApp: ElectronApplication): DesktopHarness 
   };
 }
 
+function testHomeDir(userDataDir: string): string {
+  const home = join(userDataDir, "home");
+  mkdirSync(home, { recursive: true });
+  return home;
+}
+
 function buildDesktopLaunchEnv(
   userDataDir: string,
   agentDir: string,
@@ -311,6 +349,11 @@ function buildDesktopLaunchEnv(
     PI_CODING_AGENT_DIR: agentDir,
     ...(options.notificationLogPath ? { PI_APP_NOTIFICATION_LOG_PATH: options.notificationLogPath } : {}),
     PI_APP_OPEN_DEVTOOLS: "0",
+    // Run as Alamelu Pi: unbranded, the app picks the upstream SDK driver this fork no longer has.
+    PI_GUI_BRAND: process.env.PI_GUI_BRAND ?? "alpi",
+    // Never the real HOME: pi also reads ~/.agents/skills, so the user's own skills showed up in tests.
+    // One home per user-data folder, so a relaunch of the same app sees the same home.
+    HOME: testHomeDir(userDataDir),
     ...(options.envOverrides ?? {}),
   };
 
@@ -509,6 +552,7 @@ export async function seedAgentDir(agentDir: string, options: SeedAgentDirOption
     withOpenAiAuth = true,
     withDefaultModel = true,
     enabledModels = ["openai/gpt-5", "openai/gpt-4o"],
+    defaultProjectTrust,
   } = options;
   await mkdir(agentDir, { recursive: true });
   await writeFile(
@@ -531,6 +575,7 @@ export async function seedAgentDir(agentDir: string, options: SeedAgentDirOption
         ...(withDefaultModel ? { defaultProvider: "openai", defaultModel: "gpt-5" } : {}),
         defaultThinkingLevel: "medium",
         enabledModels,
+        ...(defaultProjectTrust ? { defaultProjectTrust } : {}),
       },
       null,
       2,
@@ -1410,7 +1455,38 @@ export async function selectSessionAndWaitForDraft(window: Page, sessionTitle: s
 }
 
 export async function clickSession(window: Page, sessionTitle: string): Promise<void> {
+  await expandWorkspaceOfSession(window, sessionTitle);
   await window.locator(".session-row__select", { hasText: sessionTitle }).click();
+}
+
+/**
+ * Sidebar workspaces start collapsed and show no thread rows (alpi_sidebar_no_repository_plan.md), also
+ * after a restart. Expand the workspace that holds this thread, if it is collapsed.
+ */
+export async function expandWorkspaceOfSession(window: Page, sessionTitle: string): Promise<void> {
+  let rootWorkspaceId = "";
+  await expect
+    .poll(async () => {
+      const state = await getDesktopState(window);
+      const workspace = state.workspaces.find((entry) => entry.sessions.some((session) => session.title === sessionTitle));
+      rootWorkspaceId = workspace ? (workspace.rootWorkspaceId ?? workspace.id) : "";
+      return rootWorkspaceId;
+    })
+    .not.toBe("");
+  await expandWorkspaceGroup(window, rootWorkspaceId);
+}
+
+/** Expand a root workspace's sidebar group if it is collapsed. */
+export async function expandWorkspaceGroup(window: Page, rootWorkspaceId: string): Promise<void> {
+  const root = (await getDesktopState(window)).workspaces.find((entry) => entry.id === rootWorkspaceId);
+  if (!root) throw new Error(`Workspace not found: ${rootWorkspaceId}`);
+  const displayName = root.specialKind === "no-repository" ? "Others" : root.name;
+  const group = window.locator(".workspace-group").filter({ has: window.getByRole("button", { name: displayName, exact: true }) });
+  const toggle = group.locator(".workspace-row__select");
+  // Wait for the row first: a group renders its thread list in the same pass, so only then does a missing
+  // list mean collapsed. Checking earlier (for example just after leaving Settings) could collapse it.
+  await expect(toggle).toBeVisible();
+  if (!(await group.locator(".session-list").count())) await toggle.click();
 }
 
 export async function openSidebarDestination(window: Page, name: "Skills" | "Extensions" | "Settings"): Promise<void> {
@@ -1527,6 +1603,9 @@ export async function startThreadViaIpc(
     },
   );
   await expect(window.getByTestId("composer")).toBeVisible({ timeout: 15_000 });
+  // Starting a thread from the screen expands its workspace (alpi_sidebar_no_repository_plan.md); this IPC
+  // shortcut skips that step, so do it here.
+  await expandWorkspaceGroup(window, rootWorkspaceId);
 }
 
 export async function createNamedThread(
@@ -1582,10 +1661,7 @@ export async function createNamedThread(
     await app.selectSession({ workspaceId, sessionId });
   }, { workspaceId: targetWorkspaceId, sessionId: session.id });
   await expect(window.locator(".topbar__session")).toHaveText(title);
-  const workspace = (await getDesktopState(window)).workspaces.find((entry) => entry.id === targetWorkspaceId)!;
-  const displayName = workspace.specialKind === "no-repository" ? "Others" : workspace.name;
-  const group = window.locator(".workspace-group").filter({ has: window.getByRole("button", { name: displayName, exact: true }) });
-  if (!(await group.locator(".session-list").count())) await group.locator(".workspace-row__select").click();
+  await expandWorkspaceOfSession(window, title);
   const composer = window.getByTestId("composer");
   await expect(composer).toBeVisible({ timeout: 15_000 });
   await composer.click();

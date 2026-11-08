@@ -691,8 +691,9 @@ function finishComposerCommand(
   key: string,
   label?: string,
 ): DesktopAppState {
+  // The command text is used up, but a command sends no attachments: they stay, on screen and in the
+  // saved file, for the next message (persistence.spec.ts expects them back after /status and a restart).
   store.sessionState.composerDraftsBySession.delete(key);
-  store.sessionState.composerAttachmentsBySession.delete(key);
   if (label) {
     appendLocalActivity(store, sessionRef, label);
   }
@@ -719,7 +720,6 @@ function finishComposerCommand(
     composerDraft: "",
     composerDraftSyncSource: "command",
     composerDraftSyncNonce: store.state.composerDraftSyncNonce + 1,
-    composerAttachments: [],
     lastError: undefined,
     revision: store.state.revision + 1,
   };

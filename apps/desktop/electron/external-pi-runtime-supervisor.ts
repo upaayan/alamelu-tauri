@@ -39,6 +39,12 @@ interface ExternalPiRuntimeSupervisorOptions {
   readonly env?: NodeJS.ProcessEnv;
 }
 
+const PI_THINKING_SUFFIX = /:(off|minimal|low|medium|high|xhigh|max)$/;
+
+function isPlainModelId(pattern: string): boolean {
+  return pattern.includes("/") && !/[*?[]/.test(pattern) && !PI_THINKING_SUFFIX.test(pattern);
+}
+
 export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
   private listModelsInFlight: Promise<string> | undefined;
 
@@ -49,7 +55,26 @@ export class ExternalPiRuntimeSupervisor implements DesktopRuntimeSupervisor {
   }
 
   async refreshRuntime(workspace: WorkspaceRef): Promise<RuntimeSnapshot> {
-    return this.buildSnapshot(workspace);
+    const snapshot = await this.buildSnapshot(workspace);
+    // As upstream pi-gui's refresh did: when none of the enabled models can be picked, turn on the models
+    // of every signed-in provider, so a provider connected since the last look becomes usable.
+    const patterns = snapshot.settings.enabledModelPatterns;
+    if (patterns.length === 0) return snapshot;
+    // pi also reads globs ("anthropic/*"), bare ids and a ":high"-style suffix (model-resolver.js). The exact
+    // test below cannot judge those, so such a list is left as it is rather than having models added to it.
+    if (!patterns.every(isPlainModelId)) return snapshot;
+    const isSelectable = (model: RuntimeModelRecord) => model.available && patterns.includes(`${model.providerId}/${model.modelId}`);
+    if (snapshot.models.some(isSelectable)) return snapshot;
+    const signedIn = new Set(snapshot.providers.filter((provider) => provider.hasAuth).map((provider) => provider.id));
+    const merged = [
+      ...new Set([
+        ...patterns,
+        ...snapshot.models
+          .filter((model) => model.available && signedIn.has(model.providerId))
+          .map((model) => `${model.providerId}/${model.modelId}`),
+      ]),
+    ];
+    return merged.length === patterns.length ? snapshot : this.setScopedModelPatterns(workspace, merged);
   }
 
   async getGlobalModelSettings(_workspace: WorkspaceRef): Promise<ModelSettingsSnapshot> {
@@ -302,7 +327,12 @@ function providerRecord(providerId: string, authBridge: ExternalPiAuthBridge): R
   const authType = storedAuthType ?? (authStatus.configured && apiKeySetupSupported ? "api_key" : "none");
   return {
     id: providerId,
-    name: oauthProvider?.name ?? authBridge.getProviderDisplayName(providerId),
+    // pi names some providers by their subscription sign-in ("OpenAI (ChatGPT subscription)"); use that
+    // name only when it is how this provider is signed in, or its only way in.
+    name:
+      oauthProvider && (authType === "oauth" || !apiKeySetupSupported)
+        ? oauthProvider.name
+        : authBridge.getProviderDisplayName(providerId),
     hasAuth: authStatus.configured,
     authType,
     authSource: providerAuthSource(authStatus, authType),
