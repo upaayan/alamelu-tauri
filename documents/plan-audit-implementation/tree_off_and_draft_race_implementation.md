@@ -285,3 +285,13 @@ PI_GUI_PI_BIN=/opt/homebrew/Cellar/pi-coding-agent/1.5.0/bin/pi   (the same pi a
 
 - No `pi --mode rpc` process runs yet. The app starts one when a thread is opened.
 - I11 (Sudhir's own check) waits until he next uses the app. The old copy stays beside it until then (I12).
+
+## Persistence (I12) (2026-11-08)
+
+- Commit `f56362a` holds this change's files only: the 32 tracked files and the five records. It was pushed to `origin/main`; `origin/main..HEAD` was empty before the push.
+- CI "Native builds", run 42464657190, is green:
+  - attempt 1: the Windows job's tests passed, then it failed with `http status: 504` while Tauri's bundler downloaded `nsis-3.11.zip` from GitHub. That was GitHub's outage, not the code.
+  - attempt 2 re-ran only that job, and it passed.
+  - compatibility (macOS, Windows), macOS Apple Silicon and Windows AMD64 all succeeded.
+- The old app copy, `/Applications/Alamelu Pi Tauri.app.before-tree-off-20261108-1420`, goes to the Trash after Sudhir's own check (I11).
+- These records are committed with `[skip ci]`.
