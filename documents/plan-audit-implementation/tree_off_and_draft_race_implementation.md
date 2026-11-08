@@ -295,3 +295,8 @@ PI_GUI_PI_BIN=/opt/homebrew/Cellar/pi-coding-agent/1.5.0/bin/pi   (the same pi a
   - compatibility (macOS, Windows), macOS Apple Silicon and Windows AMD64 all succeeded.
 - The old app copy, `/Applications/Alamelu Pi Tauri.app.before-tree-off-20261108-1420`, goes to the Trash after Sudhir's own check (I11).
 - These records are committed with `[skip ci]`.
+
+## Sudhir's check (I11) and the old copy (I12) (2026-11-08, 15:05 IST)
+
+- Sudhir: "I am good and have tested. You can delete the backup."
+- `/Applications/Alamelu Pi Tauri.app.before-tree-off-20261108-1420` was moved to the Trash. Only `/Applications/Alamelu Pi Tauri.app` remains.
